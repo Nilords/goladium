@@ -2076,7 +2076,7 @@ async def get_session_from_google(request: Request, response: Response):
 
 @api_router.get("/auth/me")
 async def get_current_user_info(request: Request):
-    # user = await get_current_user(request)
+    user = await get_current_user(request)
     stats = await get_user_stats_from_history(user["user_id"])
     
     # Get XP progress info
