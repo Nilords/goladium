@@ -140,8 +140,8 @@ async def unmute(interaction: discord.Interaction, username: str):
     await interaction.response.defer(ephemeral=True)
     
     result = await api_request("POST", "/admin/mute", {
-        "username": username,
-        "duration_seconds": 0
+    "username": username,
+    "duration_seconds": 0
     })
     
     if result["status"] == 200:
