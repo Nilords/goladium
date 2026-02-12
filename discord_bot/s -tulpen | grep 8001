@@ -1,0 +1,19 @@
+[0;1;32m●[0m goladium-backend.service - Goladium FastAPI Backend
+     Loaded: loaded (/etc/systemd/system/goladium-backend.service; enabled; vendor preset: enabled)
+     Active: [0;1;32mactive (running)[0m since Thu 2026-02-12 15:49:35 UTC; 3min 9s ago
+   Main PID: 40614 (python)
+      Tasks: 5 (limit: 4523)
+     Memory: 47.9M
+        CPU: 956ms
+     CGroup: /system.slice/goladium-backend.service
+             └─40614 /var/www/goladium/.venv/bin/python -m uvicorn server:app --host 0.0.0.0 --port 8001
+
+Feb 12 15:49:35 goladium-prod systemd[1]: Started Goladium FastAPI Backend.
+Feb 12 15:49:36 goladium-prod python[40614]: INFO:     Started server process [40614]
+Feb 12 15:49:36 goladium-prod python[40614]: INFO:     Waiting for application startup.
+Feb 12 15:49:36 goladium-prod python[40614]: 2026-02-12 15:49:36,224 - server - INFO - Initializing item system...
+Feb 12 15:49:36 goladium-prod python[40614]: 2026-02-12 15:49:36,235 - server - INFO - Item system initialized successfully
+Feb 12 15:49:36 goladium-prod python[40614]: INFO:     Application startup complete.
+Feb 12 15:49:36 goladium-prod python[40614]: INFO:     Uvicorn running on http://0.0.0.0:8001 (Press CTRL+C to quit)
+Feb 12 15:50:37 goladium-prod python[40614]: INFO:     78.46.221.76:0 - "GET /admin/userinfo/ghost HTTP/1.1" 404 Not Found
+Feb 12 15:50:47 goladium-prod python[40614]: INFO:     78.46.221.76:0 - "GET /admin/userinfo/Ghost HTTP/1.1" 404 Not Found

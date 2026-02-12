@@ -5,8 +5,10 @@ import os
 import aiohttp
 from dotenv import load_dotenv
 
-# Load environment variables
-load_dotenv()
+# Load environment variables from bot directory explicitly
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+load_dotenv(os.path.join(BASE_DIR, ".env"))
+
 
 TOKEN = os.getenv("DISCORD_BOT_TOKEN")
 ADMIN_API_KEY = os.getenv("ADMIN_API_KEY")

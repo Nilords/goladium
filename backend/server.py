@@ -43,10 +43,15 @@ DISCORD_WEBHOOK_URL = os.environ.get('DISCORD_WEBHOOK_URL', '')
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
 # Create the main app
-app = FastAPI(title="Goladium API", description="Demo Casino Simulation Platform")
+app = FastAPI(
+    title="Goladium API",
+    description="Demo Casino Simulation Platform",
+    version="0.1.0",
+    root_path="/api"
+)
 
 # Create router with /api prefix
-api_router = APIRouter(prefix="/api")
+api_router = APIRouter()
 
 # ============== XP SYSTEM CONFIG ==============
 # 1 XP per 0.01 G bet (100 XP per 1 G wagered)
@@ -5434,6 +5439,8 @@ async def admin_modify_balance(data: AdminBalanceRequest, request: Request):
 
 @api_router.get("/admin/userinfo/{username}")
 async def admin_get_userinfo(username: str, request: Request):
+    print("DEBUG USERNAME RAW:", repr(username))
+    print("DEBUG DB NAME:", db.name)
     """Get detailed user information (Discord bot endpoint)"""
     if not verify_admin_key(request):
         raise HTTPException(status_code=401, detail="Invalid admin key")

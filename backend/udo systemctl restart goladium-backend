@@ -1,0 +1,20 @@
+[0;1;32m●[0m goladium-backend.service - Goladium FastAPI Backend
+     Loaded: loaded (/etc/systemd/system/goladium-backend.service; enabled; vendor preset: enabled)
+     Active: [0;1;32mactive (running)[0m since Thu 2026-02-12 15:49:35 UTC; 53min ago
+   Main PID: 40614 (python)
+      Tasks: 9 (limit: 4523)
+     Memory: 50.9M
+        CPU: 11.213s
+     CGroup: /system.slice/goladium-backend.service
+             └─40614 /var/www/goladium/.venv/bin/python -m uvicorn server:app --host 0.0.0.0 --port 8001
+
+Feb 12 16:42:09 goladium-prod python[40614]: INFO:     176.6.153.142:0 - "GET /api/game-pass HTTP/1.1" 200 OK
+Feb 12 16:42:09 goladium-prod python[40614]: INFO:     176.6.153.142:0 - "GET /api/quests HTTP/1.1" 200 OK
+Feb 12 16:43:09 goladium-prod python[40614]: INFO:     176.6.153.142:0 - "GET /api/games/slots HTTP/1.1" 200 OK
+Feb 12 16:43:09 goladium-prod python[40614]: INFO:     176.6.153.142:0 - "GET /api/games/wheel/status HTTP/1.1" 200 OK
+Feb 12 16:43:09 goladium-prod python[40614]: INFO:     176.6.153.142:0 - "GET /api/chat/messages?limit=50 HTTP/1.1" 200 OK
+Feb 12 16:43:09 goladium-prod python[40614]: INFO:     176.6.153.142:0 - "GET /api/live-wins?limit=20 HTTP/1.1" 200 OK
+Feb 12 16:43:09 goladium-prod python[40614]: INFO:     176.6.153.142:0 - "GET /api/user/history?limit=5 HTTP/1.1" 200 OK
+Feb 12 16:43:09 goladium-prod python[40614]: INFO:     176.6.153.142:0 - "GET /api/leaderboard?limit=5 HTTP/1.1" 200 OK
+Feb 12 16:43:09 goladium-prod python[40614]: INFO:     176.6.153.142:0 - "GET /api/game-pass HTTP/1.1" 200 OK
+Feb 12 16:43:09 goladium-prod python[40614]: INFO:     176.6.153.142:0 - "GET /api/quests HTTP/1.1" 200 OK
