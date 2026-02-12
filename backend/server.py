@@ -5495,6 +5495,9 @@ async def admin_get_userinfo(username: str, request: Request):
         "created_at": user.get("created_at")
     }
 
+# Include router AFTER all endpoints are defined
+app.include_router(api_router)
+
 @app.on_event("startup")
 async def initialize_item_system():
     """Initialize item system with seed items and shop listings on startup"""
