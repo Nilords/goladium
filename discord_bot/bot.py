@@ -140,12 +140,16 @@ async def unmute(interaction: discord.Interaction, username: str):
     await interaction.response.defer(ephemeral=True)
     
     result = await api_request("POST", "/admin/mute", {
-    "username": username,
-    "duration_seconds": 0
+        "username": username,
+        "duration_seconds": 0
     })
     
     if result["status"] == 200:
-        await interaction.followup.send(f"**{username}** has been unmuted")
+        data = result["data"]
+        if data.get("was_muted"):
+            await interaction.followup.send(f"**{username}** has been unmuted")
+        else:
+            await interaction.followup.send(f"**{username}** was not muted")
     elif result["status"] == 404:
         await interaction.followup.send(f"User '{username}' not found")
     else:
