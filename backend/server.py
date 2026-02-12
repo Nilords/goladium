@@ -5295,6 +5295,202 @@ SEED_ITEMS = [
     }
 ]
 
+# ============== ADMIN API ENDPOINTS ==============
+# These endpoints are called by the Discord bot for moderation
+# Authentication via ADMIN_API_KEY header
+
+ADMIN_API_KEY = os.environ.get('ADMIN_API_KEY', '')
+
+def verify_admin_key(request: Request) -> bool:
+    """Verify admin API key from request header"""
+    api_key = request.headers.get("X-Admin-Key")
+    if not ADMIN_API_KEY or not api_key:
+        return False
+    return api_key == ADMIN_API_KEY
+
+class AdminMuteRequest(BaseModel):
+    username: str
+    duration_seconds: int  # 0 = unmute
+
+class AdminBanRequest(BaseModel):
+    username: str
+    duration_seconds: int  # 0 = unban
+
+class AdminBalanceRequest(BaseModel):
+    username: str
+    currency: str  # "g" or "a"
+    amount: float
+    action: str  # "set" or "add"
+
+@api_router.post("/admin/mute")
+async def admin_mute_user(data: AdminMuteRequest, request: Request):
+    """Mute a user for a specified duration (Discord bot endpoint)"""
+    if not verify_admin_key(request):
+        raise HTTPException(status_code=401, detail="Invalid admin key")
+    
+    user = await db.users.find_one({"username": data.username}, {"_id": 0})
+    if not user:
+        raise HTTPException(status_code=404, detail=f"User '{data.username}' not found")
+    
+    now = datetime.now(timezone.utc)
+    
+    if data.duration_seconds <= 0:
+        # Unmute
+        await db.users.update_one(
+            {"username": data.username},
+            {"$unset": {"mute_until": ""}}
+        )
+        return {"success": True, "action": "unmuted", "username": data.username}
+    else:
+        # Mute
+        mute_until = now + timedelta(seconds=data.duration_seconds)
+        await db.users.update_one(
+            {"username": data.username},
+            {"$set": {"mute_until": mute_until.isoformat()}}
+        )
+        return {
+            "success": True,
+            "action": "muted",
+            "username": data.username,
+            "mute_until": mute_until.isoformat(),
+            "duration_seconds": data.duration_seconds
+        }
+
+@api_router.post("/admin/ban")
+async def admin_ban_user(data: AdminBanRequest, request: Request):
+    """Ban a user for a specified duration (Discord bot endpoint)"""
+    if not verify_admin_key(request):
+        raise HTTPException(status_code=401, detail="Invalid admin key")
+    
+    user = await db.users.find_one({"username": data.username}, {"_id": 0})
+    if not user:
+        raise HTTPException(status_code=404, detail=f"User '{data.username}' not found")
+    
+    now = datetime.now(timezone.utc)
+    
+    if data.duration_seconds <= 0:
+        # Unban
+        await db.users.update_one(
+            {"username": data.username},
+            {"$unset": {"banned_until": ""}}
+        )
+        return {"success": True, "action": "unbanned", "username": data.username}
+    else:
+        # Ban
+        banned_until = now + timedelta(seconds=data.duration_seconds)
+        await db.users.update_one(
+            {"username": data.username},
+            {"$set": {"banned_until": banned_until.isoformat()}}
+        )
+        
+        # Invalidate all user sessions
+        await db.user_sessions.delete_many({"user_id": user["user_id"]})
+        
+        return {
+            "success": True,
+            "action": "banned",
+            "username": data.username,
+            "banned_until": banned_until.isoformat(),
+            "duration_seconds": data.duration_seconds,
+            "sessions_invalidated": True
+        }
+
+@api_router.post("/admin/balance")
+async def admin_modify_balance(data: AdminBalanceRequest, request: Request):
+    """Set or add balance for a user (Discord bot endpoint)"""
+    if not verify_admin_key(request):
+        raise HTTPException(status_code=401, detail="Invalid admin key")
+    
+    user = await db.users.find_one({"username": data.username}, {"_id": 0})
+    if not user:
+        raise HTTPException(status_code=404, detail=f"User '{data.username}' not found")
+    
+    currency_field = "balance" if data.currency.lower() == "g" else "balance_a"
+    current_balance = user.get(currency_field, 0)
+    
+    if data.action == "set":
+        new_balance = data.amount
+    elif data.action == "add":
+        new_balance = current_balance + data.amount
+    else:
+        raise HTTPException(status_code=400, detail="Invalid action. Use 'set' or 'add'")
+    
+    # Prevent negative balance
+    new_balance = max(0, new_balance)
+    
+    await db.users.update_one(
+        {"username": data.username},
+        {"$set": {currency_field: round(new_balance, 2)}}
+    )
+    
+    return {
+        "success": True,
+        "username": data.username,
+        "currency": data.currency.upper(),
+        "previous_balance": round(current_balance, 2),
+        "new_balance": round(new_balance, 2),
+        "action": data.action
+    }
+
+@api_router.get("/admin/userinfo/{username}")
+async def admin_get_userinfo(username: str, request: Request):
+    """Get detailed user information (Discord bot endpoint)"""
+    if not verify_admin_key(request):
+        raise HTTPException(status_code=401, detail="Invalid admin key")
+    
+    user = await db.users.find_one({"username": username}, {"_id": 0, "password_hash": 0})
+    if not user:
+        raise HTTPException(status_code=404, detail=f"User '{username}' not found")
+    
+    # Get user stats
+    stats = await get_user_stats_from_history(user["user_id"])
+    
+    # Check ban/mute status
+    now = datetime.now(timezone.utc)
+    
+    mute_until = user.get("mute_until")
+    is_muted = False
+    mute_remaining = 0
+    if mute_until:
+        if isinstance(mute_until, str):
+            mute_until = datetime.fromisoformat(mute_until)
+        if mute_until.tzinfo is None:
+            mute_until = mute_until.replace(tzinfo=timezone.utc)
+        if mute_until > now:
+            is_muted = True
+            mute_remaining = int((mute_until - now).total_seconds())
+    
+    banned_until = user.get("banned_until")
+    is_banned = False
+    ban_remaining = 0
+    if banned_until:
+        if isinstance(banned_until, str):
+            banned_until = datetime.fromisoformat(banned_until)
+        if banned_until.tzinfo is None:
+            banned_until = banned_until.replace(tzinfo=timezone.utc)
+        if banned_until > now:
+            is_banned = True
+            ban_remaining = int((banned_until - now).total_seconds())
+    
+    return {
+        "user_id": user["user_id"],
+        "username": user["username"],
+        "email": user.get("email", "N/A"),
+        "balance_g": round(user.get("balance", 0), 2),
+        "balance_a": round(user.get("balance_a", 0), 2),
+        "level": user.get("level", 1),
+        "xp": user.get("xp", 0),
+        "total_wagered": round(stats.get("total_wagered", 0), 2),
+        "total_wins": stats.get("total_wins", 0),
+        "total_losses": stats.get("total_losses", 0),
+        "net_profit": round(stats.get("net_profit", 0), 2),
+        "is_muted": is_muted,
+        "mute_remaining_seconds": mute_remaining,
+        "is_banned": is_banned,
+        "ban_remaining_seconds": ban_remaining,
+        "created_at": user.get("created_at")
+    }
+
 @app.on_event("startup")
 async def initialize_item_system():
     """Initialize item system with seed items and shop listings on startup"""
