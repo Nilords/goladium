@@ -65,3 +65,7 @@ goladium_full_backup_*
 # =========================
 test_reports/
 memory/
+-e 
+# Environment files
+*.env
+*.env.*
