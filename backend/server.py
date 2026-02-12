@@ -2425,7 +2425,7 @@ async def spin_lucky_wheel(request: Request):
     user = await get_current_user(request)
     
     last_spin = user.get("last_wheel_spin")
-    snow = datetime.now(timezone.utc)
+    now = datetime.now(timezone.utc)
     
     if last_spin:
         if isinstance(last_spin, str):
