@@ -136,6 +136,7 @@ const Chat = () => {
     if (!newMessage.trim() || loading) return;
 
     setLoading(true);
+    setMuteError(null);
     try {
       const response = await fetch(`/api/chat/send`, {
         method: 'POST',
@@ -151,6 +152,12 @@ const Chat = () => {
         const data = await response.json();
         setMessages(prev => [...prev, data]);
         setNewMessage('');
+      } else if (response.status === 403) {
+        // User is muted - show error message
+        const errorData = await response.json();
+        setMuteError(errorData.detail || 'You are muted.');
+        // Clear error after 5 seconds
+        setTimeout(() => setMuteError(null), 5000);
       }
     } catch (error) {
       // Silently fail
