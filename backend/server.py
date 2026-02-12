@@ -5436,8 +5436,6 @@ async def admin_modify_balance(data: AdminBalanceRequest, request: Request):
 
 @api_router.get("/admin/userinfo/{username}")
 async def admin_get_userinfo(username: str, request: Request):
-    print("DEBUG USERNAME RAW:", repr(username))
-    print("DEBUG DB NAME:", db.name)
     """Get detailed user information (Discord bot endpoint)"""
     if not verify_admin_key(request):
         raise HTTPException(status_code=401, detail="Invalid admin key")
