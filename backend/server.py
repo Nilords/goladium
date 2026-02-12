@@ -1882,12 +1882,9 @@ async def login(credentials: UserLogin):
     user = await db.users.find_one({"username": credentials.username}, {"_id": 0})
     if not user:
         raise HTTPException(status_code=401, detail="Invalid username or password")
-    # 🔒 BAN CHECK
-    if user.get("banned"):
-        raise HTTPException(
-            status_code=403,
-            detail="Account Banned. Appeal at Discord"
-        )
+    
+    # 🔒 BAN CHECK (time-based)
+    check_user_banned(user)
     
     if not pwd_context.verify(credentials.password, user.get("password_hash", "")):
         raise HTTPException(status_code=401, detail="Invalid username or password")
