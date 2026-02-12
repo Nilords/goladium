@@ -3968,7 +3968,7 @@ async def get_user_active_cosmetics(user_id: str):
 async def send_chat_message(message_data: ChatMessageCreate, request: Request):
     user = await get_current_user(request)
 
- # MUTE CHECK (Shadow Hybrid)
+    # MUTE CHECK - Return 403 if muted (not a ChatMessage)
     mute_until = user.get("mute_until")
 
     if mute_until is not None:
@@ -3983,17 +3983,9 @@ async def send_chat_message(message_data: ChatMessageCreate, request: Request):
 
         if mute_until > now:
             remaining_seconds = max(0, int((mute_until - now).total_seconds()))
-
-            return ChatMessage(
-                message_id=f"msg_{uuid.uuid4().hex[:12]}",
-                user_id="system",
-                username="System",
-                message=f"You are muted for {remaining_seconds} more seconds.",
-                timestamp=now.isoformat(),
-                name_color="#ff4444",
-                badge=None,
-                active_tag=None,
-                active_name_color=None
+            raise HTTPException(
+                status_code=403,
+                detail=f"You are muted for {remaining_seconds} more seconds."
             )
     
     now = datetime.now(timezone.utc)
