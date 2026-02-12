@@ -1240,12 +1240,8 @@ async def get_current_user(request: Request) -> dict:
         if user_id:
             user = await db.users.find_one({"user_id": user_id}, {"_id": 0})
             if user:
-                # 🔒 BAN CHECK
-                if user.get("banned"):
-                    raise HTTPException(
-                        status_code=403,
-                        detail="Account Banned. Appeal at Discord"
-                    )
+                # 🔒 BAN CHECK (time-based)
+                check_user_banned(user)
                 return user
     
     # Then check OAuth session (Google OAuth users)
