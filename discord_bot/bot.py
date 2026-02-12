@@ -1,128 +1,351 @@
 import discord
 from discord.ext import commands
+from discord import app_commands
 import os
-TOKEN = os.getenv("DISCORD_TOKEN")
-ADMIN_ID = 1469444394221441251  # deine Discord User ID
-GUILD_ID = 1469447166148870168   # HIER deine Server ID einsetzen
+import aiohttp
+from dotenv import load_dotenv
+
+# Load environment variables
+load_dotenv()
+
+TOKEN = os.getenv("DISCORD_BOT_TOKEN")
+ADMIN_API_KEY = os.getenv("ADMIN_API_KEY")
+API_BASE_URL = os.getenv("API_BASE_URL", "https://goladium.de")
+GUILD_ID = int(os.getenv("DISCORD_GUILD_ID", "0"))
+ADMIN_USER_IDS = [int(x) for x in os.getenv("ADMIN_USER_IDS", "").split(",") if x.strip()]
 
 intents = discord.Intents.default()
 intents.members = True
 intents.message_content = True
 
 bot = commands.Bot(command_prefix="!", intents=intents)
-economy = {}
 
-def is_admin(ctx):
-    return ctx.author.id == ADMIN_ID
+def is_admin(interaction: discord.Interaction) -> bool:
+    """Check if user is an admin"""
+    return interaction.user.id in ADMIN_USER_IDS
 
+async def api_request(method: str, endpoint: str, data: dict = None) -> dict:
+    """Make authenticated request to backend API"""
+    url = f"{API_BASE_URL}/api{endpoint}"
+    headers = {"X-Admin-Key": ADMIN_API_KEY, "Content-Type": "application/json"}
+    
+    async with aiohttp.ClientSession() as session:
+        if method == "GET":
+            async with session.get(url, headers=headers) as resp:
+                return {"status": resp.status, "data": await resp.json()}
+        elif method == "POST":
+            async with session.post(url, headers=headers, json=data) as resp:
+                return {"status": resp.status, "data": await resp.json()}
+
+def parse_duration(duration_str: str) -> int:
+    """Parse duration string like '1h', '30m', '7d' to seconds"""
+    duration_str = duration_str.lower().strip()
+    
+    if duration_str in ["0", "permanent", "perm"]:
+        return 0  # Will be handled as unban/unmute when 0
+    
+    multipliers = {
+        's': 1,
+        'm': 60,
+        'h': 3600,
+        'd': 86400,
+        'w': 604800
+    }
+    
+    try:
+        if duration_str[-1] in multipliers:
+            return int(duration_str[:-1]) * multipliers[duration_str[-1]]
+        else:
+            return int(duration_str) * 60  # Default to minutes
+    except (ValueError, IndexError):
+        return 0
+
+def format_duration(seconds: int) -> str:
+    """Format seconds to human readable string"""
+    if seconds <= 0:
+        return "0s"
+    
+    days = seconds // 86400
+    hours = (seconds % 86400) // 3600
+    minutes = (seconds % 3600) // 60
+    secs = seconds % 60
+    
+    parts = []
+    if days > 0:
+        parts.append(f"{days}d")
+    if hours > 0:
+        parts.append(f"{hours}h")
+    if minutes > 0:
+        parts.append(f"{minutes}m")
+    if secs > 0 and not parts:
+        parts.append(f"{secs}s")
+    
+    return " ".join(parts) if parts else "0s"
 
 @bot.event
 async def on_ready():
-    print(f"Bot online als {bot.user}")
+    print(f"Bot online as {bot.user}")
+    try:
+        if GUILD_ID:
+            guild = discord.Object(id=GUILD_ID)
+            synced = await bot.tree.sync(guild=guild)
+            print(f"Synced {len(synced)} commands to guild {GUILD_ID}")
+        else:
+            synced = await bot.tree.sync()
+            print(f"Synced {len(synced)} commands globally")
+    except Exception as e:
+        print(f"Failed to sync commands: {e}")
 
+# ============== MODERATION COMMANDS ==============
 
-@bot.slash_command(
-    name="ping",
-    description="Test command",
-    guild_ids=[GUILD_ID]
-)
-async def ping(ctx):
-    await ctx.respond("Pong! 🏓")
-
-
-@bot.slash_command(
-    name="admin_test",
-    description="Admin only command",
-    guild_ids=[GUILD_ID]
-)
-async def admin_test(ctx):
-    if not is_admin(ctx):
-        await ctx.respond("❌ Keine Berechtigung.", ephemeral=True)
+@bot.tree.command(name="mute", description="Mute a user in chat")
+@app_commands.describe(username="Goladium username", duration="Duration (e.g. 1h, 30m, 7d)")
+@app_commands.guilds(discord.Object(id=GUILD_ID)) if GUILD_ID else app_commands.guilds()
+async def mute(interaction: discord.Interaction, username: str, duration: str):
+    if not is_admin(interaction):
+        await interaction.response.send_message("No permission.", ephemeral=True)
         return
-
-    await ctx.respond("✅ Admin Command funktioniert.")
-
-@bot.slash_command(
-    name="balance",
-    description="Zeigt das Guthaben eines Users",
-    guild_ids=[GUILD_ID]
-)
-async def balance(ctx, member: discord.Member = None):
-
-    target = member if member else ctx.author
-
-    if target.id not in economy:
-        economy[target.id] = {"g": 0, "a": 0}
-
-    g = economy[target.id]["g"]
-    a = economy[target.id]["a"]
-
-    await ctx.respond(
-        f"💰 Balance von {target.display_name}\n"
-        f"G: {g}\n"
-        f"A: {a}"
-    )
-
-@bot.slash_command(
-    name="give_g",
-    description="G Währung vergeben",
-    guild_ids=[GUILD_ID]
-)
-async def give_g(ctx, member: discord.Member, amount: int):
-
-    if not is_admin(ctx):
-        await ctx.respond("❌ Keine Berechtigung.", ephemeral=True)
+    
+    await interaction.response.defer(ephemeral=True)
+    
+    seconds = parse_duration(duration)
+    if seconds <= 0:
+        await interaction.followup.send("Invalid duration. Use format: 1h, 30m, 7d")
         return
-
-    if member.id not in economy:
-        economy[member.id] = {"g": 0, "a": 0}
-
-    economy[member.id]["g"] += amount
-
-    await ctx.respond(f"✅ {amount} G an {member.mention} vergeben.")
-
-@bot.slash_command(
-    name="give_a",
-    description="A Währung vergeben",
-    guild_ids=[GUILD_ID]
-)
-async def give_a(ctx, member: discord.Member, amount: int):
-
-    if not is_admin(ctx):
-        await ctx.respond("❌ Keine Berechtigung.", ephemeral=True)
-        return
-
-    if member.id not in economy:
-        economy[member.id] = {"g": 0, "a": 0}
-
-    economy[member.id]["a"] += amount
-
-    await ctx.respond(f"💎 {amount} A an {member.mention} vergeben.")
-
-@bot.command(name="balance")
-async def balance_text(ctx, *, name: str = None):
-    # wenn kein Name: eigene Balance
-    if not name:
-        target_id = ctx.author.id
-        target_name = ctx.author.display_name
-    else:
-        # Versuche User im Server über Name/Nickname zu finden
-        member = discord.utils.find(
-            lambda m: m.name.lower() == name.lower() or m.display_name.lower() == name.lower(),
-            ctx.guild.members
+    
+    result = await api_request("POST", "/admin/mute", {
+        "username": username,
+        "duration_seconds": seconds
+    })
+    
+    if result["status"] == 200:
+        await interaction.followup.send(
+            f"**{username}** muted for **{format_duration(seconds)}**"
         )
-        if not member:
-            await ctx.reply(f"❌ User '{name}' nicht gefunden.")
-            return
-        target_id = member.id
-        target_name = member.display_name
+    elif result["status"] == 404:
+        await interaction.followup.send(f"User '{username}' not found")
+    else:
+        await interaction.followup.send(f"Error: {result['data'].get('detail', 'Unknown error')}")
 
-    if target_id not in economy:
-        economy[target_id] = {"g": 0, "a": 0}
+@bot.tree.command(name="unmute", description="Unmute a user")
+@app_commands.describe(username="Goladium username")
+@app_commands.guilds(discord.Object(id=GUILD_ID)) if GUILD_ID else app_commands.guilds()
+async def unmute(interaction: discord.Interaction, username: str):
+    if not is_admin(interaction):
+        await interaction.response.send_message("No permission.", ephemeral=True)
+        return
+    
+    await interaction.response.defer(ephemeral=True)
+    
+    result = await api_request("POST", "/admin/mute", {
+        "username": username,
+        "duration_seconds": 0
+    })
+    
+    if result["status"] == 200:
+        await interaction.followup.send(f"**{username}** has been unmuted")
+    elif result["status"] == 404:
+        await interaction.followup.send(f"User '{username}' not found")
+    else:
+        await interaction.followup.send(f"Error: {result['data'].get('detail', 'Unknown error')}")
 
-    g = economy[target_id]["g"]
-    a = economy[target_id]["a"]
+@bot.tree.command(name="ban", description="Ban a user from the platform")
+@app_commands.describe(username="Goladium username", duration="Duration (e.g. 1h, 30m, 7d)")
+@app_commands.guilds(discord.Object(id=GUILD_ID)) if GUILD_ID else app_commands.guilds()
+async def ban(interaction: discord.Interaction, username: str, duration: str):
+    if not is_admin(interaction):
+        await interaction.response.send_message("No permission.", ephemeral=True)
+        return
+    
+    await interaction.response.defer(ephemeral=True)
+    
+    seconds = parse_duration(duration)
+    if seconds <= 0:
+        await interaction.followup.send("Invalid duration. Use format: 1h, 30m, 7d")
+        return
+    
+    result = await api_request("POST", "/admin/ban", {
+        "username": username,
+        "duration_seconds": seconds
+    })
+    
+    if result["status"] == 200:
+        await interaction.followup.send(
+            f"**{username}** banned for **{format_duration(seconds)}**\nSessions invalidated."
+        )
+    elif result["status"] == 404:
+        await interaction.followup.send(f"User '{username}' not found")
+    else:
+        await interaction.followup.send(f"Error: {result['data'].get('detail', 'Unknown error')}")
 
-    await ctx.reply(f"💰 Balance von {target_name}\nG: {g}\nA: {a}")
+@bot.tree.command(name="unban", description="Unban a user")
+@app_commands.describe(username="Goladium username")
+@app_commands.guilds(discord.Object(id=GUILD_ID)) if GUILD_ID else app_commands.guilds()
+async def unban(interaction: discord.Interaction, username: str):
+    if not is_admin(interaction):
+        await interaction.response.send_message("No permission.", ephemeral=True)
+        return
+    
+    await interaction.response.defer(ephemeral=True)
+    
+    result = await api_request("POST", "/admin/ban", {
+        "username": username,
+        "duration_seconds": 0
+    })
+    
+    if result["status"] == 200:
+        await interaction.followup.send(f"**{username}** has been unbanned")
+    elif result["status"] == 404:
+        await interaction.followup.send(f"User '{username}' not found")
+    else:
+        await interaction.followup.send(f"Error: {result['data'].get('detail', 'Unknown error')}")
 
-bot.run(TOKEN)
+# ============== BALANCE COMMANDS ==============
+
+@bot.tree.command(name="balance", description="Check a user's balance")
+@app_commands.describe(username="Goladium username")
+@app_commands.guilds(discord.Object(id=GUILD_ID)) if GUILD_ID else app_commands.guilds()
+async def balance(interaction: discord.Interaction, username: str):
+    if not is_admin(interaction):
+        await interaction.response.send_message("No permission.", ephemeral=True)
+        return
+    
+    await interaction.response.defer(ephemeral=True)
+    
+    result = await api_request("GET", f"/admin/userinfo/{username}")
+    
+    if result["status"] == 200:
+        data = result["data"]
+        await interaction.followup.send(
+            f"**{username}** Balance:\n"
+            f"G: **{data['balance_g']:.2f}**\n"
+            f"A: **{data['balance_a']:.2f}**"
+        )
+    elif result["status"] == 404:
+        await interaction.followup.send(f"User '{username}' not found")
+    else:
+        await interaction.followup.send(f"Error: {result['data'].get('detail', 'Unknown error')}")
+
+@bot.tree.command(name="setbalance", description="Set a user's balance")
+@app_commands.describe(username="Goladium username", currency="Currency (g or a)", amount="Amount to set")
+@app_commands.guilds(discord.Object(id=GUILD_ID)) if GUILD_ID else app_commands.guilds()
+async def setbalance(interaction: discord.Interaction, username: str, currency: str, amount: float):
+    if not is_admin(interaction):
+        await interaction.response.send_message("No permission.", ephemeral=True)
+        return
+    
+    if currency.lower() not in ["g", "a"]:
+        await interaction.response.send_message("Currency must be 'g' or 'a'", ephemeral=True)
+        return
+    
+    await interaction.response.defer(ephemeral=True)
+    
+    result = await api_request("POST", "/admin/balance", {
+        "username": username,
+        "currency": currency,
+        "amount": amount,
+        "action": "set"
+    })
+    
+    if result["status"] == 200:
+        data = result["data"]
+        await interaction.followup.send(
+            f"**{username}** {data['currency']} balance set:\n"
+            f"{data['previous_balance']:.2f} → **{data['new_balance']:.2f}**"
+        )
+    elif result["status"] == 404:
+        await interaction.followup.send(f"User '{username}' not found")
+    else:
+        await interaction.followup.send(f"Error: {result['data'].get('detail', 'Unknown error')}")
+
+@bot.tree.command(name="addbalance", description="Add to a user's balance")
+@app_commands.describe(username="Goladium username", currency="Currency (g or a)", amount="Amount to add")
+@app_commands.guilds(discord.Object(id=GUILD_ID)) if GUILD_ID else app_commands.guilds()
+async def addbalance(interaction: discord.Interaction, username: str, currency: str, amount: float):
+    if not is_admin(interaction):
+        await interaction.response.send_message("No permission.", ephemeral=True)
+        return
+    
+    if currency.lower() not in ["g", "a"]:
+        await interaction.response.send_message("Currency must be 'g' or 'a'", ephemeral=True)
+        return
+    
+    await interaction.response.defer(ephemeral=True)
+    
+    result = await api_request("POST", "/admin/balance", {
+        "username": username,
+        "currency": currency,
+        "amount": amount,
+        "action": "add"
+    })
+    
+    if result["status"] == 200:
+        data = result["data"]
+        sign = "+" if amount >= 0 else ""
+        await interaction.followup.send(
+            f"**{username}** {data['currency']} balance:\n"
+            f"{data['previous_balance']:.2f} {sign}{amount:.2f} = **{data['new_balance']:.2f}**"
+        )
+    elif result["status"] == 404:
+        await interaction.followup.send(f"User '{username}' not found")
+    else:
+        await interaction.followup.send(f"Error: {result['data'].get('detail', 'Unknown error')}")
+
+# ============== INFO COMMANDS ==============
+
+@bot.tree.command(name="userinfo", description="Get detailed user information")
+@app_commands.describe(username="Goladium username")
+@app_commands.guilds(discord.Object(id=GUILD_ID)) if GUILD_ID else app_commands.guilds()
+async def userinfo(interaction: discord.Interaction, username: str):
+    if not is_admin(interaction):
+        await interaction.response.send_message("No permission.", ephemeral=True)
+        return
+    
+    await interaction.response.defer(ephemeral=True)
+    
+    result = await api_request("GET", f"/admin/userinfo/{username}")
+    
+    if result["status"] == 200:
+        data = result["data"]
+        
+        # Build status indicators
+        status = []
+        if data["is_banned"]:
+            status.append(f"BANNED ({format_duration(data['ban_remaining_seconds'])} remaining)")
+        if data["is_muted"]:
+            status.append(f"MUTED ({format_duration(data['mute_remaining_seconds'])} remaining)")
+        status_str = " | ".join(status) if status else "Active"
+        
+        embed = discord.Embed(title=f"User: {data['username']}", color=0xFFD700)
+        embed.add_field(name="User ID", value=data["user_id"], inline=True)
+        embed.add_field(name="Level", value=f"{data['level']} ({data['xp']} XP)", inline=True)
+        embed.add_field(name="Status", value=status_str, inline=False)
+        embed.add_field(name="Balance G", value=f"{data['balance_g']:.2f}", inline=True)
+        embed.add_field(name="Balance A", value=f"{data['balance_a']:.2f}", inline=True)
+        embed.add_field(name="Total Wagered", value=f"{data['total_wagered']:.2f} G", inline=True)
+        embed.add_field(name="Wins / Losses", value=f"{data['total_wins']} / {data['total_losses']}", inline=True)
+        embed.add_field(name="Net Profit", value=f"{data['net_profit']:.2f} G", inline=True)
+        embed.add_field(name="Created", value=data.get("created_at", "N/A")[:10], inline=True)
+        
+        await interaction.followup.send(embed=embed)
+    elif result["status"] == 404:
+        await interaction.followup.send(f"User '{username}' not found")
+    else:
+        await interaction.followup.send(f"Error: {result['data'].get('detail', 'Unknown error')}")
+
+@bot.tree.command(name="ping", description="Test bot connection")
+@app_commands.guilds(discord.Object(id=GUILD_ID)) if GUILD_ID else app_commands.guilds()
+async def ping(interaction: discord.Interaction):
+    await interaction.response.send_message(f"Pong! Latency: {round(bot.latency * 1000)}ms")
+
+# Run bot
+if __name__ == "__main__":
+    if not TOKEN:
+        print("ERROR: DISCORD_BOT_TOKEN not set in .env")
+        exit(1)
+    if not ADMIN_API_KEY:
+        print("WARNING: ADMIN_API_KEY not set - API calls will fail")
+    if not ADMIN_USER_IDS:
+        print("WARNING: ADMIN_USER_IDS not set - no admins configured")
+    
+    bot.run(TOKEN)
