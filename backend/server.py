@@ -1187,6 +1187,38 @@ def verify_jwt_token(token: str) -> Optional[str]:
     except jwt.InvalidTokenError:
         return None
 
+def check_user_banned(user: dict) -> None:
+    """Check if user is banned (time-based). Raises HTTPException if banned."""
+    banned_until = user.get("banned_until")
+    if banned_until is None:
+        return
+    
+    if isinstance(banned_until, str):
+        banned_until = datetime.fromisoformat(banned_until)
+    
+    if banned_until.tzinfo is None:
+        banned_until = banned_until.replace(tzinfo=timezone.utc)
+    
+    now = datetime.now(timezone.utc)
+    
+    if banned_until > now:
+        remaining = banned_until - now
+        days = remaining.days
+        hours = remaining.seconds // 3600
+        minutes = (remaining.seconds % 3600) // 60
+        
+        if days > 0:
+            time_str = f"{days}d {hours}h"
+        elif hours > 0:
+            time_str = f"{hours}h {minutes}m"
+        else:
+            time_str = f"{minutes}m"
+        
+        raise HTTPException(
+            status_code=403,
+            detail=f"Account banned for {time_str}. Appeal at Discord."
+        )
+
 async def get_current_user(request: Request) -> dict:
     """Get current user - checks JWT first (explicit auth), then OAuth session.
     
