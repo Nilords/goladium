@@ -22,6 +22,7 @@ const Chat = () => {
   const [newMessage, setNewMessage] = useState('');
   const [loading, setLoading] = useState(false);
   const [unreadCount, setUnreadCount] = useState(0);
+  const [muteError, setMuteError] = useState(null);
   const scrollRef = useRef(null);
   const lastMessageCountRef = useRef(0);
   const wasDraggingRef = useRef(false);
