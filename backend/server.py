@@ -2307,7 +2307,7 @@ async def spin_slot(bet_request: SlotBetRequest, request: Request):
     )
     
     # Record bet history - SEPARATE ENTRIES for bet and win
-    timestamp_snow = datetime.now(timezone.utc)
+    timestamp_now = datetime.now(timezone.utc)
     timestamp_bet = timestamp_now.isoformat()
     # Win timestamp is 1 millisecond later to ensure correct ordering (bet before win)
     timestamp_win = (timestamp_now + timedelta(milliseconds=1)).isoformat()
