@@ -335,6 +335,13 @@ const Chat = () => {
           </div>
         </ScrollArea>
 
+        {/* Mute Error Message */}
+        {muteError && (
+          <div className="px-3 py-2 bg-red-500/20 border-t border-red-500/30">
+            <p className="text-xs text-red-400 text-center">{muteError}</p>
+          </div>
+        )}
+
         {/* Input */}
         <form onSubmit={sendMessage} className="p-2 border-t border-white/10 bg-black/30">
           <div className="flex items-center gap-2">
