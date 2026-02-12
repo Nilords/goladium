@@ -5273,9 +5273,6 @@ async def claim_game_pass_reward(level: int, request: Request):
         "tier": reward_tier
     }
 
-# Include router AFTER all endpoints are defined
-app.include_router(api_router)
-
 # ============== ITEM SYSTEM INITIALIZATION ==============
 # Seed items are created on startup if they don't exist
 
