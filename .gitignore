@@ -1,0 +1,67 @@
+# =========================
+# IDE
+# =========================
+.idea/
+.vscode/
+
+# =========================
+# Python
+# =========================
+__pycache__/
+*.pyc
+.venv/
+venv/
+
+# =========================
+# Node
+# =========================
+node_modules/
+
+# =========================
+# Builds
+# =========================
+frontend_dist/
+frontend/dist/
+dist/
+build/
+
+# =========================
+# Environment
+# =========================
+.env
+backend/.env
+discord_bot/.env
+*.env.*
+
+# =========================
+# Logs
+# =========================
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# =========================
+# OS
+# =========================
+.DS_Store
+Thumbs.db
+
+# =========================
+# Backups
+# =========================
+*.tar.gz
+*.zip
+mongo_backup_*
+goladium_backup_*
+goladium_full_backup_*
+
+# =========================
+# Emergent local state
+# =========================
+.emergent/
+
+# =========================
+# Test Reports
+# =========================
+test_reports/
+memory/

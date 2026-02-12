@@ -1,0 +1,359 @@
+@import url('https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;700&family=Space+Grotesk:wght@300;500;700&family=Syne:wght@400;700;800&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+    :root {
+        --background: 0 0% 2%;
+        --foreground: 0 0% 93%;
+        --card: 240 10% 4%;
+        --card-foreground: 0 0% 93%;
+        --popover: 240 10% 4%;
+        --popover-foreground: 0 0% 93%;
+        --primary: 180 100% 50%;
+        --primary-foreground: 240 10% 4%;
+        --secondary: 266 100% 50%;
+        --secondary-foreground: 0 0% 98%;
+        --muted: 240 4% 16%;
+        --muted-foreground: 240 5% 65%;
+        --accent: 324 100% 50%;
+        --accent-foreground: 0 0% 98%;
+        --destructive: 0 100% 50%;
+        --destructive-foreground: 0 0% 98%;
+        --border: 240 4% 16%;
+        --input: 240 4% 16%;
+        --ring: 180 100% 50%;
+        --radius: 0.5rem;
+        
+        /* Custom Goladium colors */
+        --gold: 51 100% 50%;
+        --neon-cyan: 180 100% 50%;
+        --neon-purple: 266 100% 50%;
+        --neon-pink: 324 100% 50%;
+        --success: 152 100% 50%;
+        --surface: 240 10% 4%;
+    }
+
+    * {
+        @apply border-border;
+    }
+
+    body {
+        @apply bg-background text-foreground;
+        font-family: 'Manrope', sans-serif;
+        background-color: #050505;
+        overflow-x: hidden;
+        /* Prevent layout shift when scrollbar appears/disappears */
+        overflow-y: scroll;
+    }
+
+    /* Ensure consistent page structure */
+    #root {
+        min-height: 100vh;
+    }
+
+    h1, h2, h3, h4, h5, h6 {
+        font-family: 'Syne', sans-serif;
+        font-weight: 700;
+        letter-spacing: -0.02em;
+    }
+
+    .font-mono, .font-numbers {
+        font-family: 'Space Grotesk', monospace;
+        letter-spacing: 0.05em;
+    }
+}
+
+/* Scrollbar styling */
+::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+}
+
+::-webkit-scrollbar-track {
+    background: #0A0A0C;
+}
+
+::-webkit-scrollbar-thumb {
+    background: #222;
+    border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+    background: #333;
+}
+
+/* Selection styling */
+::selection {
+    background: rgba(0, 240, 255, 0.3);
+    color: #fff;
+}
+
+/* Custom animations */
+@keyframes neon-pulse {
+    0%, 100% {
+        box-shadow: 0 0 5px rgba(0, 240, 255, 0.5), 0 0 10px rgba(0, 240, 255, 0.3);
+    }
+    50% {
+        box-shadow: 0 0 20px rgba(0, 240, 255, 0.8), 0 0 30px rgba(0, 240, 255, 0.5);
+    }
+}
+
+@keyframes gold-pulse {
+    0%, 100% {
+        box-shadow: 0 0 5px rgba(255, 215, 0, 0.4), 0 0 10px rgba(255, 215, 0, 0.2);
+    }
+    50% {
+        box-shadow: 0 0 20px rgba(255, 215, 0, 0.6), 0 0 30px rgba(255, 215, 0, 0.4);
+    }
+}
+
+@keyframes spin-reel {
+    0% {
+        transform: translateY(0);
+    }
+    100% {
+        transform: translateY(-100%);
+    }
+}
+
+@keyframes fade-in {
+    from {
+        opacity: 0;
+        transform: translateY(10px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+@keyframes slide-in-right {
+    from {
+        opacity: 0;
+        transform: translateX(20px);
+    }
+    to {
+        opacity: 1;
+        transform: translateX(0);
+    }
+}
+
+@keyframes bounce-win {
+    0%, 100% {
+        transform: scale(1);
+    }
+    50% {
+        transform: scale(1.1);
+    }
+}
+
+@keyframes wheel-spin {
+    from {
+        transform: rotate(0deg);
+    }
+    to {
+        transform: rotate(360deg);
+    }
+}
+
+@keyframes shimmer {
+    0% {
+        transform: translateX(-100%);
+    }
+    100% {
+        transform: translateX(100%);
+    }
+}
+
+@keyframes pulse-slow {
+    0%, 100% {
+        opacity: 1;
+    }
+    50% {
+        opacity: 0.8;
+    }
+}
+
+/* Utility classes */
+.animate-shimmer {
+    animation: shimmer 3s infinite;
+}
+
+.animate-pulse-slow {
+    animation: pulse-slow 3s infinite;
+}
+
+.neon-glow {
+    box-shadow: 0 0 15px rgba(0, 240, 255, 0.5);
+}
+
+.gold-glow {
+    box-shadow: 0 0 15px rgba(255, 215, 0, 0.4);
+}
+
+.neon-text {
+    text-shadow: 0 0 10px rgba(0, 240, 255, 0.8);
+}
+
+.gold-text {
+    color: #FFD700;
+    text-shadow: 0 0 10px rgba(255, 215, 0, 0.5);
+}
+
+.glass-panel {
+    background: rgba(0, 0, 0, 0.4);
+    backdrop-filter: blur(16px);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.grid-bg {
+    background-image: 
+        linear-gradient(to right, rgba(128, 128, 128, 0.07) 1px, transparent 1px),
+        linear-gradient(to bottom, rgba(128, 128, 128, 0.07) 1px, transparent 1px);
+    background-size: 24px 24px;
+}
+
+.animate-neon-pulse {
+    animation: neon-pulse 2s ease-in-out infinite;
+}
+
+.animate-gold-pulse {
+    animation: gold-pulse 2s ease-in-out infinite;
+}
+
+.animate-fade-in {
+    animation: fade-in 0.3s ease-out;
+}
+
+.animate-slide-in {
+    animation: slide-in-right 0.3s ease-out;
+}
+
+.animate-bounce-win {
+    animation: bounce-win 0.5s ease-in-out;
+}
+
+/* Slot machine specific */
+.slot-reel {
+    overflow: hidden;
+    position: relative;
+}
+
+.slot-symbol {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 3rem;
+}
+
+.slot-spinning .slot-symbol {
+    filter: blur(2px);
+}
+
+/* Button enhancements */
+.btn-primary {
+    @apply bg-primary text-primary-foreground font-bold uppercase tracking-wider;
+    transition: box-shadow 0.3s ease, transform 0.2s ease;
+}
+
+.btn-primary:hover {
+    box-shadow: 0 0 20px rgba(0, 240, 255, 0.6);
+    transform: translateY(-1px);
+}
+
+.btn-gold {
+    background: linear-gradient(135deg, #FFD700 0%, #FFA500 100%);
+    color: #000;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+}
+
+.btn-gold:hover {
+    box-shadow: 0 0 20px rgba(255, 215, 0, 0.6);
+}
+
+/* Card enhancements */
+.game-card {
+    @apply bg-card border border-white/5 rounded-xl overflow-hidden relative;
+    transition: border-color 0.3s ease, transform 0.2s ease;
+}
+
+.game-card:hover {
+    border-color: rgba(0, 240, 255, 0.5);
+    transform: translateY(-2px);
+}
+
+/* Input styling */
+input[type="number"]::-webkit-inner-spin-button,
+input[type="number"]::-webkit-outer-spin-button {
+    -webkit-appearance: none;
+    margin: 0;
+}
+
+input[type="number"] {
+    -moz-appearance: textfield;
+}
+
+/* Chat message styling */
+.chat-message {
+    @apply p-3 rounded-lg mb-2;
+    background: rgba(255, 255, 255, 0.03);
+}
+
+.chat-message:hover {
+    background: rgba(255, 255, 255, 0.06);
+}
+
+/* VIP colors */
+.vip-gold { color: #FFD700; }
+.vip-cyan { color: #00F0FF; }
+.vip-purple { color: #7000FF; }
+.vip-pink { color: #FF0099; }
+
+/* Disclaimer bar */
+.disclaimer-bar {
+    background: rgba(255, 100, 100, 0.1);
+    border-bottom: 1px solid rgba(255, 100, 100, 0.2);
+    color: #FF6B6B;
+    font-size: 0.75rem;
+    text-align: center;
+    padding: 0.25rem;
+}
+
+/* Lucky wheel */
+.lucky-wheel {
+    position: relative;
+    border-radius: 50%;
+    overflow: hidden;
+}
+
+.wheel-pointer {
+    position: absolute;
+    top: -10px;
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 10;
+}
+
+/* Debug wrapper fix */
+[data-debug-wrapper="true"] {
+    display: contents !important;
+}
+
+[data-debug-wrapper="true"] > * {
+    margin-left: inherit;
+    margin-right: inherit;
+    margin-top: inherit;
+    margin-bottom: inherit;
+    padding-left: inherit;
+    padding-right: inherit;
+    padding-top: inherit;
+    padding-bottom: inherit;
+    column-gap: inherit;
+    row-gap: inherit;
+    gap: inherit;
+}

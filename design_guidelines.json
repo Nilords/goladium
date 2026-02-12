@@ -1,0 +1,138 @@
+{
+  "identity": {
+    "name": "Goladium",
+    "aesthetic": "Dark Retro-Futurism / Cyberpunk Casino",
+    "description": "A high-stakes simulation platform blending 80s arcade nostalgia with premium modern UI. Think 'Blade Runner meets Las Vegas'.",
+    "emotional_archetype": "Electric & Neon (Archetype 7) + Luxury Gold",
+    "design_principles": [
+      "Neon over Daylight: The sun never rises in Goladium.",
+      "Digital Tactility: Buttons should feel 'clicky' and mechanical.",
+      "Gold is God: Currency elements must always look premium and metallic.",
+      "Motion is Life: Static screens are forbidden. Use subtle glows and scans."
+    ]
+  },
+  "typography": {
+    "primary_font": "Manrope",
+    "heading_font": "Syne",
+    "mono_font": "Space Grotesk",
+    "google_fonts_import": "https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;700&family=Space+Grotesk:wght@300;500;700&family=Syne:wght@400;700;800&display=swap",
+    "usage": {
+      "headings": "font-family: 'Syne', sans-serif; font-weight: 700; letter-spacing: -0.02em;",
+      "body": "font-family: 'Manrope', sans-serif;",
+      "numbers_and_ui": "font-family: 'Space Grotesk', monospace; letter-spacing: 0.05em;"
+    }
+  },
+  "colors": {
+    "palette": {
+      "background": "#050505",
+      "surface": "#0F0F12",
+      "primary": "#00F0FF",
+      "secondary": "#7000FF",
+      "accent": "#FF0099",
+      "gold": "#FFD700",
+      "success": "#00FF94",
+      "error": "#FF2E2E",
+      "text_primary": "#EDEDED",
+      "text_secondary": "#888888"
+    },
+    "css_variables": {
+      "root": {
+        "--background": "0 0% 2%",
+        "--foreground": "0 0% 93%",
+        "--card": "240 10% 4%",
+        "--card-foreground": "0 0% 93%",
+        "--popover": "240 10% 4%",
+        "--popover-foreground": "0 0% 93%",
+        "--primary": "180 100% 50%",
+        "--primary-foreground": "240 10% 4%",
+        "--secondary": "266 100% 50%",
+        "--secondary-foreground": "0 0% 98%",
+        "--muted": "240 4% 16%",
+        "--muted-foreground": "240 5% 65%",
+        "--accent": "324 100% 50%",
+        "--accent-foreground": "0 0% 98%",
+        "--destructive": "0 100% 50%",
+        "--destructive-foreground": "0 0% 98%",
+        "--border": "240 4% 16%",
+        "--input": "240 4% 16%",
+        "--ring": "180 100% 50%",
+        "--radius": "0.5rem"
+      }
+    }
+  },
+  "visual_enhancers": {
+    "glassmorphism": "bg-black/40 backdrop-blur-xl border border-white/10 shadow-[0_8px_32px_rgba(0,0,0,0.5)]",
+    "neon_glow": "shadow-[0_0_15px_rgba(0,240,255,0.5)]",
+    "gold_glow": "shadow-[0_0_15px_rgba(255,215,0,0.4)]",
+    "grid_background": "bg-[linear-gradient(to_right,#80808012_1px,transparent_1px),linear-gradient(to_bottom,#80808012_1px,transparent_1px)] bg-[size:24px_24px]"
+  },
+  "components": {
+    "Button": {
+      "default": "bg-primary text-primary-foreground hover:bg-primary/90 hover:shadow-[0_0_20px_rgba(0,240,255,0.6)] transition-all duration-300 font-bold uppercase tracking-wider",
+      "secondary": "bg-secondary text-white hover:bg-secondary/80 hover:shadow-[0_0_20px_rgba(112,0,255,0.6)]",
+      "outline": "border-2 border-primary text-primary hover:bg-primary hover:text-black hover:shadow-[0_0_15px_rgba(0,240,255,0.5)]",
+      "ghost": "hover:bg-white/10 text-white"
+    },
+    "Card": {
+      "base": "bg-[#0A0A0C] border border-white/5 rounded-xl overflow-hidden relative group",
+      "hover_effect": "hover:border-primary/50 transition-colors duration-300"
+    },
+    "Input": {
+      "base": "bg-black/50 border-white/10 focus:border-primary focus:ring-1 focus:ring-primary/50 text-white placeholder:text-white/30"
+    }
+  },
+  "layout_strategies": {
+    "lobby_grid": "grid grid-cols-1 md:grid-cols-4 lg:grid-cols-6 gap-6 p-6",
+    "game_container": "relative w-full max-w-5xl mx-auto aspect-video bg-black/80 border-4 border-[#222] rounded-lg shadow-2xl overflow-hidden",
+    "sidebar": "w-64 h-screen bg-[#050505] border-r border-white/5 flex flex-col"
+  },
+  "image_urls": {
+    "hero_background": {
+      "url": "https://images.unsplash.com/photo-1688873157896-432c9a44eaae?crop=entropy&cs=srgb&fm=jpg&q=85",
+      "alt": "Neon Casino Interior",
+      "usage": "Main background with heavy overlay (opacity 0.2)"
+    },
+    "slot_machine_bg": {
+      "url": "https://images.unsplash.com/photo-1762219214749-427929a1d36f?crop=entropy&cs=srgb&fm=jpg&q=85",
+      "alt": "Retro Arcade Machine",
+      "usage": "Background for the Slot Machine page"
+    },
+    "currency_icon": {
+      "url": "https://images.unsplash.com/photo-1641784691031-b25bd8b98e3b?crop=entropy&cs=srgb&fm=jpg&q=85",
+      "alt": "Gold Coins Pile",
+      "usage": "Use as a texture or small icon for 'Goladium' currency display"
+    },
+    "default_avatar": {
+      "url": "https://images.unsplash.com/photo-1558961917-2bfe20527f46?crop=entropy&cs=srgb&fm=jpg&q=85",
+      "alt": "Cyberpunk Avatar",
+      "usage": "Default user profile picture"
+    },
+    "lucky_wheel_bg": {
+      "url": "https://images.unsplash.com/photo-1757584736899-522cc391ae5f?crop=entropy&cs=srgb&fm=jpg&q=85",
+      "alt": "Arcade Entrance",
+      "usage": "Background for Lucky Wheel page"
+    }
+  },
+  "instructions_to_main_agent": [
+    "1. SETUP: Update `index.css` with the provided CSS variables immediately. This sets the dark theme foundation.",
+    "2. FONTS: Add the Google Fonts import to `index.html` or `index.css`.",
+    "3. COMPONENTS: When using Shadcn components, ALWAYS override the default styles with the `visual_enhancers` classes. Do not use default white cards.",
+    "4. LAYOUT: Use the 'Bento Grid' strategy for the main lobby. Make the 'Slot Machine' card the largest (Hero).",
+    "5. ANIMATION: Use `framer-motion` for all page transitions and game effects. The slot machine reels MUST have a blur effect when spinning.",
+    "6. CURRENCY: Display the user balance in the top right with the 'Space Grotesk' font and Gold color (#FFD700). It should look like a digital score counter.",
+    "7. DISCLAIMER: Ensure the 'DEMO ONLY' disclaimer is visible in the footer or top bar, styled in muted red or orange."
+  ],
+  "UNIVERSAL_GUIDELINES_FOR_MAIN_AGENT": [
+    "Dark colors look good when used independently without gradients. DO NOT use dark colors as gradients.",
+    "Don't make generic centered layouts, simplistic gradients, and uniform styling.",
+    "Create depth through layered design elements with z-index hierarchy.",
+    "Use glass-morphism effects with backdrop filters (12-24px blur).",
+    "You MUST NOT apply universal transition. Eg: `transition: all`. This results in breaking transforms.",
+    "You MUST NOT center align the app container.",
+    "Always use modern button styles like pill-shaped, or sharp button with interaction animations.",
+    "NEVER use AI assistant Emoji characters for icons.",
+    "Every interaction needs micro-animations - hover states, transitions.",
+    "Use 2-3x more spacing than feels comfortable.",
+    "Subtle grain textures, noise overlays, custom cursors, selection states, and loading animations: separates good from extraordinary."
+  ]
+}
