@@ -5329,12 +5329,19 @@ async def admin_mute_user(data: AdminMuteRequest, request: Request):
     now = datetime.now(timezone.utc)
     
     if data.duration_seconds <= 0:
-        # Unmute
-        await db.users.update_one(
+        # Unmute - completely remove mute_until field
+        was_muted = user.get("mute_until") is not None
+        result = await db.users.update_one(
             {"username": data.username},
             {"$unset": {"mute_until": ""}}
         )
-        return {"success": True, "action": "unmuted", "username": data.username}
+        return {
+            "success": True,
+            "action": "unmuted",
+            "username": data.username,
+            "was_muted": was_muted,
+            "modified": result.modified_count > 0
+        }
     else:
         # Mute
         mute_until = now + timedelta(seconds=data.duration_seconds)
