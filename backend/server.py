@@ -3032,45 +3032,50 @@ async def get_bet_history(
     # Get total count for pagination info
     total_count = await db.bet_history.count_documents(query)
     
-    history = await db.bet_history.find(
-        query,
-        {"_id": 0}
-    ).sort([("timestamp", -1), ("transaction_type", 1)]).skip(skip).limit(limit).to_list(limit)
-    
     # Secondary sort in Python to ensure bet comes before win for same timestamp
     # With reverse=True (descending time), we want bet to appear ABOVE win in the list
     # Since timestamps are: bet=T, win=T+1ms, descending sort puts win first naturally
     # We need to group by base timestamp and put bet before win within the group
-    def sort_key(item):
-        ts = item.get("timestamp", "")
-        if isinstance(ts, str):
-            ts = datetime.fromisoformat(ts) if ts else datetime.min
-        # Round to same second to group bet/win pairs
-        base_ts = ts.replace(microsecond=0)
-        # For same second: bet (1) comes before win (0) in descending sort
-        # Because higher values come first when reverse=True
-        type_order = 1 if item.get("transaction_type") == "bet" else 0
-        return (base_ts, type_order)
-    
-    history = sorted(history, key=sort_key, reverse=True)
+    history = await db.bet_history.find(
+        query,
+        {"_id": 0}
+    ).sort([
+        ("timestamp", -1),
+        ("transaction_type", -1)  # BET zuerst
+    ]).skip(skip).limit(limit).to_list(limit)
     
     for item in history:
+
+    # Timestamp konvertieren
         if isinstance(item.get("timestamp"), str):
             item["timestamp"] = datetime.fromisoformat(item["timestamp"])
-        # Ensure all required fields exist
+
+    # Sicherstellen, dass bet_id existiert
         if "bet_id" not in item:
             item["bet_id"] = f"bet_{uuid.uuid4().hex[:12]}"
-        # For new format with transaction_type, use 'amount' field
-        if "transaction_type" in item:
-            if "amount" not in item:
-                item["amount"] = item.get("win_amount", 0) if item["transaction_type"] == "win" else -item.get("bet_amount", 0)
-        else:
-            # Legacy format - calculate net_outcome
-            if "net_outcome" not in item:
-                item["net_outcome"] = round(item.get("win_amount", 0) - item.get("bet_amount", 0), 2)
-            if "amount" not in item:
-                item["amount"] = item.get("net_outcome", 0)
-    
+
+    # Einheitliche Amount-Logik (Single Source of Truth)
+
+        transaction_type = item.get("transaction_type")
+
+        bet_amount = float(item.get("bet_amount", 0))
+        win_amount = float(item.get("win_amount", 0))
+
+# Falls nur amount gespeichert ist
+        if transaction_type == "bet":
+            bet_amount = abs(float(item.get("amount", bet_amount)))
+            win_amount = 0.0
+
+        elif transaction_type == "win":
+            win_amount = float(item.get("amount", win_amount))
+            bet_amount = 0.0
+
+# WICHTIG: Werte setzen, die Frontend braucht
+        item["bet_amount"] = bet_amount
+        item["win_amount"] = win_amount
+        item["net_outcome"] = win_amount - bet_amount
+        item["amount"] = win_amount - bet_amount
+
     return {
         "items": history,
         "total": total_count,
@@ -5115,7 +5120,7 @@ async def claim_quest_reward(quest_id: str, request: Request):
         quests_since_a = quest_data.get("quests_since_a", 0)
         
         # Reset daily counter if new day
-        if last_a_date != today:
+        if last_a_date and last_a_date != today:
             daily_a = 0
             quests_since_a = 0
         
