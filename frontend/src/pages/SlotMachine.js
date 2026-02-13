@@ -258,7 +258,7 @@ const SlotMachine = () => {
     if (autoSpinRef.current) {
       setTimeout(() => {
         runAutoSpin();
-      }, 1500); // 1.5 second delay between auto-spins
+      }, 500); // 0.5 second delay between auto-spins
     }
   };
 

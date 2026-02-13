@@ -269,7 +269,7 @@ const Dashboard = () => {
 
         {/* Discord Community Banner - Prominent */}
         <a 
-          href="https://discord.gg/placeholder" 
+          href="https://discord.gg/6hX8XJC2MP" 
           target="_blank" 
           rel="noopener noreferrer"
           className="block mb-8 group"

@@ -359,7 +359,7 @@ const GamePass = () => {
                   </span>
                 </div>
                 <a 
-                  href="https://discord.gg/placeholder" 
+                  href="https://discord.gg/6hX8XJC2MP" 
                   target="_blank" 
                   rel="noopener noreferrer"
                   className="flex items-center gap-2 text-primary hover:underline"

@@ -88,7 +88,7 @@ const LandingPage = () => {
       {/* Language Toggle & Discord - Below 18+ banner */}
       <div className="absolute top-28 right-6 z-50 flex items-center gap-3">
         <a
-          href="https://discord.gg/placeholder"
+          href="https://discord.gg/6hX8XJC2MP"
           target="_blank"
           rel="noopener noreferrer"
           className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-[#5865F2] hover:bg-[#4752C4] transition-colors text-white font-bold shadow-lg shadow-[#5865F2]/30"
