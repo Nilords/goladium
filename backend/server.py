@@ -5323,39 +5323,46 @@ async def admin_mute_user(data: AdminMuteRequest, request: Request):
     if not verify_admin_key(request):
         raise HTTPException(status_code=401, detail="Invalid admin key")
     
-    user = await db.users.find_one({"username": data.username}, {"_id": 0})
+    # Case-insensitive username search
+    user = await db.users.find_one(
+        {"username": {"$regex": f"^{data.username}$", "$options": "i"}},
+        {"_id": 0}
+    )
     if not user:
         raise HTTPException(status_code=404, detail=f"User '{data.username}' not found")
     
+    # Use the actual username from DB for consistency
+    actual_username = user["username"]
     now = datetime.now(timezone.utc)
     
     if data.duration_seconds <= 0:
         # Unmute - completely remove mute_until field
         was_muted = user.get("mute_until") is not None
         result = await db.users.update_one(
-            {"username": data.username},
+            {"username": actual_username},
             {"$unset": {"mute_until": ""}}
         )
         return {
             "success": True,
             "action": "unmuted",
-            "username": data.username,
+            "username": actual_username,
             "was_muted": was_muted,
             "modified": result.modified_count > 0
         }
     else:
         # Mute
         mute_until = now + timedelta(seconds=data.duration_seconds)
-        await db.users.update_one(
-            {"username": data.username},
+        result = await db.users.update_one(
+            {"username": actual_username},
             {"$set": {"mute_until": mute_until.isoformat()}}
         )
         return {
             "success": True,
             "action": "muted",
-            "username": data.username,
+            "username": actual_username,
             "mute_until": mute_until.isoformat(),
-            "duration_seconds": data.duration_seconds
+            "duration_seconds": data.duration_seconds,
+            "modified": result.modified_count > 0
         }
 
 @api_router.post("/admin/ban")
