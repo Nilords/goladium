@@ -5422,10 +5422,16 @@ async def admin_modify_balance(data: AdminBalanceRequest, request: Request):
     if not verify_admin_key(request):
         raise HTTPException(status_code=401, detail="Invalid admin key")
     
-    user = await db.users.find_one({"username": data.username}, {"_id": 0})
+    # Case-insensitive username search
+    user = await db.users.find_one(
+        {"username": {"$regex": f"^{data.username}$", "$options": "i"}},
+        {"_id": 0}
+    )
     if not user:
         raise HTTPException(status_code=404, detail=f"User '{data.username}' not found")
     
+    # Use the actual username from DB for consistency
+    actual_username = user["username"]
     currency_field = "balance" if data.currency.lower() == "g" else "balance_a"
     current_balance = user.get(currency_field, 0)
     
@@ -5439,18 +5445,19 @@ async def admin_modify_balance(data: AdminBalanceRequest, request: Request):
     # Prevent negative balance
     new_balance = max(0, new_balance)
     
-    await db.users.update_one(
-        {"username": data.username},
+    result = await db.users.update_one(
+        {"username": actual_username},
         {"$set": {currency_field: round(new_balance, 2)}}
     )
     
     return {
         "success": True,
-        "username": data.username,
+        "username": actual_username,
         "currency": data.currency.upper(),
         "previous_balance": round(current_balance, 2),
         "new_balance": round(new_balance, 2),
-        "action": data.action
+        "action": data.action,
+        "modified": result.modified_count > 0
     }
 
 @api_router.get("/admin/userinfo/{username}")
