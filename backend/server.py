@@ -5466,7 +5466,11 @@ async def admin_get_userinfo(username: str, request: Request):
     if not verify_admin_key(request):
         raise HTTPException(status_code=401, detail="Invalid admin key")
     
-    user = await db.users.find_one({"username": username}, {"_id": 0, "password_hash": 0})
+    # Case-insensitive username search
+    user = await db.users.find_one(
+        {"username": {"$regex": f"^{username}$", "$options": "i"}},
+        {"_id": 0, "password_hash": 0}
+    )
     if not user:
         raise HTTPException(status_code=404, detail=f"User '{username}' not found")
     
