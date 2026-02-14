@@ -5371,24 +5371,35 @@ async def admin_ban_user(data: AdminBanRequest, request: Request):
     if not verify_admin_key(request):
         raise HTTPException(status_code=401, detail="Invalid admin key")
     
-    user = await db.users.find_one({"username": data.username}, {"_id": 0})
+    # Case-insensitive username search
+    user = await db.users.find_one(
+        {"username": {"$regex": f"^{data.username}$", "$options": "i"}},
+        {"_id": 0}
+    )
     if not user:
         raise HTTPException(status_code=404, detail=f"User '{data.username}' not found")
     
+    # Use the actual username from DB for consistency
+    actual_username = user["username"]
     now = datetime.now(timezone.utc)
     
     if data.duration_seconds <= 0:
         # Unban
-        await db.users.update_one(
-            {"username": data.username},
+        result = await db.users.update_one(
+            {"username": actual_username},
             {"$unset": {"banned_until": ""}}
         )
-        return {"success": True, "action": "unbanned", "username": data.username}
+        return {
+            "success": True,
+            "action": "unbanned",
+            "username": actual_username,
+            "modified": result.modified_count > 0
+        }
     else:
         # Ban
         banned_until = now + timedelta(seconds=data.duration_seconds)
-        await db.users.update_one(
-            {"username": data.username},
+        result = await db.users.update_one(
+            {"username": actual_username},
             {"$set": {"banned_until": banned_until.isoformat()}}
         )
         
@@ -5398,10 +5409,11 @@ async def admin_ban_user(data: AdminBanRequest, request: Request):
         return {
             "success": True,
             "action": "banned",
-            "username": data.username,
+            "username": actual_username,
             "banned_until": banned_until.isoformat(),
             "duration_seconds": data.duration_seconds,
-            "sessions_invalidated": True
+            "sessions_invalidated": True,
+            "modified": result.modified_count > 0
         }
 
 @api_router.post("/admin/balance")
