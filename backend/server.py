@@ -1269,12 +1269,8 @@ async def get_current_user(request: Request) -> dict:
                     {"_id": 0}
                 )
                 if user:
-                    # 🔒 BAN CHECK
-                    if user.get("banned"):
-                        raise HTTPException(
-                            status_code=403,
-                            detail="Account Banned. Appeal at Discord"
-                        )
+                    # 🔒 BAN CHECK (time-based)
+                    check_user_banned(user)
                     return user
     
     raise HTTPException(status_code=401, detail="Not authenticated")
