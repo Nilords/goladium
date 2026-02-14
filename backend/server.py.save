@@ -4925,7 +4925,7 @@ async def get_quests(request: Request):
         quests_since_a = 0
     
     # Determine if A-currency quests can be shown
-    can_show_a_quests = quests_since_a >= 5 and daily_a < 5
+    can_show_a_quests = quests_since_a >= 2 and daily_a < 5
     
     # Determine language
     lang = request.headers.get("Accept-Language", "en")[:2]
@@ -5069,7 +5069,7 @@ async def get_quests(request: Request):
     return {
         "slots": result_slots,
         "quests": quests,  # Legacy support
-        "quests_until_a_chance": max(0, 5 - quests_since_a) if not can_show_a_quests else 0,
+        "quests_until_a_chance": max(0, 2 - quests_since_a) if not can_show_a_quests else 0,
         "daily_a_earned": daily_a,
         "daily_a_limit": 5
     }
@@ -5120,12 +5120,12 @@ async def claim_quest_reward(quest_id: str, request: Request):
         quests_since_a = quest_data.get("quests_since_a", 0)
         
         # Reset daily counter if new day
-        if last_a_date and last_a_date != today:
+        if last_a_date != today:
             daily_a = 0
             quests_since_a = 0
         
         # Check if A can be given (max 5/day, 2 quest cooldown)
-        can_give_a = daily_a < 5 and quests_since_a >= 5
+        can_give_a = daily_a < 5 and quests_since_a >= 2
         
         if can_give_a:
             a_amount = min(rewards["a"], 5 - daily_a)  # Cap at remaining daily
