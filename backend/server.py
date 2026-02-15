@@ -5876,6 +5876,118 @@ async def admin_get_userinfo(username: str, request: Request):
         "created_at": user.get("created_at")
     }
 
+@api_router.get("/admin/moderation-logs/{username}")
+async def admin_get_moderation_logs(username: str, request: Request, limit: int = 50):
+    """Get moderation logs for a user (Discord bot endpoint)"""
+    if not verify_admin_key(request):
+        raise HTTPException(status_code=401, detail="Invalid admin key")
+    
+    # Case-insensitive username search
+    user = await db.users.find_one(
+        {"username": {"$regex": f"^{username}$", "$options": "i"}},
+        {"_id": 0, "user_id": 1, "username": 1}
+    )
+    if not user:
+        raise HTTPException(status_code=404, detail=f"User '{username}' not found")
+    
+    logs = await db.moderation_logs.find(
+        {"user_id": user["user_id"]},
+        {"_id": 0}
+    ).sort("timestamp", -1).limit(limit).to_list(limit)
+    
+    return {
+        "username": user["username"],
+        "total_logs": len(logs),
+        "logs": logs
+    }
+
+@api_router.post("/admin/reset-moderation/{username}")
+async def admin_reset_moderation_counters(username: str, request: Request):
+    """Reset moderation counters for a user (Discord bot endpoint)"""
+    if not verify_admin_key(request):
+        raise HTTPException(status_code=401, detail="Invalid admin key")
+    
+    # Case-insensitive username search
+    user = await db.users.find_one(
+        {"username": {"$regex": f"^{username}$", "$options": "i"}},
+        {"_id": 0, "user_id": 1, "username": 1}
+    )
+    if not user:
+        raise HTTPException(status_code=404, detail=f"User '{username}' not found")
+    
+    # Reset all moderation counters and remove permanent mute
+    result = await db.users.update_one(
+        {"user_id": user["user_id"]},
+        {
+            "$set": {
+                "spam_count": 0,
+                "profanity_count": 0,
+                "advertising_count": 0,
+                "permanently_chat_muted": False
+            },
+            "$unset": {"mute_until": ""}
+        }
+    )
+    
+    # Log the reset action
+    log_entry = {
+        "log_id": f"mod_{uuid.uuid4().hex[:12]}",
+        "user_id": user["user_id"],
+        "username": user["username"],
+        "action": "admin_reset",
+        "violation_type": "admin_action",
+        "reason": "Moderation counters reset by admin",
+        "timestamp": datetime.now(timezone.utc).isoformat()
+    }
+    await db.moderation_logs.insert_one(log_entry)
+    
+    return {
+        "success": True,
+        "username": user["username"],
+        "action": "moderation_reset",
+        "message": "All moderation counters reset and mutes cleared"
+    }
+
+@api_router.get("/admin/moderation-stats/{username}")
+async def admin_get_moderation_stats(username: str, request: Request):
+    """Get moderation statistics for a user (Discord bot endpoint)"""
+    if not verify_admin_key(request):
+        raise HTTPException(status_code=401, detail="Invalid admin key")
+    
+    # Case-insensitive username search
+    user = await db.users.find_one(
+        {"username": {"$regex": f"^{username}$", "$options": "i"}},
+        {"_id": 0, "user_id": 1, "username": 1, "spam_count": 1, "profanity_count": 1, 
+         "advertising_count": 1, "permanently_chat_muted": 1, "mute_until": 1}
+    )
+    if not user:
+        raise HTTPException(status_code=404, detail=f"User '{username}' not found")
+    
+    # Check mute status
+    now = datetime.now(timezone.utc)
+    mute_until = user.get("mute_until")
+    is_muted = False
+    mute_remaining = 0
+    
+    if mute_until:
+        if isinstance(mute_until, str):
+            mute_until = datetime.fromisoformat(mute_until)
+        if mute_until.tzinfo is None:
+            mute_until = mute_until.replace(tzinfo=timezone.utc)
+        if mute_until > now:
+            is_muted = True
+            mute_remaining = int((mute_until - now).total_seconds())
+    
+    return {
+        "username": user["username"],
+        "spam_count": user.get("spam_count", 0),
+        "profanity_count": user.get("profanity_count", 0),
+        "advertising_count": user.get("advertising_count", 0),
+        "permanently_chat_muted": user.get("permanently_chat_muted", False),
+        "is_currently_muted": is_muted,
+        "mute_remaining_seconds": mute_remaining
+    }
+
 # Include router AFTER all endpoints are defined
 app.include_router(api_router)
 
