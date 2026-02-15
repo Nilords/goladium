@@ -6007,6 +6007,11 @@ async def initialize_item_system():
     await db.trades.create_index([("initiator_id", 1), ("status", 1)])
     await db.trades.create_index([("recipient_id", 1), ("status", 1)])
     
+    # Create indexes for moderation logs
+    await db.moderation_logs.create_index("log_id", unique=True)
+    await db.moderation_logs.create_index([("user_id", 1), ("timestamp", -1)])
+    await db.moderation_logs.create_index("violation_type")
+    
     # Seed items if they don't exist
     for item_data in SEED_ITEMS:
         existing = await db.items.find_one({"item_id": item_data["item_id"]})
