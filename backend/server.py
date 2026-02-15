@@ -4305,20 +4305,26 @@ async def get_user_active_cosmetics(user_id: str):
 @api_router.post("/chat/send", response_model=ChatMessage)
 async def send_chat_message(message_data: ChatMessageCreate, request: Request):
     user = await get_current_user(request)
-
-    # MUTE CHECK - Return 403 if muted (not a ChatMessage)
+    user_id = user["user_id"]
+    username = user["username"]
+    
+    # ========== AUTOMATED MODERATION SYSTEM ==========
+    # Check for permanent chat mute first
+    if user.get("permanently_chat_muted"):
+        raise HTTPException(
+            status_code=403,
+            detail="You have been permanently muted in chat. If you believe this was a mistake, please contact us on Discord."
+        )
+    
+    # Check existing mute (from manual mute or previous auto-mute)
     mute_until = user.get("mute_until")
-
     if mute_until is not None:
-
         if isinstance(mute_until, str):
             mute_until = datetime.fromisoformat(mute_until)
-
         if mute_until.tzinfo is None:
             mute_until = mute_until.replace(tzinfo=timezone.utc)
-
+        
         now = datetime.now(timezone.utc)
-
         if mute_until > now:
             remaining_seconds = max(0, int((mute_until - now).total_seconds()))
             raise HTTPException(
@@ -4326,6 +4332,16 @@ async def send_chat_message(message_data: ChatMessageCreate, request: Request):
                 detail=f"You are muted for {remaining_seconds} more seconds."
             )
     
+    # Run automated moderation checks
+    moderation_result = await moderate_message(user_id, username, message_data.message)
+    
+    if not moderation_result.allowed:
+        raise HTTPException(
+            status_code=403,
+            detail=moderation_result.error_message
+        )
+    
+    # ========== MESSAGE APPROVED - PROCEED ==========
     now = datetime.now(timezone.utc)
     
     # Get active prestige cosmetics for display
