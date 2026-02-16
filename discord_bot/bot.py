@@ -40,11 +40,16 @@ async def api_request(method: str, endpoint: str, data: dict = None) -> dict:
                 return {"status": resp.status, "data": await resp.json()}
 
 def parse_duration(duration_str: str) -> int:
-    """Parse duration string like '1h', '30m', '7d' to seconds"""
+    """Parse duration string like '1h', '30m', '7d' to seconds. Returns -1 for permanent."""
     duration_str = duration_str.lower().strip()
     
-    if duration_str in ["0", "permanent", "perm"]:
-        return 0  # Will be handled as unban/unmute when 0
+    # Permanent mute
+    if duration_str in ["permanent", "perm", "perma", "forever", "-1"]:
+        return -1
+    
+    # Unmute (0 seconds)
+    if duration_str == "0":
+        return 0
     
     multipliers = {
         's': 1,
@@ -100,8 +105,8 @@ async def on_ready():
 
 # ============== MODERATION COMMANDS ==============
 
-@bot.tree.command(name="mute", description="Mute a user in chat")
-@app_commands.describe(username="Goladium username", duration="Duration (e.g. 1h, 30m, 7d)")
+@bot.tree.command(name="mute", description="Mute a user in chat (use 'perm' for permanent)")
+@app_commands.describe(username="Goladium username", duration="Duration (e.g. 1h, 30m, 7d, perm)")
 @app_commands.guilds(discord.Object(id=GUILD_ID)) if GUILD_ID else app_commands.guilds()
 async def mute(interaction: discord.Interaction, username: str, duration: str):
     if not is_admin(interaction):
@@ -111,8 +116,10 @@ async def mute(interaction: discord.Interaction, username: str, duration: str):
     await interaction.response.defer(ephemeral=True)
     
     seconds = parse_duration(duration)
-    if seconds <= 0:
-        await interaction.followup.send("Invalid duration. Use format: 1h, 30m, 7d")
+    
+    # Check for invalid duration (0 means unmute, not allowed here)
+    if seconds == 0:
+        await interaction.followup.send("Invalid duration. Use format: 1h, 30m, 7d, perm")
         return
     
     result = await api_request("POST", "/admin/mute", {
@@ -121,15 +128,21 @@ async def mute(interaction: discord.Interaction, username: str, duration: str):
     })
     
     if result["status"] == 200:
-        await interaction.followup.send(
-            f"**{username}** muted for **{format_duration(seconds)}**"
-        )
+        data = result["data"]
+        if data.get("is_permanent") or seconds == -1:
+            await interaction.followup.send(
+                f"⛔ **{username}** has been **PERMANENTLY** muted in chat"
+            )
+        else:
+            await interaction.followup.send(
+                f"🔇 **{username}** muted for **{format_duration(seconds)}**"
+            )
     elif result["status"] == 404:
         await interaction.followup.send(f"User '{username}' not found")
     else:
         await interaction.followup.send(f"Error: {result['data'].get('detail', 'Unknown error')}")
 
-@bot.tree.command(name="unmute", description="Unmute a user")
+@bot.tree.command(name="unmute", description="Unmute a user (works for both temp and permanent mutes)")
 @app_commands.describe(username="Goladium username")
 @app_commands.guilds(discord.Object(id=GUILD_ID)) if GUILD_ID else app_commands.guilds()
 async def unmute(interaction: discord.Interaction, username: str):
@@ -146,10 +159,15 @@ async def unmute(interaction: discord.Interaction, username: str):
     
     if result["status"] == 200:
         data = result["data"]
-        if data.get("was_muted"):
-            await interaction.followup.send(f"**{username}** has been unmuted")
+        was_muted = data.get("was_muted", False)
+        was_perma = data.get("was_permanently_muted", False)
+        
+        if was_perma:
+            await interaction.followup.send(f"✅ **{data['username']}** permanent mute has been removed")
+        elif was_muted:
+            await interaction.followup.send(f"✅ **{data['username']}** has been unmuted")
         else:
-            await interaction.followup.send(f"**{username}** was not muted")
+            await interaction.followup.send(f"ℹ️ **{data['username']}** was not muted")
     elif result["status"] == 404:
         await interaction.followup.send(f"User '{username}' not found")
     else:

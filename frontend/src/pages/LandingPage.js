@@ -196,8 +196,8 @@ const LandingPage = () => {
 
             {/* Starting Balance */}
             <div className="inline-flex items-center space-x-3 px-6 py-3 rounded-xl bg-gold/10 border border-gold/30">
-              <span className="text-gold font-mono text-2xl font-bold">50.00</span>
-              <span className="text-gold/80">{t('currency_name')} {language === 'de' ? 'Startguthaben' : 'Starting Balance'}</span>
+              <span className="text-gold font-mono text-2xl font-bold">10.00 G</span>
+              <span className="text-gold/80">{t('')} {language === 'de' ? 'Neu Spieler Bonus' : 'New Player Welcome Boost'}</span>
             </div>
           </div>
 

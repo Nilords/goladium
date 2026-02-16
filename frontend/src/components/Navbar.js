@@ -56,10 +56,6 @@ const Navbar = () => {
 
   return (
     <>
-      {/* Disclaimer Bar */}
-      <div className="disclaimer-bar">
-        {t('disclaimer')}
-      </div>
 
       {/* Main Navbar */}
       <nav className="sticky top-0 z-50 bg-black/80 backdrop-blur-xl border-b border-white/10">

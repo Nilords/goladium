@@ -42,6 +42,9 @@ DISCORD_WEBHOOK_URL = os.environ.get('DISCORD_WEBHOOK_URL', '')
 # Password hashing
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
+# ALPHA REGISTRATION LOCK
+ALPHA_REGISTRATION_OPEN = False
+
 # Create the main app
 app = FastAPI(
     title="Goladium API",
@@ -2139,6 +2142,10 @@ async def send_discord_webhook(event_type: str, data: dict):
 
 @api_router.post("/auth/register", response_model=TokenResponse)
 async def register(user_data: UserCreate):
+    # 🔒 ALPHA LOCK
+    if not ALPHA_REGISTRATION_OPEN:
+        raise HTTPException(status_code=403, detail="Registration temporarily disabled during Alpha testing.")
+
     # Auto-generate email from username if not provided
     email = user_data.email if user_data.email else f"{user_data.username.lower()}@goladium.local"
     
@@ -2192,7 +2199,7 @@ async def register(user_data: UserCreate):
         user_id=user_id,
         email=email,
         username=user_data.username,
-        balance=50.0,
+        balance=10.0,
         balance_a=0.0,
         level=1,
         xp=0,
@@ -2695,8 +2702,8 @@ async def spin_slot(bet_request: SlotBetRequest, request: Request):
     if result["is_win"]:
         await update_quest_progress(user["user_id"], "wins", 1, bet_amount=total_bet)
     
-    # Record big wins (>= 10 G) to live feed
-    if win_amount >= 10:
+    # Record big wins (>= 100 G) to live feed
+    if win_amount >= 100:
         await record_big_win(
             user=user,
             game_type="slot",
@@ -4421,20 +4428,11 @@ async def get_available_cosmetics():
 
 # ============== MISC ENDPOINTS ==============
 
-@api_router.get("/")
-async def root():
-    return {
-        "message": "Welcome to Goladium API",
-        "version": "2.0.0",
-        "disclaimer": "This is a demo simulation. No real money, no real items, no real-world value."
-    }
-
 @api_router.get("/translations")
 async def get_translations(lang: str = "en"):
     translations = {
         "en": {
             "app_name": "Goladium",
-            "disclaimer": "This is a demo simulation. No real money, no real items, no real-world value.",
             "currency_name": "Goladium",
             "login": "Login",
             "register": "Register",
@@ -4475,7 +4473,6 @@ async def get_translations(lang: str = "en"):
         },
         "de": {
             "app_name": "Goladium",
-            "disclaimer": "Dies ist eine Demo-Simulation. Kein echtes Geld, keine echten Gegenstände, kein realer Wert.",
             "currency_name": "Goladium",
             "login": "Anmelden",
             "register": "Registrieren",
@@ -5658,7 +5655,7 @@ def verify_admin_key(request: Request) -> bool:
 
 class AdminMuteRequest(BaseModel):
     username: str
-    duration_seconds: int  # 0 = unmute
+    duration_seconds: int  # 0 = unmute, -1 = permanent mute
 
 class AdminBanRequest(BaseModel):
     username: str
@@ -5688,7 +5685,7 @@ async def admin_mute_user(data: AdminMuteRequest, request: Request):
     actual_username = user["username"]
     now = datetime.now(timezone.utc)
     
-    if data.duration_seconds <= 0:
+    if data.duration_seconds == 0:
         # Unmute - remove mute_until AND permanently_chat_muted flag
         was_muted = user.get("mute_until") is not None
         was_perma_muted = user.get("permanently_chat_muted", False)
@@ -5708,12 +5705,45 @@ async def admin_mute_user(data: AdminMuteRequest, request: Request):
             "was_permanently_muted": was_perma_muted,
             "modified": result.modified_count > 0
         }
+    elif data.duration_seconds == -1:
+        # Permanent chat mute
+        result = await db.users.update_one(
+            {"username": actual_username},
+            {
+                "$set": {"permanently_chat_muted": True},
+                "$unset": {"mute_until": ""}
+            }
+        )
+        
+        # Log moderation action
+        log_entry = {
+            "log_id": f"mod_{uuid.uuid4().hex[:12]}",
+            "user_id": user["user_id"],
+            "username": actual_username,
+            "action": "permanent_chat_mute",
+            "violation_type": "admin_action",
+            "reason": "Permanently muted by admin via Discord",
+            "is_permanent": True,
+            "timestamp": now.isoformat()
+        }
+        await db.moderation_logs.insert_one(log_entry)
+        
+        return {
+            "success": True,
+            "action": "permanently_muted",
+            "username": actual_username,
+            "is_permanent": True,
+            "modified": result.modified_count > 0
+        }
     else:
-        # Mute
+        # Temporary mute
         mute_until = now + timedelta(seconds=data.duration_seconds)
         result = await db.users.update_one(
             {"username": actual_username},
-            {"$set": {"mute_until": mute_until.isoformat()}}
+            {
+                "$set": {"mute_until": mute_until.isoformat()},
+                "$unset": {"permanently_chat_muted": ""}  # Clear perma flag if doing temp mute
+            }
         )
         return {
             "success": True,

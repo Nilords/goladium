@@ -24,6 +24,7 @@ const Chat = () => {
   const [unreadCount, setUnreadCount] = useState(0);
   const [muteError, setMuteError] = useState(null);
   const scrollRef = useRef(null);
+  const [isAtBottom, setIsAtBottom] = useState(true);
   const lastMessageCountRef = useRef(0);
   const wasDraggingRef = useRef(false);
 
@@ -36,6 +37,18 @@ const Chat = () => {
       y: window.innerHeight - FOOTER_HEIGHT - panelHeight - 16
     };
   }, [isExpanded]);
+
+  const handleScroll = () => {
+    if (!scrollRef.current) return;
+
+    const el = scrollRef.current;
+
+    const threshold = 40; // Toleranz in px
+    const atBottom =
+      el.scrollHeight - el.scrollTop - el.clientHeight < threshold;
+
+    setIsAtBottom(atBottom);
+  };
 
   const { 
     position, 
@@ -99,10 +112,10 @@ const Chat = () => {
   }, []);
 
   useEffect(() => {
-    if (scrollRef.current && isExpanded) {
+    if (scrollRef.current && isExpanded && isAtBottom) {
       scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
     }
-  }, [messages, isExpanded]);
+  }, [messages, isExpanded, isAtBottom]);
 
   // Track unread messages when collapsed
   useEffect(() => {
@@ -279,8 +292,13 @@ const Chat = () => {
           </button>
         </div>
 
-        {/* Messages */}
-        <ScrollArea className="flex-1 p-3" ref={scrollRef}>
+      {/* Messages */}
+      <ScrollArea className="flex-1 p-3">
+        <div
+          ref={scrollRef}
+          onScroll={handleScroll}
+          className="h-full overflow-y-auto pr-2"
+        >
           <div className="space-y-2.5">
             {messages.length === 0 ? (
               <div className="text-center text-white/40 py-8">
@@ -326,12 +344,13 @@ const Chat = () => {
                       </div>
                       <p className="text-xs text-white/80 break-words mt-0.5">
                         {msg.message}
-                      </p>
-                    </div>
-                  </div>
-                </div>
-              ))
-            )}
+                       </p>
+                     </div>
+                   </div>
+                 </div>
+               ))
+             )}
+           </div>
           </div>
         </ScrollArea>
 
