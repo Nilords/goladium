@@ -283,17 +283,9 @@ const Profile = () => {
           </CardContent>
         </Card>
 
-        {/* Tabs - Fixed with proper value binding */}
+        {/* Tabs - Two tabs: History and Stats & Analytics */}
         <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-          <TabsList className="grid w-full grid-cols-3 bg-[#0A0A0C] border border-white/5 mb-6 h-12">
-            <TabsTrigger 
-              value="stats" 
-              className="data-[state=active]:bg-primary data-[state=active]:text-black h-full"
-              data-testid="stats-tab"
-            >
-              <BarChart3 className="w-4 h-4 mr-2" />
-              {language === 'de' ? 'Statistiken' : 'Statistics'}
-            </TabsTrigger>
+          <TabsList className="grid w-full grid-cols-2 bg-[#0A0A0C] border border-white/5 mb-6 h-12">
             <TabsTrigger 
               value="history"
               className="data-[state=active]:bg-primary data-[state=active]:text-black h-full"
@@ -308,126 +300,9 @@ const Profile = () => {
               data-testid="analytics-tab"
             >
               <Activity className="w-4 h-4 mr-2" />
-              {language === 'de' ? 'Analyse' : 'Analytics'}
+              {language === 'de' ? 'Statistiken & Analyse' : 'Stats & Analytics'}
             </TabsTrigger>
           </TabsList>
-
-          {/* Statistics Tab */}
-          <TabsContent value="stats" className="mt-0">
-            <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-4 mb-6">
-              <Card className="bg-[#0A0A0C] border-white/5">
-                <CardContent className="p-4">
-                  <div className="flex items-center justify-between mb-2">
-                    <span className="text-white/50 text-sm">{t('total_spins')}</span>
-                    <Sparkles className="w-4 h-4 text-primary" />
-                  </div>
-                  <p className="text-2xl font-bold text-white">{stats?.overall?.total_spins || 0}</p>
-                </CardContent>
-              </Card>
-
-              <Card className="bg-[#0A0A0C] border-white/5">
-                <CardContent className="p-4">
-                  <div className="flex items-center justify-between mb-2">
-                    <span className="text-white/50 text-sm">{t('total_wagered') || 'Total Wagered'}</span>
-                    <Gamepad2 className="w-4 h-4 text-gold" />
-                  </div>
-                  <p className="text-2xl font-bold font-mono text-gold">
-                    {stats?.overall?.total_wagered?.toFixed(2) || '0.00'}
-                  </p>
-                </CardContent>
-              </Card>
-
-              <Card className="bg-[#0A0A0C] border-white/5">
-                <CardContent className="p-4">
-                  <div className="flex items-center justify-between mb-2">
-                    <span className="text-white/50 text-sm">{t('net_profit')}</span>
-                    {(stats?.overall?.net_profit || 0) >= 0 ? (
-                      <TrendingUp className="w-4 h-4 text-green-500" />
-                    ) : (
-                      <TrendingDown className="w-4 h-4 text-red-500" />
-                    )}
-                  </div>
-                  <p className={`text-2xl font-bold font-mono ${
-                    (stats?.overall?.net_profit || 0) >= 0 ? 'text-green-500' : 'text-red-500'
-                  }`}>
-                    {(stats?.overall?.net_profit || 0) >= 0 ? '+' : ''}
-                    {stats?.overall?.net_profit?.toFixed(2) || '0.00'}
-                  </p>
-                </CardContent>
-              </Card>
-            </div>
-
-            {/* Game-specific Stats */}
-            <div className="grid md:grid-cols-2 gap-6">
-              {/* Always show Slots card */}
-              {(() => {
-                const slotStats = Object.entries(stats?.by_game || {}).find(([key, gs]) => gs.game_type === 'slot');
-                const slotData = slotStats ? slotStats[1] : null;
-                return (
-                  <Card className="bg-[#0A0A0C] border-white/5">
-                    <CardHeader className="pb-2">
-                      <CardTitle className="text-lg text-white flex items-center gap-2">
-                        <Gamepad2 className="w-5 h-5 text-primary" />
-                        {slotData?.slot_name || t('slot_machine')}
-                      </CardTitle>
-                    </CardHeader>
-                    <CardContent className="space-y-3">
-                      <div className="flex justify-between">
-                        <span className="text-white/60">{language === 'de' ? 'Einsätze' : 'Total Bets'}</span>
-                        <span className="text-white font-mono">{slotData?.total_bets || 0}</span>
-                      </div>
-                      <div className="flex justify-between">
-                        <span className="text-white/60">{language === 'de' ? 'Gewettet' : 'Wagered'}</span>
-                        <span className="text-gold font-mono">{(slotData?.total_wagered || 0).toFixed(2)} G</span>
-                      </div>
-                      <div className="flex justify-between">
-                        <span className="text-white/60">{language === 'de' ? 'Gewonnen' : 'Won'}</span>
-                        <span className="text-green-500 font-mono">{(slotData?.total_won || 0).toFixed(2)} G</span>
-                      </div>
-                      <div className="flex justify-between">
-                        <span className="text-white/60">{language === 'de' ? 'Gewinnrate' : 'Win Rate'}</span>
-                        <span className="text-primary font-mono">{slotData?.win_rate || 0}%</span>
-                      </div>
-                    </CardContent>
-                  </Card>
-                );
-              })()}
-
-              {/* Always show Jackpot card */}
-              {(() => {
-                const jackpotStats = Object.entries(stats?.by_game || {}).find(([key, gs]) => gs.game_type === 'jackpot');
-                const jackpotData = jackpotStats ? jackpotStats[1] : null;
-                return (
-                  <Card className="bg-[#0A0A0C] border-white/5 border-purple-500/30">
-                    <CardHeader className="pb-2">
-                      <CardTitle className="text-lg text-white flex items-center gap-2">
-                        <Trophy className="w-5 h-5 text-purple-400" />
-                        Jackpot
-                      </CardTitle>
-                    </CardHeader>
-                    <CardContent className="space-y-3">
-                      <div className="flex justify-between">
-                        <span className="text-white/60">{language === 'de' ? 'Einsätze' : 'Total Bets'}</span>
-                        <span className="text-white font-mono">{jackpotData?.total_bets || 0}</span>
-                      </div>
-                      <div className="flex justify-between">
-                        <span className="text-white/60">{language === 'de' ? 'Gewettet' : 'Wagered'}</span>
-                        <span className="text-gold font-mono">{(jackpotData?.total_wagered || 0).toFixed(2)} G</span>
-                      </div>
-                      <div className="flex justify-between">
-                        <span className="text-white/60">{language === 'de' ? 'Gewonnen' : 'Won'}</span>
-                        <span className="text-green-500 font-mono">{(jackpotData?.total_won || 0).toFixed(2)} G</span>
-                      </div>
-                      <div className="flex justify-between">
-                        <span className="text-white/60">{language === 'de' ? 'Gewinnrate' : 'Win Rate'}</span>
-                        <span className="text-purple-400 font-mono">{jackpotData?.win_rate || 0}%</span>
-                      </div>
-                    </CardContent>
-                  </Card>
-                );
-              })()}
-            </div>
-          </TabsContent>
 
           {/* History Tab */}
           <TabsContent value="history" className="mt-0">
