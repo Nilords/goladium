@@ -583,29 +583,28 @@ QUEST_DEFINITIONS = [
     },
 ]
 
-# Game Pass reward items (every 10 levels)
-GAME_PASS_REWARDS = {
-    # Level: {"free": {...}, "galadium": {...}}
-    10: {
-        "free": {"type": "item", "item_id": "common_chest", "name": "Common Chest"},
-        "galadium": {"type": "item", "item_id": "rare_chest", "name": "Rare Chest"}
-    },
-    20: {
-        "free": {"type": "item", "item_id": "uncommon_chest", "name": "Uncommon Chest"},
-        "galadium": {"type": "item", "item_id": "epic_chest", "name": "Epic Chest"}
-    },
-    30: {
-        "free": {"type": "item", "item_id": "rare_chest", "name": "Rare Chest"},
-        "galadium": {"type": "item", "item_id": "legendary_chest", "name": "Legendary Chest"}
-    },
-    40: {
-        "free": {"type": "item", "item_id": "epic_chest", "name": "Epic Chest"},
-        "galadium": {"type": "item", "item_id": "legendary_chest", "name": "Legendary Chest"}
-    },
-    50: {
-        "free": {"type": "item", "item_id": "legendary_chest", "name": "Legendary Chest"},
-        "galadium": {"type": "item", "item_id": "mythic_chest", "name": "Mythic Chest"}
-    },
+# Game Pass Chest System
+# Every level = 1 chest for everyone
+# Galadium Pass active = +1 bonus chest per level (2 total)
+
+# Standard GamePass Chest item
+GAMEPASS_CHEST = {
+    "item_id": "gamepass_chest",
+    "name": "GamePass Chest",
+    "flavor_text": "A reward for your dedication. What treasures await inside?",
+    "rarity": "uncommon",
+    "base_value": 10.0,
+    "category": "chest"
+}
+
+# Galadium Pass Bonus Chest item (slightly better looking)
+GALADIUM_CHEST = {
+    "item_id": "galadium_chest", 
+    "name": "Galadium Chest",
+    "flavor_text": "A premium reward for Galadium Pass holders. Golden treasures await!",
+    "rarity": "rare",
+    "base_value": 15.0,
+    "category": "chest"
 }
 
 # ============== MODELS ==============
