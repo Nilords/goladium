@@ -4307,6 +4307,117 @@ async def get_user_active_cosmetics(user_id: str):
         "active_cosmetics": active
     }
 
+# ============== ACCOUNT VALUE TRACKING ==============
+
+async def record_value_snapshot(user_id: str, balance_g: float, balance_a: float, trigger: str = "auto"):
+    """Record a snapshot of user's account value"""
+    now = datetime.now(timezone.utc)
+    total_value = balance_g + balance_a
+    
+    snapshot = {
+        "snapshot_id": f"snap_{uuid.uuid4().hex[:12]}",
+        "user_id": user_id,
+        "balance_g": round(balance_g, 2),
+        "balance_a": round(balance_a, 2),
+        "total_value": round(total_value, 2),
+        "trigger": trigger,
+        "timestamp": now.isoformat()
+    }
+    
+    await db.value_snapshots.insert_one(snapshot)
+    return snapshot
+
+@api_router.get("/user/value-history")
+async def get_value_history(request: Request, timeframe: str = "daily"):
+    """Get user's account value history for chart"""
+    user = await get_current_user(request)
+    user_id = user["user_id"]
+    now = datetime.now(timezone.utc)
+    
+    # Time range based on timeframe
+    if timeframe == "hourly":
+        start_time = now - timedelta(hours=24)
+    elif timeframe == "weekly":
+        start_time = now - timedelta(weeks=12)
+    else:  # daily
+        start_time = now - timedelta(days=30)
+    
+    # Fetch snapshots
+    snapshots = await db.value_snapshots.find(
+        {"user_id": user_id, "timestamp": {"$gte": start_time.isoformat()}},
+        {"_id": 0, "total_value": 1, "balance_g": 1, "balance_a": 1, "timestamp": 1}
+    ).sort("timestamp", 1).to_list(10000)
+    
+    current_g = user.get("balance", 0)
+    current_a = user.get("balance_a", 0)
+    current_value = current_g + current_a
+    
+    # No history - create initial snapshot
+    if not snapshots:
+        initial = await record_value_snapshot(user_id, current_g, current_a, "initial")
+        return {
+            "timeframe": timeframe,
+            "data_points": [{
+                "timestamp": initial["timestamp"],
+                "total_value": initial["total_value"],
+                "balance_g": initial["balance_g"],
+                "balance_a": initial["balance_a"]
+            }],
+            "stats": {
+                "highest": current_value,
+                "lowest": current_value,
+                "current": current_value,
+                "range": 0,
+                "percent_change": 0,
+                "all_time_high": current_value,
+                "all_time_low": current_value
+            }
+        }
+    
+    # Build data points
+    data_points = []
+    for snap in snapshots:
+        data_points.append({
+            "timestamp": snap["timestamp"],
+            "total_value": snap["total_value"],
+            "balance_g": snap.get("balance_g", snap["total_value"]),
+            "balance_a": snap.get("balance_a", 0)
+        })
+    
+    # Calculate ALL values including current for accurate ATH/ATL
+    all_values = [dp["total_value"] for dp in data_points] + [current_value]
+    
+    # Stats - ATH/ATL from ALL data, not just timeframe
+    all_snapshots = await db.value_snapshots.find(
+        {"user_id": user_id},
+        {"_id": 0, "total_value": 1}
+    ).to_list(100000)
+    
+    all_time_values = [s["total_value"] for s in all_snapshots] + [current_value]
+    
+    highest_in_range = max([dp["total_value"] for dp in data_points]) if data_points else current_value
+    lowest_in_range = min([dp["total_value"] for dp in data_points]) if data_points else current_value
+    
+    all_time_high = max(all_time_values)
+    all_time_low = min(all_time_values)
+    
+    start_value = data_points[0]["total_value"] if data_points else current_value
+    percent_change = ((current_value - start_value) / abs(start_value) * 100) if start_value != 0 else 0
+    
+    return {
+        "timeframe": timeframe,
+        "data_points": data_points,
+        "stats": {
+            "highest": round(highest_in_range, 2),
+            "lowest": round(lowest_in_range, 2),
+            "current": round(current_value, 2),
+            "range": round(highest_in_range - lowest_in_range, 2),
+            "percent_change": round(percent_change, 2),
+            "all_time_high": round(all_time_high, 2),
+            "all_time_low": round(all_time_low, 2)
+        }
+    }
+
 # ============== CHAT ENDPOINTS ==============
 
 @api_router.post("/chat/send", response_model=ChatMessage)
