@@ -463,9 +463,9 @@ const Dashboard = () => {
                     <Target className="w-4 h-4 mr-1" />
                     Quests
                   </TabsTrigger>
-                  <TabsTrigger value="pass" className="data-[state=active]:bg-primary/20 data-[state=active]:text-primary text-sm">
-                    <Gift className="w-4 h-4 mr-1" />
-                    {language === 'de' ? 'Belohnungen' : 'Rewards'}
+                  <TabsTrigger value="pass" className="data-[state=active]:bg-yellow-500/20 data-[state=active]:text-yellow-400 text-sm">
+                    <Package className="w-4 h-4 mr-1" />
+                    {language === 'de' ? 'Truhen' : 'Chests'}
                   </TabsTrigger>
                 </TabsList>
               </div>
