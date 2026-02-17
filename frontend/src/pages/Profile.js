@@ -5,6 +5,7 @@ import { formatCurrency, formatCurrencyFull } from '../lib/formatCurrency';
 import Navbar from '../components/Navbar';
 import Footer from '../components/Footer';
 import Chat from '../components/Chat';
+import AccountValueChart from '../components/AccountValueChart';
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card';
 import { Badge } from '../components/ui/badge';
 import { Button } from '../components/ui/button';
@@ -22,7 +23,7 @@ import {
   TableRow 
 } from '../components/ui/table';
 import { 
-  Trophy, 
+  Activity,
   History, 
   TrendingUp, 
   TrendingDown,
