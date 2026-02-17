@@ -6572,6 +6572,29 @@ SEED_ITEMS = [
         "category": "chest",
         "is_tradeable": True,
         "is_sellable": True
+    },
+    # GamePass Level Reward Chests
+    {
+        "item_id": "gamepass_chest",
+        "name": "GamePass Chest",
+        "flavor_text": "A reward for your dedication. What treasures await inside?",
+        "rarity": "uncommon",
+        "base_value": 10.0,
+        "image_url": None,
+        "category": "chest",
+        "is_tradeable": True,
+        "is_sellable": True
+    },
+    {
+        "item_id": "galadium_chest",
+        "name": "Galadium Chest",
+        "flavor_text": "A premium reward for Galadium Pass holders. Golden treasures await!",
+        "rarity": "rare",
+        "base_value": 15.0,
+        "image_url": None,
+        "category": "chest",
+        "is_tradeable": True,
+        "is_sellable": True
     }
 ]
 
