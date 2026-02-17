@@ -97,6 +97,7 @@ const Inventory = () => {
   };
 
   const handleSellClick = () => {
+    setSellAmount(1);
     setShowSellConfirm(true);
   };
 
@@ -105,35 +106,76 @@ const Inventory = () => {
     
     setSelling(true);
     try {
-      const response = await fetch(`/api/inventory/sell`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`
-        },
-        credentials: 'include',
-        body: JSON.stringify({ inventory_id: selectedItem.inventory_id })
-      });
+      // Check if we're selling multiple items
+      const itemCount = selectedItem.count || 1;
+      const actualSellAmount = Math.min(sellAmount, itemCount);
       
-      const data = await response.json();
-      
-      if (response.ok) {
-        toast.success(
-          <div className="flex items-center gap-2">
-            <Coins className="w-5 h-5 text-gold" />
-            <span>
-              {language === 'de' 
-                ? `${selectedItem.item_name} für ${data.sell_amount.toFixed(2)} G verkauft!`
-                : `Sold ${selectedItem.item_name} for ${data.sell_amount.toFixed(2)} G!`}
-            </span>
-          </div>
-        );
-        setShowSellConfirm(false);
-        setSelectedItem(null);
-        loadInventory();
-        if (refreshUser) refreshUser();
+      if (actualSellAmount > 1 && selectedItem.inventory_ids?.length > 1) {
+        // Batch sell - use first N inventory_ids
+        const idsToSell = selectedItem.inventory_ids.slice(0, actualSellAmount);
+        
+        const response = await fetch(`/api/inventory/sell-batch`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`
+          },
+          credentials: 'include',
+          body: JSON.stringify({ inventory_ids: idsToSell })
+        });
+        
+        const data = await response.json();
+        
+        if (response.ok) {
+          toast.success(
+            <div className="flex items-center gap-2">
+              <Coins className="w-5 h-5 text-gold" />
+              <span>
+                {language === 'de' 
+                  ? `${data.items_sold}x ${selectedItem.item_name} für ${data.total_sell_amount.toFixed(2)} G verkauft!`
+                  : `Sold ${data.items_sold}x ${selectedItem.item_name} for ${data.total_sell_amount.toFixed(2)} G!`}
+              </span>
+            </div>
+          );
+          setShowSellConfirm(false);
+          setSelectedItem(null);
+          loadInventory();
+          if (refreshUser) refreshUser();
+        } else {
+          toast.error(data.detail || 'Failed to sell items');
+        }
       } else {
-        toast.error(data.detail || 'Failed to sell item');
+        // Single sell
+        const response = await fetch(`/api/inventory/sell`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`
+          },
+          credentials: 'include',
+          body: JSON.stringify({ inventory_id: selectedItem.inventory_id })
+        });
+        
+        const data = await response.json();
+        
+        if (response.ok) {
+          toast.success(
+            <div className="flex items-center gap-2">
+              <Coins className="w-5 h-5 text-gold" />
+              <span>
+                {language === 'de' 
+                  ? `${selectedItem.item_name} für ${data.sell_amount.toFixed(2)} G verkauft!`
+                  : `Sold ${selectedItem.item_name} for ${data.sell_amount.toFixed(2)} G!`}
+              </span>
+            </div>
+          );
+          setShowSellConfirm(false);
+          setSelectedItem(null);
+          loadInventory();
+          if (refreshUser) refreshUser();
+        } else {
+          toast.error(data.detail || 'Failed to sell item');
+        }
       }
     } catch (error) {
       console.error('Sell error:', error);
