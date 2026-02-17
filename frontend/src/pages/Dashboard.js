@@ -660,144 +660,86 @@ const Dashboard = () => {
                 </div>
               </TabsContent>
 
-              {/* Pass Rewards Tab */}
+              {/* Chests Tab - NEW CHEST SYSTEM */}
               <TabsContent value="pass" className="mt-4">
-                <div className="grid lg:grid-cols-2 gap-4">
-                  {/* Standard Track */}
-                  <div className="space-y-3">
-                    <div className="flex items-center gap-2 mb-2">
-                      <Gift className="w-5 h-5 text-white/60" />
-                      <span className="font-medium text-white">Standard Track</span>
-                    </div>
-                    <ScrollArea className="h-[250px] pr-2">
-                      <div className="space-y-2">
-                        {gamePass?.all_rewards && Object.entries(gamePass.all_rewards).map(([level, rewards]) => {
-                          const levelNum = parseInt(level);
-                          const isUnlocked = (gamePass?.level || 1) >= levelNum;
-                          const isClaimed = gamePass?.rewards_claimed?.includes(levelNum);
-                          const canClaim = isUnlocked && !isClaimed && !gamePass?.galadium_active;
-                          
-                          return (
-                            <div 
-                              key={level}
-                              className={`p-3 rounded-lg border transition-all ${
-                                isUnlocked 
-                                  ? isClaimed 
-                                    ? 'bg-white/5 border-white/10 opacity-50' 
-                                    : 'bg-primary/10 border-primary/30'
-                                  : 'bg-white/[0.02] border-white/5'
-                              }`}
-                            >
-                              <div className="flex items-center justify-between">
-                                <div className="flex items-center gap-2">
-                                  <div className={`w-8 h-8 rounded-lg flex items-center justify-center ${
-                                    isUnlocked ? 'bg-primary/20' : 'bg-white/10'
-                                  }`}>
-                                    {isClaimed ? (
-                                      <CheckCircle2 className="w-4 h-4 text-green-400" />
-                                    ) : isUnlocked ? (
-                                      <Gift className="w-4 h-4 text-primary" />
-                                    ) : (
-                                      <Lock className="w-4 h-4 text-white/30" />
-                                    )}
-                                  </div>
-                                  <div>
-                                    <p className={`text-sm font-medium ${isUnlocked ? 'text-white' : 'text-white/50'}`}>
-                                      Level {level}
-                                    </p>
-                                    <p className="text-xs text-white/40">{rewards.free.name}</p>
-                                  </div>
-                                </div>
-                                {canClaim && (
-                                  <Button 
-                                    size="sm"
-                                    onClick={() => claimPassReward(levelNum)}
-                                    disabled={claimingReward === levelNum}
-                                    className="bg-primary hover:bg-primary/80 text-black text-xs h-7"
-                                  >
-                                    {claimingReward === levelNum ? '...' : language === 'de' ? 'Abholen' : 'Claim'}
-                                  </Button>
-                                )}
-                              </div>
-                            </div>
-                          );
-                        })}
+                <div className="space-y-4">
+                  {/* Chest Info Cards */}
+                  <div className="grid sm:grid-cols-2 gap-4">
+                    {/* GamePass Chest */}
+                    <div className="p-4 rounded-xl bg-gradient-to-br from-yellow-500/10 to-orange-500/10 border border-yellow-500/30">
+                      <div className="flex items-center gap-3 mb-3">
+                        <div className="w-12 h-12 rounded-xl bg-yellow-500/20 flex items-center justify-center">
+                          <Package className="w-6 h-6 text-yellow-400" />
+                        </div>
+                        <div className="flex-1">
+                          <h4 className="text-white font-medium">GamePass Chest</h4>
+                          <p className="text-white/50 text-xs">
+                            {language === 'de' ? '1 pro Level • Für alle' : '1 per level • For everyone'}
+                          </p>
+                        </div>
+                        <Badge className="bg-green-500/20 text-green-400 border-green-500/30 text-xs">
+                          {gamePass?.chest_system?.unclaimed_normal?.length || 0} {language === 'de' ? 'verfügbar' : 'available'}
+                        </Badge>
                       </div>
-                    </ScrollArea>
+                    </div>
+
+                    {/* Galadium Chest */}
+                    <div className={`p-4 rounded-xl border ${
+                      gamePass?.galadium_active 
+                        ? 'bg-gradient-to-br from-purple-500/10 to-pink-500/10 border-purple-500/30' 
+                        : 'bg-white/[0.02] border-white/10 opacity-60'
+                    }`}>
+                      <div className="flex items-center gap-3 mb-3">
+                        <div className={`w-12 h-12 rounded-xl flex items-center justify-center ${
+                          gamePass?.galadium_active ? 'bg-purple-500/20' : 'bg-white/10'
+                        }`}>
+                          <Crown className={`w-6 h-6 ${gamePass?.galadium_active ? 'text-purple-400' : 'text-white/30'}`} />
+                        </div>
+                        <div className="flex-1">
+                          <h4 className={`font-medium ${gamePass?.galadium_active ? 'text-white' : 'text-white/50'}`}>
+                            Galadium Chest
+                          </h4>
+                          <p className="text-white/50 text-xs">
+                            {gamePass?.galadium_active 
+                              ? (language === 'de' ? '+1 Bonus pro Level' : '+1 bonus per level')
+                              : (language === 'de' ? 'Galadium Pass erforderlich' : 'Requires Galadium Pass')}
+                          </p>
+                        </div>
+                        {gamePass?.galadium_active ? (
+                          <Badge className="bg-purple-500/20 text-purple-300 border-purple-500/30 text-xs">
+                            {gamePass?.chest_system?.unclaimed_galadium?.length || 0} {language === 'de' ? 'verfügbar' : 'available'}
+                          </Badge>
+                        ) : (
+                          <Lock className="w-5 h-5 text-white/30" />
+                        )}
+                      </div>
+                    </div>
                   </div>
 
-                  {/* Galadium Track */}
-                  <div className="space-y-3">
-                    <div className="flex items-center justify-between mb-2">
-                      <div className="flex items-center gap-2">
-                        <Crown className="w-5 h-5 text-purple-400" />
-                        <span className="font-medium text-white">Galadium Pass</span>
-                      </div>
-                      {!gamePass?.galadium_active && (
-                        <Badge className="bg-purple-500/20 text-purple-300 border-purple-500/30 text-xs">
-                          {language === 'de' ? 'Bald verfügbar' : 'Coming soon'}
-                        </Badge>
-                      )}
+                  {/* Drop Rates Info */}
+                  <div className="p-3 rounded-lg bg-black/20 border border-white/5">
+                    <div className="flex items-center gap-2 mb-2">
+                      <Info className="w-4 h-4 text-white/40" />
+                      <span className="text-white/60 text-xs font-medium">
+                        {language === 'de' ? 'Drop-Wahrscheinlichkeiten' : 'Drop Rates'}
+                      </span>
                     </div>
-                    <ScrollArea className="h-[250px] pr-2">
-                      <div className="space-y-2">
-                        {gamePass?.all_rewards && Object.entries(gamePass.all_rewards).map(([level, rewards]) => {
-                          const levelNum = parseInt(level);
-                          const isUnlocked = (gamePass?.level || 1) >= levelNum;
-                          const isClaimed = gamePass?.rewards_claimed?.includes(levelNum);
-                          const canClaim = isUnlocked && !isClaimed && gamePass?.galadium_active;
-                          const isGaladiumActive = gamePass?.galadium_active;
-                          
-                          return (
-                            <div 
-                              key={level}
-                              className={`p-3 rounded-lg border transition-all ${
-                                isGaladiumActive
-                                  ? isUnlocked 
-                                    ? isClaimed 
-                                      ? 'bg-white/5 border-white/10 opacity-50' 
-                                      : 'bg-purple-500/10 border-purple-500/30'
-                                    : 'bg-white/[0.02] border-white/5'
-                                  : 'bg-white/[0.02] border-white/5 opacity-40'
-                              }`}
-                            >
-                              <div className="flex items-center justify-between">
-                                <div className="flex items-center gap-2">
-                                  <div className={`w-8 h-8 rounded-lg flex items-center justify-center ${
-                                    isGaladiumActive && isUnlocked ? 'bg-purple-500/20' : 'bg-white/10'
-                                  }`}>
-                                    {isClaimed && isGaladiumActive ? (
-                                      <CheckCircle2 className="w-4 h-4 text-green-400" />
-                                    ) : isGaladiumActive && isUnlocked ? (
-                                      <Sparkles className="w-4 h-4 text-purple-400" />
-                                    ) : (
-                                      <Lock className="w-4 h-4 text-white/30" />
-                                    )}
-                                  </div>
-                                  <div>
-                                    <p className={`text-sm font-medium ${isGaladiumActive && isUnlocked ? 'text-white' : 'text-white/50'}`}>
-                                      Level {level}
-                                    </p>
-                                    <p className="text-xs text-purple-300/60">{rewards.galadium.name}</p>
-                                  </div>
-                                </div>
-                                {canClaim && (
-                                  <Button 
-                                    size="sm"
-                                    onClick={() => claimPassReward(levelNum)}
-                                    disabled={claimingReward === levelNum}
-                                    className="bg-purple-600 hover:bg-purple-500 text-white text-xs h-7"
-                                  >
-                                    {claimingReward === levelNum ? '...' : language === 'de' ? 'Abholen' : 'Claim'}
-                                  </Button>
-                                )}
-                              </div>
-                            </div>
-                          );
-                        })}
-                      </div>
-                    </ScrollArea>
+                    <div className="flex flex-wrap gap-2">
+                      <Badge className="bg-gray-500/20 text-gray-400 border-gray-500/30 text-xs">80% → 5-15 G</Badge>
+                      <Badge className="bg-green-500/20 text-green-400 border-green-500/30 text-xs">15% → 16-40 G</Badge>
+                      <Badge className="bg-purple-500/20 text-purple-400 border-purple-500/30 text-xs">4% → 41-100 G</Badge>
+                      <Badge className="bg-yellow-500/20 text-yellow-400 border-yellow-500/30 text-xs">1% → Item!</Badge>
+                    </div>
                   </div>
+
+                  {/* Link to Full GamePass Page */}
+                  <Link to="/game-pass">
+                    <Button className="w-full bg-gradient-to-r from-primary to-cyan-500 hover:from-primary/80 hover:to-cyan-500/80 text-black font-bold">
+                      <Package className="w-4 h-4 mr-2" />
+                      {language === 'de' ? 'Truhen öffnen & verwalten' : 'Open & Manage Chests'}
+                      <ChevronRight className="w-4 h-4 ml-2" />
+                    </Button>
+                  </Link>
                 </div>
               </TabsContent>
             </Tabs>
