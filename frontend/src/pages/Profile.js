@@ -302,12 +302,12 @@ const Profile = () => {
               {t('history')}
             </TabsTrigger>
             <TabsTrigger 
-              value="leaderboard"
+              value="analytics"
               className="data-[state=active]:bg-primary data-[state=active]:text-black h-full"
-              data-testid="leaderboard-tab"
+              data-testid="analytics-tab"
             >
-              <Trophy className="w-4 h-4 mr-2" />
-              {t('leaderboard')}
+              <Activity className="w-4 h-4 mr-2" />
+              {language === 'de' ? 'Analyse' : 'Analytics'}
             </TabsTrigger>
           </TabsList>
 
