@@ -4180,6 +4180,167 @@ async def open_chest(data: OpenChestRequest, request: Request):
     }
 
 
+class OpenChestsBatchRequest(BaseModel):
+    inventory_ids: list[str]
+
+@api_router.post("/inventory/open-chests-batch")
+async def open_chests_batch(data: OpenChestsBatchRequest, request: Request):
+    """
+    Open multiple chests at once - ALL results are calculated FIRST before any response.
+    This prevents duplication bugs as all chests are consumed atomically.
+    """
+    user = await get_current_user(request)
+    user_id = user["user_id"]
+    now = datetime.now(timezone.utc)
+    
+    if not data.inventory_ids:
+        raise HTTPException(status_code=400, detail="No chests provided")
+    
+    if len(data.inventory_ids) > 1000:
+        raise HTTPException(status_code=400, detail="Maximum 1000 chests per batch")
+    
+    # STEP 1: Find ALL chests and verify ownership FIRST
+    chests = await db.user_inventory.find({
+        "inventory_id": {"$in": data.inventory_ids},
+        "user_id": user_id
+    }).to_list(1000)
+    
+    if not chests:
+        raise HTTPException(status_code=404, detail="No valid chests found")
+    
+    # Verify all are actually chests
+    valid_chest_ids = []
+    for chest in chests:
+        if chest.get("category") == "chest" or "chest" in chest.get("item_id", ""):
+            valid_chest_ids.append(chest["inventory_id"])
+    
+    if not valid_chest_ids:
+        raise HTTPException(status_code=400, detail="No valid chests found in selection")
+    
+    # STEP 2: DELETE all chests FIRST (atomic - prevents duplication)
+    delete_result = await db.user_inventory.delete_many({
+        "inventory_id": {"$in": valid_chest_ids},
+        "user_id": user_id
+    })
+    
+    # STEP 3: Now generate ALL rewards (chests are already gone from inventory)
+    results = []
+    total_g = 0
+    items_won = []
+    
+    for chest in chests:
+        if chest["inventory_id"] not in valid_chest_ids:
+            continue
+            
+        # Generate reward
+        reward = generate_simple_chest_reward_sync()
+        
+        if reward["type"] == "item_roll":
+            # 1% item drop
+            shop_item = await get_random_shop_item()
+            
+            if shop_item:
+                item_id = shop_item.get("item_id")
+                reward_item_def = await db.items.find_one({"item_id": item_id})
+                
+                if reward_item_def:
+                    new_inv_id = f"inv_{uuid.uuid4().hex[:12]}"
+                    new_inventory_item = {
+                        "inventory_id": new_inv_id,
+                        "user_id": user_id,
+                        "item_id": item_id,
+                        "item_name": reward_item_def.get("name", "Unknown"),
+                        "item_rarity": reward_item_def.get("rarity", "common"),
+                        "item_flavor_text": reward_item_def.get("flavor_text", ""),
+                        "purchase_price": reward_item_def.get("base_value", 0),
+                        "acquired_at": now.isoformat(),
+                        "acquired_from": "chest_1%_drop"
+                    }
+                    await db.user_inventory.insert_one(new_inventory_item)
+                    
+                    item_value = reward_item_def.get("base_value", 0)
+                    items_won.append({
+                        "name": reward_item_def.get("name"),
+                        "rarity": reward_item_def.get("rarity"),
+                        "value": item_value
+                    })
+                    
+                    results.append({
+                        "type": "item",
+                        "name": reward_item_def.get("name"),
+                        "rarity": reward_item_def.get("rarity"),
+                        "value": item_value,
+                        "tier": "legendary",
+                        "tier_label": "🎉 JACKPOT!",
+                        "tier_color": "#eab308"
+                    })
+                    
+                    await record_inventory_value_event(
+                        user_id=user_id,
+                        event_type="drop",
+                        delta_value=item_value,
+                        related_item_id=item_id,
+                        related_item_name=reward_item_def.get("name"),
+                        details={"source": "chest_batch_jackpot"}
+                    )
+                    continue
+            
+            # Fallback to rare G
+            import random
+            g_amount = round(random.uniform(41, 100), 2)
+            total_g += g_amount
+            results.append({
+                "type": "currency",
+                "amount": g_amount,
+                "tier": "rare",
+                "tier_label": "Selten",
+                "tier_color": "#a855f7"
+            })
+        else:
+            # Normal G reward
+            total_g += reward["amount"]
+            results.append({
+                "type": "currency",
+                "amount": reward["amount"],
+                "tier": reward["tier"],
+                "tier_label": reward["tier_label"],
+                "tier_color": reward["tier_color"]
+            })
+    
+    # STEP 4: Apply total G to user balance (one update, not per chest)
+    if total_g > 0:
+        await db.users.update_one(
+            {"user_id": user_id},
+            {"$inc": {"balance": total_g}}
+        )
+    
+    # Get final balance
+    updated_user = await db.users.find_one({"user_id": user_id})
+    new_balance = updated_user.get("balance", 0)
+    
+    # Record single value snapshot for the batch
+    if total_g > 0:
+        await record_value_snapshot(user_id, new_balance, updated_user.get("balance_a", 0), "chest_batch")
+    
+    # Calculate summary
+    tier_counts = {"normal": 0, "good": 0, "rare": 0}
+    for r in results:
+        if r["type"] == "currency":
+            tier_counts[r["tier"]] = tier_counts.get(r["tier"], 0) + 1
+    
+    return {
+        "success": True,
+        "chests_opened": len(results),
+        "results": results,  # All pre-calculated rewards for animation
+        "summary": {
+            "total_g": round(total_g, 2),
+            "items_won": items_won,
+            "tier_counts": tier_counts
+        },
+        "new_balance": round(new_balance, 2)
+    }
+
+
 @api_router.get("/inventory/{user_id}")
 async def get_user_inventory_public(user_id: str):
     """Get a user's inventory (public view - for profiles)"""
