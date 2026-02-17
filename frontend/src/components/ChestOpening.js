@@ -103,6 +103,9 @@ const ChestOpening = ({
               ? (language === 'de' ? 'Belohnung!' : 'Reward!')
               : (chestItem?.item_name || 'Chest')}
           </DialogTitle>
+          <DialogDescription className="sr-only">
+            {language === 'de' ? 'Truhe öffnen und Belohnung erhalten' : 'Open chest and receive reward'}
+          </DialogDescription>
         </DialogHeader>
 
         <div className="py-6">
