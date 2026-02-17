@@ -9,7 +9,7 @@ import {
 } from 'recharts';
 import { 
   TrendingUp, TrendingDown, Activity, ArrowUp, ArrowDown, 
-  Clock, Calendar, CalendarDays, Gamepad2, Trophy, Sparkles, Coins
+  Gamepad2, Trophy, Sparkles, Coins
 } from 'lucide-react';
 
 // Stock-market style timeframe configuration
