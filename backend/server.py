@@ -6913,11 +6913,11 @@ async def admin_give_chests(data: AdminGiveChestsRequest, request: Request):
             "category": "chest"
         })
     
-    # Insert all chests
-    result = await db.inventory.insert_many(chests)
+    # Insert all chests into user_inventory (correct collection)
+    result = await db.user_inventory.insert_many(chests)
     
     # Count total chests now
-    total_chests = await db.inventory.count_documents({
+    total_chests = await db.user_inventory.count_documents({
         "user_id": user["user_id"],
         "item_id": item_id
     })
