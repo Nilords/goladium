@@ -226,7 +226,7 @@ const Inventory = () => {
           <div className="flex items-center justify-center h-64">
             <div className="w-12 h-12 border-3 border-primary border-t-transparent rounded-full animate-spin" />
           </div>
-        ) : groupedInventory.length === 0 ? (
+        ) : inventory.length === 0 ? (
           <Card className="bg-[#0A0A0C] border-white/5">
             <CardContent className="flex flex-col items-center justify-center py-16">
               <Package className="w-16 h-16 text-white/20 mb-4" />
