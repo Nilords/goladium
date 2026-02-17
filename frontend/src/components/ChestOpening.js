@@ -191,7 +191,9 @@ const ChestOpening = ({
     return { totalG, items, tierCounts, count: autoOpenResults.length };
   };
 
-  const availableChests = allChests.filter(c => c.item_id === chestItem?.item_id).length;
+  // Calculate available chests - use count from stacked item or count from inventory_ids
+  const availableChests = chestItem?.count || chestItem?.inventory_ids?.length || 
+    allChests.filter(c => c.item_id === chestItem?.item_id).reduce((sum, c) => sum + (c.count || 1), 0);
 
   return (
     <Dialog open={isOpen} onOpenChange={handleClose}>
