@@ -263,8 +263,8 @@ const Inventory = () => {
               <Card 
                 key={item.inventory_id}
                 data-testid={`inventory-item-${item.item_id}`}
-                onClick={() => setSelectedItem(item)}
-                className={`bg-gradient-to-br ${getRarityGradient(item.item_rarity)} border cursor-pointer overflow-hidden transition-all duration-300 hover:scale-[1.03] hover:shadow-lg`}
+                onClick={() => handleItemClick(item)}
+                className={`bg-gradient-to-br ${getRarityGradient(item.item_rarity)} border cursor-pointer overflow-hidden transition-all duration-300 hover:scale-[1.03] hover:shadow-lg ${isChest(item) ? 'ring-2 ring-yellow-500/50' : ''}`}
               >
                 <CardContent className="p-4 space-y-3">
                   {/* Item Image */}
@@ -275,6 +275,8 @@ const Inventory = () => {
                         alt={item.item_name}
                         className="w-full h-full object-cover"
                       />
+                    ) : isChest(item) ? (
+                      <Package className="w-10 h-10 text-yellow-400" />
                     ) : (
                       <Sparkles className="w-10 h-10" style={{ color: item.rarity_color }} />
                     )}
@@ -283,6 +285,13 @@ const Inventory = () => {
                     {item.count > 1 && (
                       <div className="absolute bottom-2 right-2 bg-black/80 text-white text-xs font-mono px-2 py-0.5 rounded-full">
                         x{item.count}
+                      </div>
+                    )}
+                    
+                    {/* Chest Open Badge */}
+                    {isChest(item) && (
+                      <div className="absolute top-2 right-2 bg-yellow-500 text-black text-xs font-bold px-2 py-0.5 rounded-full animate-pulse">
+                        {language === 'de' ? 'Öffnen!' : 'Open!'}
                       </div>
                     )}
                   </div>
