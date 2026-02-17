@@ -169,11 +169,6 @@ const Profile = () => {
 
   const xpInfo = calculateXpProgress();
 
-  const getUserRank = () => {
-    const index = leaderboard.findIndex(p => p.user_id === user?.user_id);
-    return index === -1 ? '-' : index + 1;
-  };
-
   const getBadgeIcon = (badge) => {
     switch (badge) {
       case 'vip': return <Crown className="w-4 h-4" />;
