@@ -36,7 +36,9 @@ import {
   Crown,
   Info,
   ExternalLink,
-  MessageCircle
+  MessageCircle,
+  Package,
+  Box
 } from 'lucide-react';
 
 const Dashboard = () => {
