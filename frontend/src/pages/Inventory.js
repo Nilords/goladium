@@ -531,6 +531,7 @@ const Inventory = () => {
           setChestToOpen(null);
         }}
         chestItem={chestToOpen}
+        allChests={inventory.filter(item => isChest(item))}
         onChestOpened={handleChestOpened}
       />
     </div>
