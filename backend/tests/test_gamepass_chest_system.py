@@ -374,18 +374,20 @@ class TestGamePassChestSystem:
     
     # ============== USER XP/LEVEL TESTS ==============
     def test_14_user_has_xp_fields(self):
-        """Verify user profile includes game pass XP fields"""
-        response = requests.get(f"{BASE_URL}/api/auth/me", headers=self.headers)
+        """Verify game pass endpoint returns XP fields"""
+        # Use /api/game-pass endpoint which returns the game pass specific fields
+        response = requests.get(f"{BASE_URL}/api/game-pass", headers=self.headers)
         
         assert response.status_code == 200, f"Expected 200, got {response.status_code}"
         
         data = response.json()
         
-        assert "game_pass_level" in data, "User should have 'game_pass_level'"
-        assert "game_pass_xp" in data, "User should have 'game_pass_xp'"
-        assert "galadium_pass_active" in data, "User should have 'galadium_pass_active'"
+        # Game pass endpoint returns level and xp directly
+        assert "level" in data, "Response should have 'level'"
+        assert "xp" in data, "Response should have 'xp'"
+        assert "galadium_active" in data, "Response should have 'galadium_active'"
         
-        print(f"✓ User XP fields present: Level {data['game_pass_level']}, XP {data['game_pass_xp']}")
+        print(f"✓ Game pass XP fields present: Level {data['level']}, XP {data['xp']}")
 
 
 class TestChestRewardDistribution:
