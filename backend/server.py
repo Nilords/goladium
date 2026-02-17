@@ -3814,10 +3814,13 @@ async def get_user_inventory(request: Request):
     """Get current user's inventory"""
     user = await get_current_user(request)
     
+    # Get total count first
+    total_count = await db.user_inventory.count_documents({"user_id": user["user_id"]})
+    
     items = await db.user_inventory.find(
         {"user_id": user["user_id"]},
         {"_id": 0}
-    ).sort("acquired_at", -1).to_list(500)
+    ).sort("acquired_at", -1).to_list(10000)  # Increased limit for chest-heavy inventories
     
     # Sell fee percentage (30% fee = 70% return)
     SELL_FEE_PERCENT = 30
