@@ -315,6 +315,52 @@ async def addbalance(interaction: discord.Interaction, username: str, currency: 
     else:
         await interaction.followup.send(f"Error: {result['data'].get('detail', 'Unknown error')}")
 
+# ============== CHEST COMMANDS ==============
+
+@bot.tree.command(name="givechest", description="Give chests to a user")
+@app_commands.describe(
+    username="Goladium username",
+    amount="Number of chests to give",
+    chest_type="Type of chest (gamepass or galadium)"
+)
+@app_commands.choices(chest_type=[
+    app_commands.Choice(name="GamePass Chest", value="gamepass"),
+    app_commands.Choice(name="Galadium Chest", value="galadium")
+])
+@app_commands.guilds(discord.Object(id=GUILD_ID)) if GUILD_ID else app_commands.guilds()
+async def givechest(interaction: discord.Interaction, username: str, amount: int, chest_type: str = "gamepass"):
+    if not is_admin(interaction):
+        await interaction.response.send_message("❌ No permission.", ephemeral=True)
+        return
+    
+    if amount <= 0:
+        await interaction.response.send_message("❌ Amount must be positive.", ephemeral=True)
+        return
+    
+    if amount > 100000:
+        await interaction.response.send_message("❌ Maximum 100,000 chests per request.", ephemeral=True)
+        return
+    
+    await interaction.response.defer(ephemeral=True)
+    
+    result = await api_request("POST", "/admin/give-chests", {
+        "username": username,
+        "amount": amount,
+        "chest_type": chest_type
+    })
+    
+    if result["status"] == 200:
+        data = result["data"]
+        chest_emoji = "📦" if chest_type == "gamepass" else "👑"
+        await interaction.followup.send(
+            f"{chest_emoji} **{data['amount_given']:,}x {data['chest_type']}** given to **{data['username']}**\n"
+            f"Total {data['chest_type']}s: **{data['total_chests']:,}**"
+        )
+    elif result["status"] == 404:
+        await interaction.followup.send(f"❌ User '{username}' not found")
+    else:
+        await interaction.followup.send(f"❌ Error: {result['data'].get('detail', 'Unknown error')}")
+
 # ============== INFO COMMANDS ==============
 
 @bot.tree.command(name="userinfo", description="Get detailed user information")
