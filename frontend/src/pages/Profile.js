@@ -24,6 +24,7 @@ import {
 } from '../components/ui/table';
 import { 
   Activity,
+  Trophy,
   History, 
   TrendingUp, 
   TrendingDown,
