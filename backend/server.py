@@ -3786,6 +3786,16 @@ async def purchase_shop_item(purchase: ShopPurchaseRequest, request: Request):
     }
     await db.bet_history.insert_one(activity_doc)
     
+    # Record inventory value event (buy = positive delta)
+    await record_inventory_value_event(
+        user_id=user["user_id"],
+        event_type="buy",
+        delta_value=price,  # Positive - inventory value increased
+        related_item_id=listing["item_id"],
+        related_item_name=listing["item_name"],
+        details={"source": "shop", "rarity": listing["item_rarity"]}
+    )
+    
     return {
         "success": True,
         "message": f"Successfully purchased {listing['item_name']}!",
