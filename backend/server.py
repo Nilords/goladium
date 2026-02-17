@@ -2466,7 +2466,9 @@ async def get_current_user_info(request: Request):
         "active_name_color": user.get("active_name_color"),
         "active_jackpot_pattern": user.get("active_jackpot_pattern"),
         "created_at": created_at.isoformat() if created_at else None,
-        "last_wheel_spin": last_wheel.isoformat() if last_wheel else None
+        "last_wheel_spin": last_wheel.isoformat() if last_wheel else None,
+        "game_pass_level": user.get("game_pass_level", 1),
+        "game_pass_xp": user.get("game_pass_xp", 0)
     }
 
 @api_router.post("/auth/logout")
