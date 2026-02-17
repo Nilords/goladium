@@ -246,7 +246,7 @@ const Inventory = () => {
           </Card>
         ) : (
           <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">
-            {groupedInventory.map((item) => (
+            {inventory.map((item) => (
               <Card 
                 key={item.inventory_id}
                 data-testid={`inventory-item-${item.item_id}`}
