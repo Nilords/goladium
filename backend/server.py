@@ -5158,6 +5158,53 @@ async def accept_trade(trade_id: str, request: Request):
         }
     )
     
+    # Record inventory value events for both users
+    # Initiator: loses their items (trade_out), gains recipient's items (trade_in)
+    for item in trade["initiator"]["items"]:
+        item_value = item.get("purchase_price", 0) or item.get("base_value", 0)
+        await record_inventory_value_event(
+            user_id=initiator["user_id"],
+            event_type="trade_out",
+            delta_value=-item_value,
+            related_item_id=item["item_id"],
+            related_item_name=item["item_name"],
+            details={"trade_id": trade_id, "to_user": recipient["username"]}
+        )
+    
+    for item in trade["recipient"]["items"]:
+        item_value = item.get("purchase_price", 0) or item.get("base_value", 0)
+        await record_inventory_value_event(
+            user_id=initiator["user_id"],
+            event_type="trade_in",
+            delta_value=item_value,
+            related_item_id=item["item_id"],
+            related_item_name=item["item_name"],
+            details={"trade_id": trade_id, "from_user": recipient["username"]}
+        )
+    
+    # Recipient: loses their items (trade_out), gains initiator's items (trade_in)
+    for item in trade["recipient"]["items"]:
+        item_value = item.get("purchase_price", 0) or item.get("base_value", 0)
+        await record_inventory_value_event(
+            user_id=recipient["user_id"],
+            event_type="trade_out",
+            delta_value=-item_value,
+            related_item_id=item["item_id"],
+            related_item_name=item["item_name"],
+            details={"trade_id": trade_id, "to_user": initiator["username"]}
+        )
+    
+    for item in trade["initiator"]["items"]:
+        item_value = item.get("purchase_price", 0) or item.get("base_value", 0)
+        await record_inventory_value_event(
+            user_id=recipient["user_id"],
+            event_type="trade_in",
+            delta_value=item_value,
+            related_item_id=item["item_id"],
+            related_item_name=item["item_name"],
+            details={"trade_id": trade_id, "from_user": initiator["username"]}
+        )
+    
     # Calculate total fee burned
     total_fee_burned = initiator_fee + recipient_fee
     
