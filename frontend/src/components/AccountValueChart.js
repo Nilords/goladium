@@ -183,21 +183,21 @@ const AccountValueChart = () => {
               <Activity className="w-5 h-5 text-primary" />
               {language === 'de' ? 'Kontowert-Verlauf' : 'Account Value History'}
             </CardTitle>
-            <div className="flex gap-1 bg-black/30 rounded-lg p-1">
-              {['hourly', 'daily', 'weekly'].map(tf => (
+            <div className="flex gap-0.5 bg-black/30 rounded-lg p-1">
+              {TIMEFRAME_OPTIONS.map(tf => (
                 <Button
-                  key={tf}
-                  variant={timeframe === tf ? 'default' : 'ghost'}
+                  key={tf.key}
+                  variant={timeframe === tf.key ? 'default' : 'ghost'}
                   size="sm"
-                  onClick={() => setTimeframe(tf)}
-                  className={`h-8 px-3 ${timeframe === tf ? 'bg-primary text-black' : 'text-white/60'}`}
+                  onClick={() => setTimeframe(tf.key)}
+                  className={`h-7 px-2 sm:px-3 text-xs font-mono ${
+                    timeframe === tf.key 
+                      ? 'bg-primary text-black' 
+                      : 'text-white/60 hover:text-white hover:bg-white/10'
+                  }`}
+                  title={tf.description}
                 >
-                  {tf === 'hourly' && <Clock className="w-3 h-3 mr-1" />}
-                  {tf === 'daily' && <Calendar className="w-3 h-3 mr-1" />}
-                  {tf === 'weekly' && <CalendarDays className="w-3 h-3 mr-1" />}
-                  {tf === 'hourly' ? (language === 'de' ? 'Stündlich' : 'Hourly') :
-                   tf === 'daily' ? (language === 'de' ? 'Täglich' : 'Daily') :
-                   (language === 'de' ? 'Wöchentlich' : 'Weekly')}
+                  {language === 'de' ? tf.labelDe : tf.label}
                 </Button>
               ))}
             </div>
