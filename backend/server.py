@@ -6577,6 +6577,10 @@ async def initialize_item_system():
     await db.value_snapshots.create_index("snapshot_id", unique=True)
     await db.value_snapshots.create_index([("user_id", 1), ("timestamp", -1)])
     
+    # Create indexes for inventory value history
+    await db.inventory_value_history.create_index("event_id", unique=True)
+    await db.inventory_value_history.create_index([("user_id", 1), ("event_number", -1)])
+    
     # Seed items if they don't exist
     for item_data in SEED_ITEMS:
         existing = await db.items.find_one({"item_id": item_data["item_id"]})
@@ -6584,8 +6588,8 @@ async def initialize_item_system():
             item_doc = {
                 **item_data,
                 "created_at": datetime.now(timezone.utc),
-                "is_tradeable": False,  # Not tradeable while in shop
-                "is_sellable": False    # Not sellable while in shop
+                "is_tradeable": item_data.get("is_tradeable", False),
+                "is_sellable": item_data.get("is_sellable", False)
             }
             await db.items.insert_one(item_doc)
             logger.info(f"Created seed item: {item_data['name']}")
