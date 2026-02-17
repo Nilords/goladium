@@ -3811,56 +3811,82 @@ async def purchase_shop_item(purchase: ShopPurchaseRequest, request: Request):
 
 @api_router.get("/inventory")
 async def get_user_inventory(request: Request):
-    """Get current user's inventory"""
+    """Get current user's inventory with stacking for identical items"""
     user = await get_current_user(request)
     
     # Get total count first
     total_count = await db.user_inventory.count_documents({"user_id": user["user_id"]})
     
-    items = await db.user_inventory.find(
-        {"user_id": user["user_id"]},
-        {"_id": 0}
-    ).sort("acquired_at", -1).to_list(10000)  # Increased limit for chest-heavy inventories
+    # Aggregate items by item_id for stacking
+    pipeline = [
+        {"$match": {"user_id": user["user_id"]}},
+        {"$sort": {"acquired_at": -1}},
+        {"$group": {
+            "_id": "$item_id",
+            "item_id": {"$first": "$item_id"},
+            "item_name": {"$first": "$item_name"},
+            "item_rarity": {"$first": "$item_rarity"},
+            "item_image": {"$first": "$item_image"},
+            "item_flavor_text": {"$first": "$item_flavor_text"},
+            "category": {"$first": "$category"},
+            "purchase_price": {"$first": "$purchase_price"},
+            "is_tradeable": {"$first": "$is_tradeable"},
+            "is_sellable": {"$first": "$is_sellable"},
+            "count": {"$sum": 1},
+            "inventory_ids": {"$push": "$inventory_id"},
+            "first_inventory_id": {"$first": "$inventory_id"},
+            "acquired_at": {"$first": "$acquired_at"}
+        }},
+        {"$sort": {"acquired_at": -1}},
+        {"$limit": 500}
+    ]
+    
+    stacked_items = await db.user_inventory.aggregate(pipeline).to_list(500)
     
     # Sell fee percentage (30% fee = 70% return)
     SELL_FEE_PERCENT = 30
     SELL_RETURN_PERCENT = 100 - SELL_FEE_PERCENT
     
     # Enrich with rarity info and sell values
-    for item in items:
+    items = []
+    for item in stacked_items:
         rarity_info = ITEM_RARITIES.get(item.get("item_rarity", "common"), ITEM_RARITIES["common"])
-        item["rarity_display"] = rarity_info["name"]
-        item["rarity_color"] = rarity_info["color"]
         
-        # Get item's current state (tradeable/sellable)
-        item_def = await db.items.find_one({"item_id": item["item_id"]}, {"_id": 0})
-        if item_def:
-            item["is_tradeable"] = item_def.get("is_tradeable", False)
-            item["is_sellable"] = item_def.get("is_sellable", False)
-        else:
-            item["is_tradeable"] = False
-            item["is_sellable"] = False
+        # Use first_inventory_id as the main inventory_id for actions
+        enriched_item = {
+            "inventory_id": item["first_inventory_id"],
+            "item_id": item["item_id"],
+            "item_name": item["item_name"],
+            "item_rarity": item["item_rarity"],
+            "item_image": item.get("item_image"),
+            "item_flavor_text": item.get("item_flavor_text"),
+            "category": item.get("category"),
+            "rarity_display": rarity_info["name"],
+            "rarity_color": rarity_info["color"],
+            "count": item["count"],
+            "inventory_ids": item["inventory_ids"][:1000],  # Limit for performance
+            "acquired_at": item.get("acquired_at"),
+            "is_tradeable": item.get("is_tradeable", False),
+            "is_sellable": item.get("is_sellable", False)
+        }
         
-        # Get purchase price - if not set, migrate from current shop price and SAVE it permanently
-        purchase_price = item.get("purchase_price", 0)
+        # Get purchase price
+        purchase_price = item.get("purchase_price", 0) or 0
         
         if purchase_price <= 0:
-            # Try to get current shop price and save it permanently to this item
+            # Try to get current shop price
             shop_listing = await db.shop_listings.find_one(
                 {"item_id": item["item_id"], "is_active": True},
                 {"_id": 0, "price": 1}
             )
             if shop_listing:
                 purchase_price = shop_listing.get("price", 0)
-                # Permanently save the purchase_price to this inventory item
-                await db.user_inventory.update_one(
-                    {"inventory_id": item["inventory_id"]},
-                    {"$set": {"purchase_price": purchase_price}}
-                )
         
-        item["purchase_price"] = purchase_price
-        item["sell_value"] = round(purchase_price * SELL_RETURN_PERCENT / 100, 2)
-        item["sell_fee_percent"] = SELL_FEE_PERCENT
+        enriched_item["purchase_price"] = purchase_price
+        enriched_item["sell_value"] = round(purchase_price * SELL_RETURN_PERCENT / 100, 2)
+        enriched_item["sell_fee_percent"] = SELL_FEE_PERCENT
+        
+        items.append(enriched_item)
     
     return {
         "items": items,
