@@ -4,13 +4,14 @@ import { useLanguage } from '../contexts/LanguageContext';
 import Navbar from '../components/Navbar';
 import Footer from '../components/Footer';
 import Chat from '../components/Chat';
-import LiveWinFeed from '../components/LiveWinFeed';
+import ChestOpening from '../components/ChestOpening';
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card';
 import { Button } from '../components/ui/button';
 import { Badge } from '../components/ui/badge';
 import { Progress } from '../components/ui/progress';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../components/ui/tabs';
 import { ScrollArea } from '../components/ui/scroll-area';
+import { toast } from 'sonner';
 import { 
   Trophy, 
   Star, 
@@ -24,10 +25,10 @@ import {
   ChevronRight,
   Info,
   ExternalLink,
-  Crown
+  Crown,
+  Package,
+  Box
 } from 'lucide-react';
-
-
 
 const DIFFICULTY_COLORS = {
   easy: 'bg-green-500/20 text-green-400 border-green-500/30',
@@ -36,13 +37,18 @@ const DIFFICULTY_COLORS = {
 };
 
 const GamePass = () => {
-  const { token, refreshUser } = useAuth();
+  const { token, refreshUser, user } = useAuth();
   const { language } = useLanguage();
   const [gamePass, setGamePass] = useState(null);
   const [quests, setQuests] = useState([]);
+  const [inventory, setInventory] = useState([]);
   const [loading, setLoading] = useState(true);
   const [claimingQuest, setClaimingQuest] = useState(null);
-  const [claimingReward, setClaimingReward] = useState(null);
+  const [claimingChest, setClaimingChest] = useState(false);
+  
+  // Chest opening state
+  const [chestToOpen, setChestToOpen] = useState(null);
+  const [showChestDialog, setShowChestDialog] = useState(false);
 
   useEffect(() => {
     loadData();
@@ -52,17 +58,15 @@ const GamePass = () => {
 
   const loadData = async () => {
     try {
-      const [passRes, questsRes] = await Promise.all([
+      const [passRes, questsRes, inventoryRes] = await Promise.all([
         fetch(`/api/game-pass`, {
-          headers: { 'Authorization': `Bearer ${token}` },
-          credentials: 'include'
+          headers: { 'Authorization': `Bearer ${token}` }
         }),
         fetch(`/api/quests`, {
-          headers: { 
-            'Authorization': `Bearer ${token}`,
-            'Accept-Language': language
-          },
-          credentials: 'include'
+          headers: { 'Authorization': `Bearer ${token}`, 'Accept-Language': language }
+        }),
+        fetch(`/api/inventory/${user?.user_id}`, {
+          headers: { 'Authorization': `Bearer ${token}` }
         })
       ]);
 
@@ -70,6 +74,10 @@ const GamePass = () => {
       if (questsRes.ok) {
         const data = await questsRes.json();
         setQuests(data.quests || []);
+      }
+      if (inventoryRes.ok) {
+        const data = await inventoryRes.json();
+        setInventory(data.items || []);
       }
     } catch (error) {
       console.error('Failed to load game pass data:', error);
@@ -85,11 +93,12 @@ const GamePass = () => {
     try {
       const res = await fetch(`/api/quests/${questId}/claim`, {
         method: 'POST',
-        headers: { 'Authorization': `Bearer ${token}` },
-        credentials: 'include'
+        headers: { 'Authorization': `Bearer ${token}` }
       });
 
       if (res.ok) {
+        const data = await res.json();
+        toast.success(language === 'de' ? `+${data.xp_earned} XP erhalten!` : `+${data.xp_earned} XP earned!`);
         await loadData();
         await refreshUser();
       }
@@ -100,27 +109,50 @@ const GamePass = () => {
     }
   };
 
-  const claimPassReward = async (level) => {
-    if (claimingReward) return;
-    setClaimingReward(level);
+  const claimAllChests = async () => {
+    if (claimingChest) return;
+    setClaimingChest(true);
     
     try {
-      const res = await fetch(`/api/game-pass/claim/${level}`, {
+      const res = await fetch(`/api/game-pass/claim-all-chests`, {
         method: 'POST',
-        headers: { 'Authorization': `Bearer ${token}` },
-        credentials: 'include'
+        headers: { 'Authorization': `Bearer ${token}` }
       });
 
       if (res.ok) {
+        const data = await res.json();
+        toast.success(
+          language === 'de' 
+            ? `${data.chests_claimed} Truhen abgeholt!` 
+            : `${data.chests_claimed} chests claimed!`
+        );
         await loadData();
-        await refreshUser();
       }
     } catch (error) {
-      console.error('Failed to claim reward:', error);
+      console.error('Failed to claim chests:', error);
     } finally {
-      setClaimingReward(null);
+      setClaimingChest(false);
     }
   };
+
+  const openChest = (chest) => {
+    setChestToOpen(chest);
+    setShowChestDialog(true);
+  };
+
+  const handleChestOpened = async (result) => {
+    await loadData();
+    await refreshUser();
+    
+    if (result.reward?.type === 'item') {
+      toast.success('🎉 JACKPOT! Item Drop!');
+    }
+  };
+
+  // Get chests from inventory
+  const chests = inventory.filter(item => 
+    item.item_id === 'gamepass_chest' || item.item_id === 'galadium_chest'
+  );
 
   if (loading) {
     return (
@@ -137,6 +169,8 @@ const GamePass = () => {
   }
 
   const xpProgress = gamePass ? (gamePass.xp / gamePass.xp_to_next) * 100 : 0;
+  const chestSystem = gamePass?.chest_system || {};
+  const totalUnclaimed = chestSystem.total_unclaimed || 0;
 
   return (
     <div className="min-h-screen bg-[#050505] flex flex-col">
@@ -151,8 +185,8 @@ const GamePass = () => {
           </h1>
           <p className="text-white/50">
             {language === 'de' 
-              ? 'Schließe Quests ab und steige im Pass auf!'
-              : 'Complete quests and level up your pass!'}
+              ? 'Schließe Quests ab, steige auf und öffne Truhen!'
+              : 'Complete quests, level up and open chests!'}
           </p>
         </div>
 
@@ -162,9 +196,18 @@ const GamePass = () => {
               <Trophy className="w-4 h-4 mr-2" />
               Game Pass
             </TabsTrigger>
+            <TabsTrigger value="chests" className="data-[state=active]:bg-yellow-500/20 data-[state=active]:text-yellow-400 relative">
+              <Package className="w-4 h-4 mr-2" />
+              {language === 'de' ? 'Truhen' : 'Chests'}
+              {(totalUnclaimed > 0 || chests.length > 0) && (
+                <span className="absolute -top-1 -right-1 w-5 h-5 bg-red-500 text-white text-xs rounded-full flex items-center justify-center">
+                  {totalUnclaimed + chests.length}
+                </span>
+              )}
+            </TabsTrigger>
             <TabsTrigger value="quests" className="data-[state=active]:bg-primary/20 data-[state=active]:text-primary">
               <Target className="w-4 h-4 mr-2" />
-              {language === 'de' ? 'Quests' : 'Quests'}
+              Quests
             </TabsTrigger>
           </TabsList>
 
@@ -179,336 +222,349 @@ const GamePass = () => {
                       <span className="text-3xl font-bold text-primary">{gamePass?.level || 1}</span>
                     </div>
                     <div>
-                      <p className="text-white/50 text-sm">
-                        {language === 'de' ? 'Pass Level' : 'Pass Level'}
-                      </p>
+                      <p className="text-white/50 text-sm">Pass Level</p>
                       <p className="text-white text-xl font-bold">
                         {gamePass?.xp || 0} / {gamePass?.xp_to_next || 150} XP
                       </p>
                     </div>
                   </div>
-                  {gamePass?.next_reward_level && (
-                    <div className="text-right">
-                      <p className="text-white/50 text-sm">
-                        {language === 'de' ? 'Nächste Belohnung' : 'Next Reward'}
-                      </p>
-                      <p className="text-primary font-bold">Level {gamePass.next_reward_level}</p>
-                    </div>
-                  )}
+                  <div className="text-right">
+                    <p className="text-white/50 text-sm">
+                      {language === 'de' ? 'Truhen pro Level' : 'Chests per Level'}
+                    </p>
+                    <p className="text-yellow-400 font-bold">
+                      {gamePass?.galadium_active ? '2' : '1'} 
+                      <span className="text-white/50 font-normal ml-1">
+                        {gamePass?.galadium_active && (
+                          <Badge className="ml-2 bg-purple-500/20 text-purple-300 border-purple-500/30 text-xs">
+                            +1 Galadium
+                          </Badge>
+                        )}
+                      </span>
+                    </p>
+                  </div>
                 </div>
                 <Progress value={xpProgress} className="h-3 bg-white/5" />
+                <p className="text-white/40 text-xs mt-2 text-center">
+                  {language === 'de' 
+                    ? 'Erhalte XP durch das Abschließen von Quests' 
+                    : 'Earn XP by completing quests'}
+                </p>
               </CardContent>
             </Card>
 
-            {/* Reward Tracks */}
-            <div className="grid lg:grid-cols-2 gap-6">
-              {/* Free Track */}
+            {/* Chest Rewards Info */}
+            <div className="grid md:grid-cols-2 gap-4">
+              {/* Normal Chest */}
               <Card className="bg-[#0A0A0C] border-white/5">
-                <CardHeader className="pb-4">
-                  <CardTitle className="text-lg text-white flex items-center gap-2">
-                    <Gift className="w-5 h-5 text-white/60" />
-                    {language === 'de' ? 'Standard Track' : 'Standard Track'}
-                  </CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <ScrollArea className="h-[400px] pr-4">
-                    <div className="space-y-3">
-                      {gamePass?.all_rewards && Object.entries(gamePass.all_rewards).map(([level, rewards]) => {
-                        const levelNum = parseInt(level);
-                        const isUnlocked = (gamePass?.level || 1) >= levelNum;
-                        const isClaimed = gamePass?.rewards_claimed?.includes(levelNum);
-                        const canClaim = isUnlocked && !isClaimed && !gamePass?.galadium_active;
-                        
-                        return (
-                          <div 
-                            key={level}
-                            className={`p-4 rounded-xl border transition-all ${
-                              isUnlocked 
-                                ? isClaimed 
-                                  ? 'bg-white/5 border-white/10 opacity-60' 
-                                  : 'bg-primary/10 border-primary/30 hover:border-primary/50'
-                                : 'bg-white/[0.02] border-white/5'
-                            }`}
-                          >
-                            <div className="flex items-center justify-between">
-                              <div className="flex items-center gap-3">
-                                <div className={`w-10 h-10 rounded-lg flex items-center justify-center ${
-                                  isUnlocked ? 'bg-primary/20' : 'bg-white/10'
-                                }`}>
-                                  {isClaimed ? (
-                                    <CheckCircle2 className="w-5 h-5 text-green-400" />
-                                  ) : isUnlocked ? (
-                                    <Gift className="w-5 h-5 text-primary" />
-                                  ) : (
-                                    <Lock className="w-5 h-5 text-white/30" />
-                                  )}
-                                </div>
-                                <div>
-                                  <p className={`font-medium ${isUnlocked ? 'text-white' : 'text-white/50'}`}>
-                                    Level {level}
-                                  </p>
-                                  <p className="text-sm text-white/50">{rewards.free.name}</p>
-                                </div>
-                              </div>
-                              {canClaim && (
-                                <Button 
-                                  size="sm"
-                                  onClick={() => claimPassReward(levelNum)}
-                                  disabled={claimingReward === levelNum}
-                                  className="bg-primary hover:bg-primary/80 text-black"
-                                >
-                                  {claimingReward === levelNum ? '...' : language === 'de' ? 'Abholen' : 'Claim'}
-                                </Button>
-                              )}
-                            </div>
-                          </div>
-                        );
-                      })}
-                    </div>
-                  </ScrollArea>
+                <CardContent className="p-4 flex items-center gap-4">
+                  <div className="w-14 h-14 rounded-xl bg-gradient-to-br from-yellow-500/20 to-orange-500/20 flex items-center justify-center">
+                    <Package className="w-8 h-8 text-yellow-400" />
+                  </div>
+                  <div className="flex-1">
+                    <h3 className="text-white font-medium">GamePass Chest</h3>
+                    <p className="text-white/50 text-sm">
+                      {language === 'de' ? '1 pro Level • Für alle Spieler' : '1 per level • For all players'}
+                    </p>
+                  </div>
+                  <Badge className="bg-green-500/20 text-green-400 border-green-500/30">
+                    {chestSystem.unclaimed_normal?.length || 0} {language === 'de' ? 'verfügbar' : 'available'}
+                  </Badge>
                 </CardContent>
               </Card>
 
-              {/* Galadium Track */}
-              <Card className="bg-gradient-to-br from-[#0A0A0C] to-purple-900/10 border-purple-500/20">
-                <CardHeader className="pb-4">
-                  <div className="flex items-center justify-between">
-                    <CardTitle className="text-lg text-white flex items-center gap-2">
-                      <Crown className="w-5 h-5 text-purple-400" />
-                      Galadium Pass
-                    </CardTitle>
-                    {!gamePass?.galadium_active && (
-                      <Badge className="bg-purple-500/20 text-purple-300 border-purple-500/30">
-                        {language === 'de' ? 'Bald verfügbar' : 'Coming soon'}
-                      </Badge>
-                    )}
+              {/* Galadium Chest */}
+              <Card className={`border ${gamePass?.galadium_active ? 'bg-gradient-to-br from-[#0A0A0C] to-purple-900/20 border-purple-500/30' : 'bg-[#0A0A0C] border-white/5 opacity-60'}`}>
+                <CardContent className="p-4 flex items-center gap-4">
+                  <div className={`w-14 h-14 rounded-xl flex items-center justify-center ${gamePass?.galadium_active ? 'bg-gradient-to-br from-purple-500/30 to-pink-500/30' : 'bg-white/5'}`}>
+                    <Crown className={`w-8 h-8 ${gamePass?.galadium_active ? 'text-purple-400' : 'text-white/30'}`} />
                   </div>
-                </CardHeader>
-                <CardContent>
-                  <ScrollArea className="h-[400px] pr-4">
-                    <div className="space-y-3">
-                      {gamePass?.all_rewards && Object.entries(gamePass.all_rewards).map(([level, rewards]) => {
-                        const levelNum = parseInt(level);
-                        const isUnlocked = (gamePass?.level || 1) >= levelNum;
-                        const isClaimed = gamePass?.rewards_claimed?.includes(levelNum);
-                        const canClaim = isUnlocked && !isClaimed && gamePass?.galadium_active;
-                        const isGaladiumActive = gamePass?.galadium_active;
-                        
-                        return (
-                          <div 
-                            key={level}
-                            className={`p-4 rounded-xl border transition-all ${
-                              isGaladiumActive
-                                ? isUnlocked 
-                                  ? isClaimed 
-                                    ? 'bg-white/5 border-white/10 opacity-60' 
-                                    : 'bg-purple-500/10 border-purple-500/30 hover:border-purple-500/50'
-                                  : 'bg-white/[0.02] border-white/5'
-                                : 'bg-white/[0.02] border-white/5 opacity-50'
-                            }`}
-                          >
-                            <div className="flex items-center justify-between">
-                              <div className="flex items-center gap-3">
-                                <div className={`w-10 h-10 rounded-lg flex items-center justify-center ${
-                                  isGaladiumActive && isUnlocked ? 'bg-purple-500/20' : 'bg-white/10'
-                                }`}>
-                                  {isClaimed && isGaladiumActive ? (
-                                    <CheckCircle2 className="w-5 h-5 text-green-400" />
-                                  ) : isGaladiumActive && isUnlocked ? (
-                                    <Sparkles className="w-5 h-5 text-purple-400" />
-                                  ) : (
-                                    <Lock className="w-5 h-5 text-white/30" />
-                                  )}
-                                </div>
-                                <div>
-                                  <p className={`font-medium ${isGaladiumActive && isUnlocked ? 'text-white' : 'text-white/50'}`}>
-                                    Level {level}
-                                  </p>
-                                  <p className="text-sm text-purple-300/70">{rewards.galadium.name}</p>
-                                </div>
-                              </div>
-                              {canClaim && (
-                                <Button 
-                                  size="sm"
-                                  onClick={() => claimPassReward(levelNum)}
-                                  disabled={claimingReward === levelNum}
-                                  className="bg-purple-600 hover:bg-purple-500 text-white"
-                                >
-                                  {claimingReward === levelNum ? '...' : language === 'de' ? 'Abholen' : 'Claim'}
-                                </Button>
-                              )}
-                            </div>
-                          </div>
-                        );
-                      })}
-                    </div>
-                  </ScrollArea>
+                  <div className="flex-1">
+                    <h3 className={`font-medium ${gamePass?.galadium_active ? 'text-white' : 'text-white/50'}`}>Galadium Chest</h3>
+                    <p className="text-white/50 text-sm">
+                      {gamePass?.galadium_active 
+                        ? (language === 'de' ? '+1 Bonus pro Level' : '+1 Bonus per level')
+                        : (language === 'de' ? 'Galadium Pass erforderlich' : 'Requires Galadium Pass')}
+                    </p>
+                  </div>
+                  {gamePass?.galadium_active ? (
+                    <Badge className="bg-purple-500/20 text-purple-300 border-purple-500/30">
+                      {chestSystem.unclaimed_galadium?.length || 0} {language === 'de' ? 'verfügbar' : 'available'}
+                    </Badge>
+                  ) : (
+                    <Lock className="w-5 h-5 text-white/30" />
+                  )}
                 </CardContent>
               </Card>
             </div>
 
-            {/* More Info */}
-            <Card className="bg-[#0A0A0C] border-white/5">
-              <CardContent className="p-4 flex items-center justify-between">
-                <div className="flex items-center gap-3">
-                  <Info className="w-5 h-5 text-primary" />
-                  <span className="text-white/70">
+            {/* Claim All Button */}
+            {totalUnclaimed > 0 && (
+              <Button
+                onClick={claimAllChests}
+                disabled={claimingChest}
+                className="w-full bg-gradient-to-r from-yellow-500 to-orange-500 hover:from-yellow-400 hover:to-orange-400 text-black font-bold py-6 text-lg"
+              >
+                <Gift className="w-5 h-5 mr-2" />
+                {claimingChest 
+                  ? '...' 
+                  : language === 'de' 
+                    ? `${totalUnclaimed} Truhe${totalUnclaimed > 1 ? 'n' : ''} abholen!`
+                    : `Claim ${totalUnclaimed} Chest${totalUnclaimed > 1 ? 's' : ''}!`}
+              </Button>
+            )}
+          </TabsContent>
+
+          {/* Chests Tab */}
+          <TabsContent value="chests" className="space-y-6">
+            {/* Unclaimed Chests Section */}
+            {totalUnclaimed > 0 && (
+              <Card className="bg-gradient-to-br from-yellow-500/10 to-orange-500/10 border-yellow-500/30">
+                <CardHeader>
+                  <CardTitle className="text-white flex items-center gap-2">
+                    <Gift className="w-5 h-5 text-yellow-400" />
+                    {language === 'de' ? 'Nicht abgeholte Truhen' : 'Unclaimed Chests'}
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <p className="text-white/60 mb-4">
                     {language === 'de' 
-                      ? 'Fragen zum Game Pass? Tritt unserer Community bei!'
-                      : 'Questions about Game Pass? Join our community!'}
-                  </span>
+                      ? `Du hast ${totalUnclaimed} Truhe${totalUnclaimed > 1 ? 'n' : ''} zum Abholen!`
+                      : `You have ${totalUnclaimed} chest${totalUnclaimed > 1 ? 's' : ''} to claim!`}
+                  </p>
+                  <Button
+                    onClick={claimAllChests}
+                    disabled={claimingChest}
+                    className="w-full bg-gradient-to-r from-yellow-500 to-orange-500 hover:from-yellow-400 hover:to-orange-400 text-black font-bold"
+                  >
+                    <Gift className="w-4 h-4 mr-2" />
+                    {claimingChest ? '...' : language === 'de' ? 'Alle abholen' : 'Claim All'}
+                  </Button>
+                </CardContent>
+              </Card>
+            )}
+
+            {/* Inventory Chests */}
+            <Card className="bg-[#0A0A0C] border-white/5">
+              <CardHeader>
+                <CardTitle className="text-white flex items-center gap-2">
+                  <Package className="w-5 h-5 text-yellow-400" />
+                  {language === 'de' ? 'Deine Truhen' : 'Your Chests'}
+                  {chests.length > 0 && (
+                    <Badge className="bg-yellow-500/20 text-yellow-400 ml-2">{chests.length}</Badge>
+                  )}
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                {chests.length === 0 ? (
+                  <div className="text-center py-8 text-white/40">
+                    <Box className="w-12 h-12 mx-auto mb-3 opacity-30" />
+                    <p>{language === 'de' ? 'Keine Truhen im Inventar' : 'No chests in inventory'}</p>
+                    <p className="text-sm mt-1">
+                      {language === 'de' 
+                        ? 'Schließe Quests ab, um Truhen zu erhalten!'
+                        : 'Complete quests to earn chests!'}
+                    </p>
+                  </div>
+                ) : (
+                  <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                    {chests.map((chest) => (
+                      <div 
+                        key={chest.inventory_id}
+                        className={`p-4 rounded-xl border cursor-pointer transition-all hover:scale-105 ${
+                          chest.item_id === 'galadium_chest' 
+                            ? 'bg-gradient-to-br from-purple-500/10 to-pink-500/10 border-purple-500/30 hover:border-purple-400'
+                            : 'bg-gradient-to-br from-yellow-500/10 to-orange-500/10 border-yellow-500/30 hover:border-yellow-400'
+                        }`}
+                        onClick={() => openChest(chest)}
+                      >
+                        <div className="flex items-center gap-3">
+                          <div className={`w-12 h-12 rounded-lg flex items-center justify-center ${
+                            chest.item_id === 'galadium_chest' 
+                              ? 'bg-purple-500/20' 
+                              : 'bg-yellow-500/20'
+                          }`}>
+                            {chest.item_id === 'galadium_chest' 
+                              ? <Crown className="w-6 h-6 text-purple-400" />
+                              : <Package className="w-6 h-6 text-yellow-400" />
+                            }
+                          </div>
+                          <div className="flex-1">
+                            <p className="text-white font-medium text-sm">{chest.item_name}</p>
+                            <Badge className={`text-xs mt-1 ${
+                              chest.item_id === 'galadium_chest'
+                                ? 'bg-purple-500/20 text-purple-300'
+                                : 'bg-yellow-500/20 text-yellow-400'
+                            }`}>
+                              {chest.item_rarity}
+                            </Badge>
+                          </div>
+                        </div>
+                        <Button 
+                          size="sm" 
+                          className={`w-full mt-3 ${
+                            chest.item_id === 'galadium_chest'
+                              ? 'bg-purple-600 hover:bg-purple-500'
+                              : 'bg-yellow-500 hover:bg-yellow-400 text-black'
+                          }`}
+                        >
+                          <Sparkles className="w-3 h-3 mr-1" />
+                          {language === 'de' ? 'Öffnen' : 'Open'}
+                        </Button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+
+            {/* Drop Rates Info */}
+            <Card className="bg-[#0A0A0C] border-white/5">
+              <CardHeader>
+                <CardTitle className="text-white text-sm flex items-center gap-2">
+                  <Info className="w-4 h-4 text-white/50" />
+                  {language === 'de' ? 'Drop-Wahrscheinlichkeiten' : 'Drop Rates'}
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                  <div className="p-3 rounded-lg bg-gray-500/10 border border-gray-500/20 text-center">
+                    <p className="text-gray-400 font-mono text-lg">80%</p>
+                    <p className="text-white/50 text-xs">5-15 G</p>
+                  </div>
+                  <div className="p-3 rounded-lg bg-green-500/10 border border-green-500/20 text-center">
+                    <p className="text-green-400 font-mono text-lg">15%</p>
+                    <p className="text-white/50 text-xs">16-40 G</p>
+                  </div>
+                  <div className="p-3 rounded-lg bg-purple-500/10 border border-purple-500/20 text-center">
+                    <p className="text-purple-400 font-mono text-lg">4%</p>
+                    <p className="text-white/50 text-xs">41-100 G</p>
+                  </div>
+                  <div className="p-3 rounded-lg bg-yellow-500/10 border border-yellow-500/20 text-center">
+                    <p className="text-yellow-400 font-mono text-lg">1%</p>
+                    <p className="text-white/50 text-xs">Shop Item!</p>
+                  </div>
                 </div>
-                <a 
-                  href="https://discord.gg/6hX8XJC2MP" 
-                  target="_blank" 
-                  rel="noopener noreferrer"
-                  className="flex items-center gap-2 text-primary hover:underline"
-                >
-                  Discord
-                  <ExternalLink className="w-4 h-4" />
-                </a>
               </CardContent>
             </Card>
           </TabsContent>
 
           {/* Quests Tab */}
           <TabsContent value="quests" className="space-y-6">
-            {/* Quest Categories */}
-            <div className="grid gap-4">
-              {['easy', 'medium', 'hard'].map((difficulty) => {
-                const difficultyQuests = quests.filter(q => q.difficulty === difficulty);
-                if (difficultyQuests.length === 0) return null;
+            {['easy', 'medium', 'hard'].map((difficulty) => {
+              const difficultyQuests = quests.filter(q => q.difficulty === difficulty);
+              if (difficultyQuests.length === 0) return null;
 
-                return (
-                  <Card key={difficulty} className="bg-[#0A0A0C] border-white/5">
-                    <CardHeader className="pb-2">
-                      <CardTitle className="text-lg text-white flex items-center gap-2">
-                        <Badge className={`${DIFFICULTY_COLORS[difficulty]} border`}>
-                          {difficulty === 'easy' 
-                            ? (language === 'de' ? 'Einfach' : 'Easy')
-                            : difficulty === 'medium'
-                              ? (language === 'de' ? 'Mittel' : 'Medium')
-                              : (language === 'de' ? 'Schwer' : 'Hard')}
-                        </Badge>
-                      </CardTitle>
-                    </CardHeader>
-                    <CardContent>
-                      <div className="space-y-3">
-                        {difficultyQuests.map((quest) => (
-                          <QuestCard 
-                            key={quest.quest_id}
-                            quest={quest}
-                            language={language}
-                            onClaim={() => claimQuestReward(quest.quest_id)}
-                            isClaiming={claimingQuest === quest.quest_id}
-                          />
-                        ))}
-                      </div>
-                    </CardContent>
-                  </Card>
-                );
-              })}
-            </div>
-
-            {/* Quest Info */}
-            <Card className="bg-[#0A0A0C] border-white/5">
-              <CardContent className="p-4">
-                <div className="flex items-start gap-3">
-                  <Info className="w-5 h-5 text-primary flex-shrink-0 mt-0.5" />
-                  <div className="text-white/70 text-sm space-y-1">
-                    <p>
-                      {language === 'de' 
-                        ? 'Quests geben XP, G und manchmal A Währung.'
-                        : 'Quests reward XP, G, and sometimes A currency.'}
-                    </p>
-                    <p className="text-white/50">
-                      {language === 'de'
-                        ? 'A Belohnungen sind limitiert: max 5/Tag, 2 Quest Cooldown zwischen A Belohnungen.'
-                        : 'A rewards are limited: max 5/day, 2 quest cooldown between A rewards.'}
-                    </p>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
+              return (
+                <Card key={difficulty} className="bg-[#0A0A0C] border-white/5">
+                  <CardHeader className="pb-2">
+                    <CardTitle className="text-lg text-white flex items-center gap-2">
+                      <Badge className={`${DIFFICULTY_COLORS[difficulty]} border`}>
+                        {difficulty === 'easy' 
+                          ? (language === 'de' ? 'Einfach' : 'Easy')
+                          : difficulty === 'medium'
+                            ? (language === 'de' ? 'Mittel' : 'Medium')
+                            : (language === 'de' ? 'Schwer' : 'Hard')}
+                      </Badge>
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="space-y-3">
+                      {difficultyQuests.map((quest) => (
+                        <QuestCard 
+                          key={quest.quest_id}
+                          quest={quest}
+                          onClaim={() => claimQuestReward(quest.quest_id)}
+                          claiming={claimingQuest === quest.quest_id}
+                          language={language}
+                        />
+                      ))}
+                    </div>
+                  </CardContent>
+                </Card>
+              );
+            })}
+            
+            {quests.length === 0 && (
+              <Card className="bg-[#0A0A0C] border-white/5">
+                <CardContent className="p-8 text-center">
+                  <Target className="w-12 h-12 mx-auto mb-3 text-white/20" />
+                  <p className="text-white/50">
+                    {language === 'de' ? 'Keine aktiven Quests' : 'No active quests'}
+                  </p>
+                </CardContent>
+              </Card>
+            )}
           </TabsContent>
         </Tabs>
       </main>
 
       <Footer />
-      <LiveWinFeed />
       <Chat />
+
+      {/* Chest Opening Dialog */}
+      <ChestOpening
+        isOpen={showChestDialog}
+        onClose={() => {
+          setShowChestDialog(false);
+          setChestToOpen(null);
+        }}
+        chestItem={chestToOpen}
+        onChestOpened={handleChestOpened}
+      />
     </div>
   );
 };
 
-const QuestCard = ({ quest, language, onClaim, isClaiming }) => {
-  const progress = Math.min(100, (quest.current / quest.target) * 100);
-  
+// Quest Card Component
+const QuestCard = ({ quest, onClaim, claiming, language }) => {
+  const progress = quest.current_progress || 0;
+  const target = quest.target_value || 1;
+  const progressPercent = Math.min((progress / target) * 100, 100);
+  const isComplete = progress >= target;
+  const canClaim = isComplete && !quest.claimed;
+
   return (
     <div className={`p-4 rounded-xl border transition-all ${
-      quest.completed 
-        ? quest.claimed 
-          ? 'bg-white/5 border-white/10 opacity-60'
-          : 'bg-green-500/10 border-green-500/30'
-        : 'bg-white/[0.02] border-white/5 hover:border-white/10'
+      quest.claimed 
+        ? 'bg-white/5 border-white/10 opacity-60'
+        : canClaim
+          ? 'bg-primary/10 border-primary/30'
+          : 'bg-white/[0.02] border-white/5'
     }`}>
       <div className="flex items-start justify-between gap-4">
-        <div className="flex-1 min-w-0">
+        <div className="flex-1">
           <div className="flex items-center gap-2 mb-1">
-            <h4 className="font-medium text-white truncate">{quest.name}</h4>
-            {quest.completed && !quest.claimed && (
-              <CheckCircle2 className="w-4 h-4 text-green-400 flex-shrink-0" />
-            )}
+            <p className="text-white font-medium">{quest.title}</p>
+            {quest.claimed && <CheckCircle2 className="w-4 h-4 text-green-400" />}
           </div>
-          <p className="text-sm text-white/50 mb-3">{quest.description}</p>
+          <p className="text-white/50 text-sm mb-2">{quest.description}</p>
           
-          {/* Progress Bar */}
-          <div className="mb-3">
-            <div className="flex justify-between text-xs text-white/50 mb-1">
-              <span>{quest.current} / {quest.target}</span>
-              <span>{Math.round(progress)}%</span>
-            </div>
-            <Progress value={progress} className="h-2" />
-          </div>
-          
-          {/* Rewards */}
-          <div className="flex flex-wrap gap-2">
-            {quest.rewards.xp && (
-              <Badge variant="outline" className="bg-primary/10 text-primary border-primary/30 text-xs">
-                <Zap className="w-3 h-3 mr-1" />
-                +{quest.rewards.xp} XP
-              </Badge>
-            )}
-            {quest.rewards.g && (
-              <Badge variant="outline" className="bg-yellow-500/10 text-yellow-400 border-yellow-500/30 text-xs">
-                <Coins className="w-3 h-3 mr-1" />
-                +{quest.rewards.g} G
-              </Badge>
-            )}
-            {quest.rewards.a && (
-              <Badge variant="outline" className="bg-purple-500/10 text-purple-400 border-purple-500/30 text-xs">
-                <Star className="w-3 h-3 mr-1" />
-                +{quest.rewards.a} A
-              </Badge>
-            )}
-            <Badge variant="outline" className="bg-cyan-500/10 text-cyan-400 border-cyan-500/30 text-xs">
-              <Trophy className="w-3 h-3 mr-1" />
-              +{quest.game_pass_xp} Pass XP
-            </Badge>
+          {/* Progress bar */}
+          <div className="flex items-center gap-3">
+            <Progress value={progressPercent} className="h-2 flex-1 bg-white/5" />
+            <span className="text-white/50 text-xs font-mono min-w-[60px] text-right">
+              {progress}/{target}
+            </span>
           </div>
         </div>
         
-        {/* Claim Button */}
-        {quest.completed && !quest.claimed && (
-          <Button
-            size="sm"
-            onClick={onClaim}
-            disabled={isClaiming}
-            className="bg-green-600 hover:bg-green-500 text-white flex-shrink-0"
-          >
-            {isClaiming ? '...' : language === 'de' ? 'Abholen' : 'Claim'}
-          </Button>
-        )}
+        <div className="flex flex-col items-end gap-2">
+          <Badge className="bg-primary/20 text-primary border-primary/30">
+            +{quest.xp_reward} XP
+          </Badge>
+          
+          {canClaim && (
+            <Button 
+              size="sm"
+              onClick={onClaim}
+              disabled={claiming}
+              className="bg-primary hover:bg-primary/80 text-black"
+            >
+              {claiming ? '...' : language === 'de' ? 'Abholen' : 'Claim'}
+            </Button>
+          )}
+        </div>
       </div>
     </div>
   );
