@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { useLanguage } from '../contexts/LanguageContext';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from './ui/dialog';
@@ -12,33 +12,32 @@ import { Package, Sparkles, Coins, Gift, Info, Zap, StopCircle } from 'lucide-re
 const ChestOpening = ({ 
   isOpen, 
   onClose, 
-  chestItem,  // { inventory_id, item_id, item_name, item_rarity }
-  allChests = [], // All chests of the same type for auto-open
-  onChestOpened  // callback when chest is opened
+  chestItem,
+  allChests = [],
+  onChestOpened
 }) => {
   const { token, refreshUser } = useAuth();
   const { language } = useLanguage();
-  const [phase, setPhase] = useState('ready'); // ready, opening, reveal, auto-opening, auto-summary
+  const [phase, setPhase] = useState('ready');
   const [reward, setReward] = useState(null);
   const [showPayoutTable, setShowPayoutTable] = useState(false);
   const [payoutData, setPayoutData] = useState(null);
   
   // Auto-open state
   const [autoOpenAmount, setAutoOpenAmount] = useState(10);
-  const [autoOpenResults, setAutoOpenResults] = useState([]);
-  const [autoOpenProgress, setAutoOpenProgress] = useState(0);
+  const [batchResults, setBatchResults] = useState([]);
+  const [currentResultIndex, setCurrentResultIndex] = useState(0);
+  const [autoOpenSummary, setAutoOpenSummary] = useState(null);
   const [isAutoOpening, setIsAutoOpening] = useState(false);
-  const [stopAutoOpen, setStopAutoOpen] = useState(false);
+  const stopRef = useRef(false);
 
-  // Load payout table on mount
   useEffect(() => {
     loadPayoutTable();
   }, []);
 
-  // Reset stop flag when dialog opens
   useEffect(() => {
     if (isOpen) {
-      setStopAutoOpen(false);
+      stopRef.current = false;
     }
   }, [isOpen]);
 
@@ -53,55 +52,72 @@ const ChestOpening = ({
     }
   };
 
-  const openSingleChest = async (inventoryId) => {
-    const res = await fetch('/api/inventory/open-chest', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${token}`
-      },
-      body: JSON.stringify({ inventory_id: inventoryId })
-    });
-    
-    if (res.ok) {
-      return await res.json();
-    } else {
-      const err = await res.json();
-      throw new Error(err.detail || 'Failed to open chest');
-    }
-  };
-
-  const openChest = async () => {
+  const openSingleChest = async () => {
     if (!chestItem?.inventory_id) return;
     
     setPhase('opening');
     
-    // Animate for suspense
     await new Promise(resolve => setTimeout(resolve, 2000));
     
     try {
-      const data = await openSingleChest(chestItem.inventory_id);
-      setReward(data.reward);
-      setPhase('reveal');
+      const res = await fetch('/api/inventory/open-chest', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({ inventory_id: chestItem.inventory_id })
+      });
       
-      if (refreshUser) refreshUser();
-      if (onChestOpened) onChestOpened(data);
+      if (res.ok) {
+        const data = await res.json();
+        setReward(data.reward);
+        setPhase('reveal');
+        if (refreshUser) refreshUser();
+        if (onChestOpened) onChestOpened(data);
+      } else {
+        const err = await res.json();
+        toast.error(err.detail || 'Failed to open chest');
+        setPhase('ready');
+      }
     } catch (err) {
-      toast.error(err.message || 'Network error');
+      toast.error('Network error');
       setPhase('ready');
     }
   };
 
-  const startAutoOpen = async () => {
-    // Get inventory_ids from the stacked chest item
-    // The backend now returns stacked items with inventory_ids array
+  // Calculate animation delay based on tier - legendary is slowest, normal is fastest
+  const getAnimationDelay = (tier, totalCount) => {
+    // Base speed depends on total count
+    let baseDelay;
+    if (totalCount <= 10) {
+      baseDelay = 400; // Slow for few chests
+    } else if (totalCount <= 50) {
+      baseDelay = 200;
+    } else if (totalCount <= 100) {
+      baseDelay = 100;
+    } else if (totalCount <= 500) {
+      baseDelay = 50;
+    } else {
+      baseDelay = 20; // Very fast for 500+
+    }
+    
+    // Multiply by tier importance
+    switch(tier) {
+      case 'legendary': return baseDelay * 8; // 8x slower for legendary - epic moment!
+      case 'rare': return baseDelay * 2; // 2x slower for rare
+      case 'good': return baseDelay * 1.2; // Slightly slower
+      default: return baseDelay;
+    }
+  };
+
+  const startBatchOpen = async () => {
+    // Get inventory_ids from stacked item
     let inventoryIds = [];
     
     if (chestItem?.inventory_ids && chestItem.inventory_ids.length > 0) {
-      // Backend returns stacked items with inventory_ids
       inventoryIds = chestItem.inventory_ids.slice(0, autoOpenAmount);
     } else {
-      // Fallback: collect from allChests array
       const matchingChests = allChests.filter(c => c.item_id === chestItem?.item_id);
       for (const chest of matchingChests) {
         if (chest.inventory_ids) {
@@ -119,89 +135,102 @@ const ChestOpening = ({
     }
     
     setIsAutoOpening(true);
-    setPhase('auto-opening');
-    setAutoOpenResults([]);
-    setAutoOpenProgress(0);
-    setStopAutoOpen(false);
+    setPhase('batch-processing');
+    setBatchResults([]);
+    setCurrentResultIndex(0);
+    setAutoOpenSummary(null);
+    stopRef.current = false;
     
-    const results = [];
-    
-    for (let i = 0; i < inventoryIds.length; i++) {
-      // Check if user wants to stop
-      if (stopAutoOpen) {
-        break;
+    try {
+      // STEP 1: Call batch endpoint - ALL chests processed on server FIRST
+      const res = await fetch('/api/inventory/open-chests-batch', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({ inventory_ids: inventoryIds })
+      });
+      
+      if (!res.ok) {
+        const err = await res.json();
+        toast.error(err.detail || 'Batch open failed');
+        setPhase('ready');
+        setIsAutoOpening(false);
+        return;
       }
       
-      try {
-        const data = await openSingleChest(inventoryIds[i]);
-        results.push(data.reward);
-        setAutoOpenResults([...results]);
-        setAutoOpenProgress(i + 1);
+      const data = await res.json();
+      const results = data.results;
+      
+      // STEP 2: Store results and animate through them
+      setBatchResults(results);
+      setAutoOpenSummary(data.summary);
+      setPhase('batch-animating');
+      
+      // Animate through results with tier-based timing
+      for (let i = 0; i < results.length; i++) {
+        if (stopRef.current) break;
         
-        // Small delay between opens for visual feedback
-        await new Promise(resolve => setTimeout(resolve, 100));
-      } catch (err) {
-        // Skip failed chests
-        console.error('Failed to open chest:', err);
+        setCurrentResultIndex(i);
+        
+        // Get delay based on tier
+        const delay = getAnimationDelay(results[i].tier, results.length);
+        await new Promise(resolve => setTimeout(resolve, delay));
       }
+      
+      // Show summary
+      setPhase('auto-summary');
+      if (refreshUser) refreshUser();
+      if (onChestOpened) onChestOpened({ autoOpen: true, count: results.length });
+      
+    } catch (err) {
+      console.error('Batch open error:', err);
+      toast.error('Network error');
+      setPhase('ready');
     }
     
     setIsAutoOpening(false);
-    setPhase('auto-summary');
-    
-    if (refreshUser) refreshUser();
-    if (onChestOpened) onChestOpened({ autoOpen: true, count: results.length });
   };
 
   const handleClose = () => {
     setPhase('ready');
     setReward(null);
-    setAutoOpenResults([]);
-    setAutoOpenProgress(0);
+    setBatchResults([]);
+    setCurrentResultIndex(0);
+    setAutoOpenSummary(null);
     setIsAutoOpening(false);
-    setStopAutoOpen(false);
+    stopRef.current = false;
     onClose();
+  };
+
+  const stopAnimation = () => {
+    stopRef.current = true;
+    setPhase('auto-summary');
   };
 
   const getTierGlow = (tier) => {
     switch(tier) {
-      case 'good': return 'shadow-[0_0_30px_rgba(34,197,94,0.5)]';
+      case 'legendary': return 'shadow-[0_0_60px_rgba(234,179,8,0.9)] animate-pulse';
       case 'rare': return 'shadow-[0_0_40px_rgba(168,85,247,0.6)]';
-      case 'legendary': return 'shadow-[0_0_50px_rgba(234,179,8,0.7)]';
+      case 'good': return 'shadow-[0_0_30px_rgba(34,197,94,0.5)]';
       default: return '';
     }
   };
 
-  // Calculate auto-open summary
-  const getAutoOpenSummary = () => {
-    let totalG = 0;
-    let items = [];
-    let tierCounts = { normal: 0, good: 0, rare: 0, legendary: 0 };
-    
-    autoOpenResults.forEach(r => {
-      if (r.type === 'currency') {
-        totalG += r.amount;
-        tierCounts[r.tier] = (tierCounts[r.tier] || 0) + 1;
-      } else {
-        items.push(r);
-        tierCounts['legendary'] = (tierCounts['legendary'] || 0) + 1;
-      }
-    });
-    
-    return { totalG, items, tierCounts, count: autoOpenResults.length };
-  };
-
-  // Calculate available chests - use count from stacked item or count from inventory_ids
   const availableChests = chestItem?.count || chestItem?.inventory_ids?.length || 
     allChests.filter(c => c.item_id === chestItem?.item_id).reduce((sum, c) => sum + (c.count || 1), 0);
 
+  // Get current result for animation display
+  const currentResult = batchResults[currentResultIndex];
+
   return (
     <Dialog open={isOpen} onOpenChange={handleClose}>
-      <DialogContent className="bg-[#0a0a0c] border-white/10 max-w-md">
+      <DialogContent className="bg-[#0a0a0c] border-white/10 max-w-md overflow-hidden">
         <DialogHeader>
           <DialogTitle className="text-white flex items-center gap-2">
             <Package className="w-5 h-5 text-yellow-400" />
-            {phase === 'reveal' 
+            {phase === 'reveal' || phase === 'batch-animating'
               ? (language === 'de' ? 'Belohnung!' : 'Reward!')
               : phase === 'auto-summary'
                 ? (language === 'de' ? 'Zusammenfassung' : 'Summary')
@@ -212,11 +241,11 @@ const ChestOpening = ({
           </DialogDescription>
         </DialogHeader>
 
-        <div className="py-6">
-          {/* Ready Phase - Show chest */}
+        <div className="py-6 relative">
+          
+          {/* Ready Phase */}
           {phase === 'ready' && (
             <div className="text-center space-y-4">
-              {/* Chest Icon */}
               <div className="relative mx-auto w-28 h-28">
                 <div className="absolute inset-0 bg-gradient-to-b from-yellow-500/20 to-orange-500/20 rounded-2xl animate-pulse" />
                 <div className="relative w-full h-full flex items-center justify-center">
@@ -224,7 +253,6 @@ const ChestOpening = ({
                 </div>
               </div>
 
-              {/* Chest Info */}
               <div>
                 <h3 className="text-lg font-bold text-white mb-1">{chestItem?.item_name}</h3>
                 <Badge className="bg-yellow-500/20 text-yellow-400 border-yellow-500/30">
@@ -232,21 +260,18 @@ const ChestOpening = ({
                 </Badge>
               </div>
 
-              {/* Open Button */}
               <Button
-                onClick={openChest}
+                onClick={openSingleChest}
                 className="w-full bg-gradient-to-r from-yellow-500 to-orange-500 hover:from-yellow-400 hover:to-orange-400 text-black font-bold py-5 text-lg"
-                data-testid="open-chest-btn"
               >
                 <Sparkles className="w-5 h-5 mr-2" />
                 {language === 'de' ? 'ÖFFNEN!' : 'OPEN!'}
               </Button>
 
-              {/* Auto Open Section */}
               {availableChests > 1 && (
                 <div className="pt-4 border-t border-white/10">
                   <p className="text-white/50 text-xs mb-3">
-                    {language === 'de' ? 'Auto-Öffnen' : 'Auto Open'} ({availableChests} {language === 'de' ? 'verfügbar' : 'available'})
+                    {language === 'de' ? 'Auto-Öffnen' : 'Auto Open'} ({availableChests.toLocaleString()} {language === 'de' ? 'verfügbar' : 'available'})
                   </p>
                   <div className="flex gap-2">
                     <Input
@@ -256,12 +281,10 @@ const ChestOpening = ({
                       value={autoOpenAmount}
                       onChange={(e) => setAutoOpenAmount(Math.min(Math.max(1, parseInt(e.target.value) || 1), Math.min(availableChests, 1000)))}
                       className="w-24 bg-black/40 border-white/10 text-white text-center"
-                      data-testid="auto-open-amount"
                     />
                     <Button
-                      onClick={startAutoOpen}
+                      onClick={startBatchOpen}
                       className="flex-1 bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-500 hover:to-pink-500 text-white font-bold"
-                      data-testid="auto-open-btn"
                     >
                       <Zap className="w-4 h-4 mr-2" />
                       {language === 'de' ? `${autoOpenAmount}x Öffnen` : `Open ${autoOpenAmount}x`}
@@ -270,7 +293,6 @@ const ChestOpening = ({
                 </div>
               )}
 
-              {/* Payout Table Toggle */}
               <Button
                 variant="ghost"
                 size="sm"
@@ -281,7 +303,6 @@ const ChestOpening = ({
                 {language === 'de' ? 'Drop-Raten' : 'Drop Rates'}
               </Button>
 
-              {/* Payout Table */}
               {showPayoutTable && payoutData && (
                 <Card className="bg-black/40 border-white/10">
                   <CardContent className="p-3">
@@ -313,7 +334,7 @@ const ChestOpening = ({
             </div>
           )}
 
-          {/* Opening Phase - Animation */}
+          {/* Single Opening Animation */}
           {phase === 'opening' && (
             <div className="text-center space-y-6 py-8">
               <div className="relative mx-auto w-32 h-32">
@@ -328,119 +349,171 @@ const ChestOpening = ({
             </div>
           )}
 
-          {/* Auto-Opening Phase */}
-          {phase === 'auto-opening' && (
-            <div className="text-center space-y-6 py-4">
+          {/* Batch Processing - Server is calculating */}
+          {phase === 'batch-processing' && (
+            <div className="text-center space-y-6 py-8">
               <div className="relative mx-auto w-24 h-24">
-                <div className="absolute inset-0 rounded-full bg-gradient-to-r from-purple-500 via-pink-500 to-purple-500 animate-spin opacity-50 blur-xl" />
+                <div className="absolute inset-0 rounded-full bg-gradient-to-r from-purple-500 via-pink-500 to-purple-500 animate-spin opacity-70 blur-xl" />
                 <div className="relative w-full h-full flex items-center justify-center">
                   <Package className="w-14 h-14 text-purple-400 animate-pulse" />
                 </div>
               </div>
+              <p className="text-white/60 animate-pulse">
+                {language === 'de' ? 'Öffne alle Truhen...' : 'Opening all chests...'}
+              </p>
+            </div>
+          )}
+
+          {/* Batch Animating - Show results one by one */}
+          {phase === 'batch-animating' && currentResult && (
+            <div className="text-center space-y-4">
+              {/* Progress */}
+              <div className="flex justify-between items-center text-sm text-white/50 mb-2">
+                <span>{currentResultIndex + 1} / {batchResults.length}</span>
+                <Button
+                  onClick={stopAnimation}
+                  variant="ghost"
+                  size="sm"
+                  className="text-white/50 hover:text-red-400"
+                >
+                  <StopCircle className="w-4 h-4 mr-1" />
+                  Skip
+                </Button>
+              </div>
+
+              {/* Legendary Golden Glitter Effect */}
+              {currentResult.tier === 'legendary' && (
+                <div className="absolute inset-0 pointer-events-none overflow-hidden">
+                  {[...Array(20)].map((_, i) => (
+                    <div
+                      key={i}
+                      className="absolute w-2 h-2 bg-yellow-400 rounded-full animate-ping"
+                      style={{
+                        left: `${Math.random() * 100}%`,
+                        top: `${Math.random() * 100}%`,
+                        animationDelay: `${Math.random() * 0.5}s`,
+                        animationDuration: '1s'
+                      }}
+                    />
+                  ))}
+                  <div className="absolute inset-0 bg-gradient-to-t from-yellow-500/20 via-transparent to-yellow-500/20 animate-pulse" />
+                </div>
+              )}
+
+              {/* Rare Purple Glow Effect */}
+              {currentResult.tier === 'rare' && (
+                <div className="absolute inset-0 pointer-events-none">
+                  <div className="absolute inset-0 bg-gradient-to-t from-purple-500/10 via-transparent to-purple-500/10" />
+                </div>
+              )}
+
+              {/* Reward Display */}
+              <div className={`relative mx-auto w-36 h-36 rounded-2xl bg-gradient-to-b from-black to-gray-900 border-2 transition-all duration-300 ${
+                currentResult.tier === 'legendary' 
+                  ? 'border-yellow-400 scale-110' 
+                  : currentResult.tier === 'rare' 
+                    ? 'border-purple-500' 
+                    : currentResult.tier === 'good'
+                      ? 'border-green-500'
+                      : 'border-gray-500'
+              } ${getTierGlow(currentResult.tier)}`}>
+                <div className="absolute inset-0 flex items-center justify-center">
+                  {currentResult.type === 'currency' ? (
+                    <div className="text-center">
+                      <Coins className={`w-10 h-10 mx-auto mb-2 ${
+                        currentResult.tier === 'legendary' ? 'text-yellow-400 animate-bounce' :
+                        currentResult.tier === 'rare' ? 'text-purple-400' :
+                        currentResult.tier === 'good' ? 'text-green-400' :
+                        'text-gray-400'
+                      }`} />
+                      <p className={`text-2xl font-bold font-mono ${
+                        currentResult.tier === 'legendary' ? 'text-yellow-400' :
+                        currentResult.tier === 'rare' ? 'text-purple-400' :
+                        currentResult.tier === 'good' ? 'text-green-400' :
+                        'text-white'
+                      }`}>
+                        +{currentResult.amount.toFixed(2)}
+                      </p>
+                      <p className="text-white/60 text-sm">G</p>
+                    </div>
+                  ) : (
+                    <div className="text-center p-3">
+                      <Gift className="w-10 h-10 mx-auto mb-2 text-yellow-400 animate-bounce" />
+                      <p className="text-yellow-400 font-bold text-sm">{currentResult.name}</p>
+                      <Badge className="mt-1 bg-yellow-500/20 text-yellow-400 text-xs">
+                        {currentResult.rarity}
+                      </Badge>
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* Tier Label */}
+              <Badge 
+                className={`text-sm px-3 py-1 ${currentResult.tier === 'legendary' ? 'animate-pulse text-lg' : ''}`}
+                style={{ 
+                  backgroundColor: `${currentResult.tier_color}20`, 
+                  color: currentResult.tier_color,
+                  borderColor: `${currentResult.tier_color}50`
+                }}
+              >
+                {currentResult.type === 'item' ? '🎉 JACKPOT!' : currentResult.tier_label}
+              </Badge>
+
+              {/* Running Total */}
+              <div className="text-white/50 text-sm">
+                {language === 'de' ? 'Bisheriges Total:' : 'Running total:'}{' '}
+                <span className="text-green-400 font-mono">
+                  +{batchResults.slice(0, currentResultIndex + 1).reduce((sum, r) => sum + (r.amount || 0), 0).toFixed(2)} G
+                </span>
+              </div>
+            </div>
+          )}
+
+          {/* Summary Phase */}
+          {phase === 'auto-summary' && autoOpenSummary && (
+            <div className="text-center space-y-4">
+              <div className="text-4xl font-bold text-green-400 mb-2">
+                +{autoOpenSummary.total_g.toFixed(2)} G
+              </div>
+              <p className="text-white/60 text-sm">
+                {batchResults.length} {language === 'de' ? 'Truhen geöffnet' : 'chests opened'}
+              </p>
               
-              <div>
-                <p className="text-white font-bold text-2xl mb-1">
-                  {autoOpenProgress} / {Math.min(autoOpenAmount, availableChests)}
-                </p>
-                <p className="text-white/60 text-sm">
-                  {language === 'de' ? 'Truhen geöffnet' : 'Chests opened'}
-                </p>
+              {/* Tier breakdown */}
+              <div className="grid grid-cols-4 gap-2 p-3 bg-black/20 rounded-lg">
+                <div className="text-center">
+                  <p className="text-gray-400 font-mono text-lg">{autoOpenSummary.tier_counts.normal || 0}</p>
+                  <p className="text-white/40 text-xs">Normal</p>
+                </div>
+                <div className="text-center">
+                  <p className="text-green-400 font-mono text-lg">{autoOpenSummary.tier_counts.good || 0}</p>
+                  <p className="text-white/40 text-xs">{language === 'de' ? 'Gut' : 'Good'}</p>
+                </div>
+                <div className="text-center">
+                  <p className="text-purple-400 font-mono text-lg">{autoOpenSummary.tier_counts.rare || 0}</p>
+                  <p className="text-white/40 text-xs">{language === 'de' ? 'Selten' : 'Rare'}</p>
+                </div>
+                <div className="text-center">
+                  <p className="text-yellow-400 font-mono text-lg">{autoOpenSummary.items_won?.length || 0}</p>
+                  <p className="text-white/40 text-xs">Items</p>
+                </div>
               </div>
               
-              {/* Progress bar */}
-              <div className="w-full h-2 bg-white/10 rounded-full overflow-hidden">
-                <div 
-                  className="h-full bg-gradient-to-r from-purple-500 to-pink-500 transition-all duration-200"
-                  style={{ width: `${(autoOpenProgress / Math.min(autoOpenAmount, availableChests)) * 100}%` }}
-                />
-              </div>
-              
-              {/* Live rewards ticker */}
-              {autoOpenResults.length > 0 && (
-                <div className="text-left max-h-32 overflow-y-auto space-y-1 p-2 bg-black/20 rounded-lg">
-                  {autoOpenResults.slice(-5).map((r, i) => (
-                    <div key={i} className="flex items-center gap-2 text-sm">
-                      {r.type === 'currency' ? (
-                        <>
-                          <Coins className={`w-3 h-3 ${r.tier === 'rare' ? 'text-purple-400' : r.tier === 'good' ? 'text-green-400' : 'text-gray-400'}`} />
-                          <span className={r.tier === 'rare' ? 'text-purple-400' : r.tier === 'good' ? 'text-green-400' : 'text-white/60'}>
-                            +{r.amount.toFixed(2)} G
-                          </span>
-                        </>
-                      ) : (
-                        <>
-                          <Gift className="w-3 h-3 text-yellow-400" />
-                          <span className="text-yellow-400">{r.name}</span>
-                        </>
-                      )}
+              {/* Items won */}
+              {autoOpenSummary.items_won?.length > 0 && (
+                <div className="p-3 bg-yellow-500/10 border border-yellow-500/30 rounded-lg">
+                  <p className="text-yellow-400 font-bold text-sm mb-2">
+                    🎉 {language === 'de' ? 'Items gewonnen!' : 'Items won!'}
+                  </p>
+                  {autoOpenSummary.items_won.map((item, i) => (
+                    <div key={i} className="flex items-center justify-between text-sm">
+                      <span className="text-white">{item.name}</span>
+                      <Badge className="bg-yellow-500/20 text-yellow-400 text-xs">{item.rarity}</Badge>
                     </div>
                   ))}
                 </div>
               )}
-              
-              {/* Stop Button */}
-              <Button
-                onClick={() => setStopAutoOpen(true)}
-                variant="outline"
-                className="border-red-500/50 text-red-400 hover:bg-red-500/20"
-              >
-                <StopCircle className="w-4 h-4 mr-2" />
-                {language === 'de' ? 'Stoppen' : 'Stop'}
-              </Button>
-            </div>
-          )}
-
-          {/* Auto-Open Summary Phase */}
-          {phase === 'auto-summary' && (
-            <div className="text-center space-y-4">
-              {(() => {
-                const summary = getAutoOpenSummary();
-                return (
-                  <>
-                    <div className="text-4xl font-bold text-green-400 mb-2">
-                      +{summary.totalG.toFixed(2)} G
-                    </div>
-                    <p className="text-white/60 text-sm">
-                      {summary.count} {language === 'de' ? 'Truhen geöffnet' : 'chests opened'}
-                    </p>
-                    
-                    {/* Tier breakdown */}
-                    <div className="grid grid-cols-4 gap-2 p-3 bg-black/20 rounded-lg">
-                      <div className="text-center">
-                        <p className="text-gray-400 font-mono text-lg">{summary.tierCounts.normal || 0}</p>
-                        <p className="text-white/40 text-xs">Normal</p>
-                      </div>
-                      <div className="text-center">
-                        <p className="text-green-400 font-mono text-lg">{summary.tierCounts.good || 0}</p>
-                        <p className="text-white/40 text-xs">{language === 'de' ? 'Gut' : 'Good'}</p>
-                      </div>
-                      <div className="text-center">
-                        <p className="text-purple-400 font-mono text-lg">{summary.tierCounts.rare || 0}</p>
-                        <p className="text-white/40 text-xs">{language === 'de' ? 'Selten' : 'Rare'}</p>
-                      </div>
-                      <div className="text-center">
-                        <p className="text-yellow-400 font-mono text-lg">{summary.items.length}</p>
-                        <p className="text-white/40 text-xs">Items</p>
-                      </div>
-                    </div>
-                    
-                    {/* Items won */}
-                    {summary.items.length > 0 && (
-                      <div className="p-3 bg-yellow-500/10 border border-yellow-500/30 rounded-lg">
-                        <p className="text-yellow-400 font-bold text-sm mb-2">
-                          🎉 {language === 'de' ? 'Items gewonnen!' : 'Items won!'}
-                        </p>
-                        {summary.items.map((item, i) => (
-                          <div key={i} className="flex items-center justify-between text-sm">
-                            <span className="text-white">{item.name}</span>
-                            <Badge className="bg-yellow-500/20 text-yellow-400 text-xs">{item.rarity}</Badge>
-                          </div>
-                        ))}
-                      </div>
-                    )}
-                  </>
-                );
-              })()}
               
               <Button
                 onClick={handleClose}
@@ -452,7 +525,7 @@ const ChestOpening = ({
             </div>
           )}
 
-          {/* Reveal Phase - Show single reward */}
+          {/* Single Reveal Phase */}
           {phase === 'reveal' && reward && (
             <div className="text-center space-y-6">
               <div className={`relative mx-auto w-40 h-40 rounded-2xl bg-gradient-to-b from-black to-gray-900 border-2 ${
