@@ -491,23 +491,68 @@ const Inventory = () => {
                   </div>
                 </div>
                 
+                {/* Amount Selector - only show if multiple items */}
+                {(selectedItem.count || 1) > 1 && (
+                  <div className="p-3 rounded-lg bg-white/5">
+                    <div className="flex items-center justify-between mb-2">
+                      <span className="text-white/60 text-sm">{language === 'de' ? 'Anzahl' : 'Amount'}</span>
+                      <span className="text-white/40 text-xs">
+                        {language === 'de' ? 'Max:' : 'Max:'} {selectedItem.count}
+                      </span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => setSellAmount(1)}
+                        className="border-white/10 text-white/60 hover:text-white"
+                      >
+                        1
+                      </Button>
+                      <input
+                        type="range"
+                        min="1"
+                        max={selectedItem.count}
+                        value={sellAmount}
+                        onChange={(e) => setSellAmount(parseInt(e.target.value))}
+                        className="flex-1 h-2 bg-white/10 rounded-lg appearance-none cursor-pointer accent-primary"
+                      />
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => setSellAmount(selectedItem.count)}
+                        className="border-white/10 text-white/60 hover:text-white"
+                      >
+                        {language === 'de' ? 'Alle' : 'All'}
+                      </Button>
+                    </div>
+                    <p className="text-center text-white font-mono text-lg mt-2">
+                      {sellAmount}x
+                    </p>
+                  </div>
+                )}
+                
                 {/* Price Breakdown */}
                 <div className="space-y-2 p-4 rounded-lg bg-yellow-500/10 border border-yellow-500/20">
                   <div className="flex justify-between text-sm">
-                    <span className="text-white/60">{language === 'de' ? 'Wert' : 'Value'}</span>
-                    <span className="text-white font-mono">{(selectedItem.purchase_price || 0).toFixed(2)} G</span>
+                    <span className="text-white/60">
+                      {language === 'de' ? 'Wert' : 'Value'} {sellAmount > 1 ? `(${sellAmount}x)` : ''}
+                    </span>
+                    <span className="text-white font-mono">
+                      {((selectedItem.purchase_price || 0) * sellAmount).toFixed(2)} G
+                    </span>
                   </div>
                   <div className="flex justify-between text-sm">
                     <span className="text-red-400">{language === 'de' ? 'Gebühr (30%)' : 'Fee (30%)'}</span>
                     <span className="text-red-400 font-mono">
-                      -{((selectedItem.purchase_price || 0) * 0.3).toFixed(2)} G
+                      -{((selectedItem.purchase_price || 0) * 0.3 * sellAmount).toFixed(2)} G
                     </span>
                   </div>
                   <div className="border-t border-yellow-500/20 pt-2 mt-2">
                     <div className="flex justify-between">
                       <span className="text-white font-medium">{language === 'de' ? 'Du erhältst' : 'You receive'}</span>
                       <span className="text-green-400 font-mono font-bold">
-                        {(selectedItem.sell_value || ((selectedItem.purchase_price || 0) * 0.7)).toFixed(2)} G
+                        {((selectedItem.sell_value || ((selectedItem.purchase_price || 0) * 0.7)) * sellAmount).toFixed(2)} G
                       </span>
                     </div>
                   </div>
@@ -539,7 +584,10 @@ const Inventory = () => {
                   ) : (
                     <>
                       <Coins className="w-4 h-4 mr-2" />
-                      {language === 'de' ? 'Verkaufen' : 'Sell'}
+                      {sellAmount > 1 
+                        ? (language === 'de' ? `${sellAmount}x Verkaufen` : `Sell ${sellAmount}x`)
+                        : (language === 'de' ? 'Verkaufen' : 'Sell')
+                      }
                     </>
                   )}
                 </Button>
