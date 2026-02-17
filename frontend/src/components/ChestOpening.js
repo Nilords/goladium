@@ -88,7 +88,15 @@ const ChestOpening = ({
 
   // Calculate animation delay based on tier - legendary is slowest, normal is fastest
   const getAnimationDelay = (tier, totalCount) => {
-    // Base speed depends on total count
+    // FIXED display times for special drops (unabhängig von Anzahl)
+    if (tier === 'legendary') {
+      return 5000; // 5 Sekunden für legendäre/goldene Items
+    }
+    if (tier === 'rare') {
+      return 3000; // 3 Sekunden für epische/seltene Pulls
+    }
+    
+    // Dynamic speed for normal drops based on total count
     let baseDelay;
     if (totalCount <= 10) {
       baseDelay = 400; // Slow for few chests
@@ -102,13 +110,12 @@ const ChestOpening = ({
       baseDelay = 20; // Very fast for 500+
     }
     
-    // Multiply by tier importance
-    switch(tier) {
-      case 'legendary': return baseDelay * 8; // 8x slower for legendary - epic moment!
-      case 'rare': return baseDelay * 2; // 2x slower for rare
-      case 'good': return baseDelay * 1.2; // Slightly slower
-      default: return baseDelay;
+    // Good tier slightly slower
+    if (tier === 'good') {
+      return baseDelay * 1.5;
     }
+    
+    return baseDelay;
   };
 
   const startBatchOpen = async () => {
