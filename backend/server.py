@@ -5858,6 +5858,130 @@ async def claim_game_pass_reward(level: int, request: Request):
         "tier": reward_tier
     }
 
+# ============== INVENTORY VALUE TRACKING SYSTEM ==============
+# Event-based tracking of inventory value changes (not time-aggregated like account value)
+
+async def get_current_inventory_value(user_id: str) -> float:
+    """Calculate total inventory value based on purchase prices"""
+    items = await db.user_inventory.find(
+        {"user_id": user_id},
+        {"purchase_price": 1, "item_id": 1}
+    ).to_list(1000)
+    
+    total = 0.0
+    for item in items:
+        # Use purchase_price if available, else try to get from item definition
+        price = item.get("purchase_price", 0)
+        if price <= 0:
+            item_def = await db.items.find_one({"item_id": item.get("item_id")}, {"base_value": 1})
+            price = item_def.get("base_value", 0) if item_def else 0
+        total += price
+    return round(total, 2)
+
+
+async def record_inventory_value_event(
+    user_id: str,
+    event_type: str,  # buy, sell, trade_in, trade_out, reward, gamepass_reward, admin_adjust, drop
+    delta_value: float,  # Positive for gain, negative for loss
+    related_item_id: str = None,
+    related_item_name: str = None,
+    details: dict = None
+):
+    """
+    Record an inventory value change event.
+    Total value never goes below 0.
+    """
+    now = datetime.now(timezone.utc)
+    
+    # Get previous total value
+    last_event = await db.inventory_value_history.find_one(
+        {"user_id": user_id},
+        sort=[("event_number", -1)]
+    )
+    
+    previous_total = last_event["total_inventory_value_after"] if last_event else 0.0
+    event_number = (last_event["event_number"] + 1) if last_event else 1
+    
+    # Calculate new total (never below 0)
+    new_total = max(0, round(previous_total + delta_value, 2))
+    
+    event_doc = {
+        "event_id": f"inv_evt_{uuid.uuid4().hex[:12]}",
+        "user_id": user_id,
+        "event_number": event_number,
+        "event_type": event_type,
+        "delta_value": round(delta_value, 2),
+        "total_inventory_value_after": new_total,
+        "related_item_id": related_item_id,
+        "related_item_name": related_item_name,
+        "details": details or {},
+        "timestamp": now.isoformat()
+    }
+    
+    await db.inventory_value_history.insert_one(event_doc)
+    return event_doc
+
+
+@api_router.get("/user/inventory-history")
+async def get_inventory_history(request: Request, limit: int = 30):
+    """
+    Get user's inventory value history (event-based, not time-aggregated).
+    Returns the last N events in chronological order.
+    
+    Query params:
+    - limit: Number of events to return (default 30, max 100)
+    """
+    user = await get_current_user(request)
+    user_id = user["user_id"]
+    
+    # Clamp limit
+    limit = min(max(limit, 10), 100)
+    
+    # Get events sorted by event_number descending, then reverse for chronological order
+    events = await db.inventory_value_history.find(
+        {"user_id": user_id},
+        {"_id": 0}
+    ).sort("event_number", -1).limit(limit).to_list(limit)
+    
+    # Reverse to get chronological order (oldest to newest)
+    events = list(reversed(events))
+    
+    # Calculate stats from loaded events
+    if events:
+        values = [e["total_inventory_value_after"] for e in events]
+        highest = max(values)
+        lowest = min(values)  # Already >= 0 due to our constraint
+        current = events[-1]["total_inventory_value_after"] if events else 0
+        range_val = highest - lowest
+        
+        # Calculate change from first to last event
+        start_value = events[0]["total_inventory_value_after"] if events else 0
+        if start_value > 0:
+            percent_change = round(((current - start_value) / start_value) * 100, 2)
+        else:
+            percent_change = 0 if current == 0 else 100  # From 0 to something = 100%
+    else:
+        # No events - get current inventory value
+        current = await get_current_inventory_value(user_id)
+        highest = current
+        lowest = current
+        range_val = 0
+        percent_change = 0
+    
+    return {
+        "events": events,
+        "total_events": len(events),
+        "limit": limit,
+        "stats": {
+            "current": current,
+            "highest": highest,
+            "lowest": lowest,
+            "range": range_val,
+            "percent_change": percent_change
+        }
+    }
+
+
 # ============== ITEM SYSTEM INITIALIZATION ==============
 # Seed items are created on startup if they don't exist
 
@@ -5868,8 +5992,10 @@ SEED_ITEMS = [
         "flavor_text": "Placeholder item. Somehow still valuable.",
         "rarity": "uncommon",
         "base_value": 25.0,
-        "image_url": None,  # Placeholder - artwork added later
-        "category": "collectible"
+        "image_url": None,
+        "category": "collectible",
+        "is_tradeable": True,
+        "is_sellable": True
     },
     {
         "item_id": "gamblers_instinct",
@@ -5877,8 +6003,77 @@ SEED_ITEMS = [
         "flavor_text": "Only real gamblers know when to keep going.",
         "rarity": "rare",
         "base_value": 50.0,
-        "image_url": None,  # Placeholder - artwork added later
-        "category": "collectible"
+        "image_url": None,
+        "category": "collectible",
+        "is_tradeable": True,
+        "is_sellable": True
+    },
+    # GamePass Reward Items (Chests)
+    {
+        "item_id": "common_chest",
+        "name": "Common Chest",
+        "flavor_text": "A simple chest with basic treasures inside.",
+        "rarity": "common",
+        "base_value": 15.0,
+        "image_url": None,
+        "category": "chest",
+        "is_tradeable": True,
+        "is_sellable": True
+    },
+    {
+        "item_id": "uncommon_chest",
+        "name": "Uncommon Chest",
+        "flavor_text": "A sturdy chest containing decent loot.",
+        "rarity": "uncommon",
+        "base_value": 30.0,
+        "image_url": None,
+        "category": "chest",
+        "is_tradeable": True,
+        "is_sellable": True
+    },
+    {
+        "item_id": "rare_chest",
+        "name": "Rare Chest",
+        "flavor_text": "A glowing chest filled with valuable items.",
+        "rarity": "rare",
+        "base_value": 60.0,
+        "image_url": None,
+        "category": "chest",
+        "is_tradeable": True,
+        "is_sellable": True
+    },
+    {
+        "item_id": "epic_chest",
+        "name": "Epic Chest",
+        "flavor_text": "A magnificent chest radiating power.",
+        "rarity": "epic",
+        "base_value": 120.0,
+        "image_url": None,
+        "category": "chest",
+        "is_tradeable": True,
+        "is_sellable": True
+    },
+    {
+        "item_id": "legendary_chest",
+        "name": "Legendary Chest",
+        "flavor_text": "An ancient chest containing legendary treasures.",
+        "rarity": "legendary",
+        "base_value": 250.0,
+        "image_url": None,
+        "category": "chest",
+        "is_tradeable": True,
+        "is_sellable": True
+    },
+    {
+        "item_id": "mythic_chest",
+        "name": "Mythic Chest",
+        "flavor_text": "A chest of myth, said to contain items of immense power.",
+        "rarity": "legendary",  # Using legendary as top tier
+        "base_value": 500.0,
+        "image_url": None,
+        "category": "chest",
+        "is_tradeable": True,
+        "is_sellable": True
     }
 ]
 
