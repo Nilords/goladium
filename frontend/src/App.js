@@ -19,6 +19,7 @@ import Customization from './pages/Customization';
 import Profile from './pages/Profile';
 import Settings from './pages/Settings';
 import Trading from './pages/Trading';
+import GamePass from './pages/GamePass';
 import AuthCallback from './components/AuthCallback';
 
 // Protected Route wrapper
