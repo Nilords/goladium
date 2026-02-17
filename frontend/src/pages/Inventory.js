@@ -47,6 +47,7 @@ const Inventory = () => {
   const [selectedItem, setSelectedItem] = useState(null);
   const [showSellConfirm, setShowSellConfirm] = useState(false);
   const [selling, setSelling] = useState(false);
+  const [sellAmount, setSellAmount] = useState(1);
   
   // Chest opening state
   const [chestToOpen, setChestToOpen] = useState(null);
