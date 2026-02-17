@@ -6850,6 +6850,86 @@ async def admin_modify_balance(data: AdminBalanceRequest, request: Request):
         "modified": result.modified_count > 0
     }
 
+class AdminGiveChestsRequest(BaseModel):
+    username: str
+    amount: int
+    chest_type: str = "gamepass"  # "gamepass" or "galadium"
+
+@api_router.post("/admin/give-chests")
+async def admin_give_chests(data: AdminGiveChestsRequest, request: Request):
+    """Give chests to a user (Discord bot endpoint)"""
+    if not verify_admin_key(request):
+        raise HTTPException(status_code=401, detail="Invalid admin key")
+    
+    # Validate amount
+    if data.amount <= 0:
+        raise HTTPException(status_code=400, detail="Amount must be positive")
+    if data.amount > 100000:
+        raise HTTPException(status_code=400, detail="Maximum 100,000 chests per request")
+    
+    # Case-insensitive username search
+    user = await db.users.find_one(
+        {"username": {"$regex": f"^{data.username}$", "$options": "i"}},
+        {"_id": 0}
+    )
+    if not user:
+        raise HTTPException(status_code=404, detail=f"User '{data.username}' not found")
+    
+    # Determine chest type
+    chest_type = data.chest_type.lower()
+    if chest_type in ["gamepass", "normal", "standard"]:
+        item_id = "gamepass_chest"
+        item_name = "GamePass Chest"
+        item_rarity = "uncommon"
+        rarity_color = "#22c55e"
+    elif chest_type in ["galadium", "premium", "bonus"]:
+        item_id = "galadium_chest"
+        item_name = "Galadium Chest"
+        item_rarity = "rare"
+        rarity_color = "#a855f7"
+    else:
+        raise HTTPException(status_code=400, detail="Invalid chest type. Use 'gamepass' or 'galadium'")
+    
+    # Create chests
+    now = datetime.now(timezone.utc)
+    chests = []
+    for _ in range(data.amount):
+        chests.append({
+            "inventory_id": f"inv_{uuid.uuid4().hex[:12]}",
+            "user_id": user["user_id"],
+            "item_id": item_id,
+            "item_name": item_name,
+            "item_rarity": item_rarity,
+            "rarity_display": item_rarity.capitalize(),
+            "rarity_color": rarity_color,
+            "item_image": None,
+            "item_flavor_text": f"A chest earned from the {item_name.split()[0]}. Open it to reveal your reward!",
+            "purchase_price": 0,
+            "sell_value": 0,
+            "is_tradeable": False,
+            "is_sellable": False,
+            "acquired_from": "admin_grant",
+            "acquired_at": now,
+            "category": "chest"
+        })
+    
+    # Insert all chests
+    result = await db.inventory.insert_many(chests)
+    
+    # Count total chests now
+    total_chests = await db.inventory.count_documents({
+        "user_id": user["user_id"],
+        "item_id": item_id
+    })
+    
+    return {
+        "success": True,
+        "username": user["username"],
+        "chest_type": item_name,
+        "amount_given": len(result.inserted_ids),
+        "total_chests": total_chests
+    }
+
 @api_router.get("/admin/userinfo/{username}")
 async def admin_get_userinfo(username: str, request: Request):
     """Get detailed user information (Discord bot endpoint)"""
