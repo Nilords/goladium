@@ -183,21 +183,8 @@ const Inventory = () => {
     }
   };
 
-  // Group items by item_id for display (show count if duplicates)
-  const groupedInventory = inventory.reduce((acc, item) => {
-    const existing = acc.find(i => i.item_id === item.item_id);
-    if (existing) {
-      existing.count += 1;
-      existing.items.push(item);
-    } else {
-      acc.push({
-        ...item,
-        count: 1,
-        items: [item]
-      });
-    }
-    return acc;
-  }, []);
+  // Backend now returns stacked items with count and inventory_ids
+  // No need for frontend grouping anymore
 
   return (
     <div className="min-h-screen bg-[#050505] flex flex-col">
