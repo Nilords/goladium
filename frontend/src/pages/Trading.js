@@ -25,6 +25,8 @@ const RARITY_COLORS = {
 };
 
 const Trading = () => {
+  const navigate = useNavigate();
+  const { language } = useLanguage();
   const { user, token } = useAuth();
   const [activeTab, setActiveTab] = useState('inbound');
   const [inboundTrades, setInboundTrades] = useState([]);
@@ -51,6 +53,11 @@ const Trading = () => {
   // Counter offer mode
   const [counterMode, setCounterMode] = useState(false);
   const [counterTradeId, setCounterTradeId] = useState(null);
+
+  // Navigate to Inventory Analytics
+  const goToInventoryAnalytics = () => {
+    navigate('/profile?tab=analytics&view=inventory');
+  };
 
   useEffect(() => {
     if (token) {
