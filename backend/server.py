@@ -4338,40 +4338,61 @@ async def record_value_snapshot(user_id: str, balance_g: float, balance_a: float
     return snapshot
 
 @api_router.get("/user/value-history")
-async def get_value_history(request: Request, timeframe: str = "daily"):
-    """Get user's account value history for chart"""
+async def get_value_history(request: Request, timeframe: str = "1h"):
+    """
+    Get user's account value history for chart with stock-market style aggregation.
+    
+    Timeframes:
+    - 1m: Last 1 hour, aggregated by minute
+    - 15m: Last 6 hours, aggregated by 15 minutes  
+    - 1h: Last 24 hours, aggregated by hour
+    - 3d: Last 3 days, aggregated by 3 hours
+    - 1w: Last 7 days, aggregated by 6 hours
+    - 1mo: Last 30 days, aggregated by day
+    """
     user = await get_current_user(request)
     user_id = user["user_id"]
     now = datetime.now(timezone.utc)
     
-    # Time range based on timeframe
-    if timeframe == "hourly":
-        start_time = now - timedelta(hours=24)
-    elif timeframe == "weekly":
-        start_time = now - timedelta(weeks=12)
-    else:  # daily
-        start_time = now - timedelta(days=30)
+    # Timeframe configuration: (time_range, bucket_minutes, display_format)
+    TIMEFRAME_CONFIG = {
+        "1m": (timedelta(hours=1), 1, "minute"),         # 1 hour range, 1-min buckets
+        "15m": (timedelta(hours=6), 15, "15min"),        # 6 hours range, 15-min buckets
+        "1h": (timedelta(hours=24), 60, "hour"),         # 24 hours range, 1-hour buckets
+        "3d": (timedelta(days=3), 180, "3hour"),         # 3 days range, 3-hour buckets
+        "1w": (timedelta(days=7), 360, "6hour"),         # 7 days range, 6-hour buckets
+        "1mo": (timedelta(days=30), 1440, "day"),        # 30 days range, daily buckets
+    }
     
-    # Fetch snapshots
-    snapshots = await db.value_snapshots.find(
-        {"user_id": user_id, "timestamp": {"$gte": start_time.isoformat()}},
-        {"_id": 0, "total_value": 1, "balance_g": 1, "balance_a": 1, "timestamp": 1}
-    ).sort("timestamp", 1).to_list(10000)
+    # Default to 1h if invalid timeframe
+    if timeframe not in TIMEFRAME_CONFIG:
+        timeframe = "1h"
+    
+    time_range, bucket_minutes, display_format = TIMEFRAME_CONFIG[timeframe]
+    start_time = now - time_range
     
     current_g = user.get("balance", 0)
     current_a = user.get("balance_a", 0)
     current_value = current_g + current_a
     
-    # No history - create initial snapshot
-    if not snapshots:
+    # First, check if user has any snapshots at all
+    total_count = await db.value_snapshots.count_documents({"user_id": user_id})
+    
+    if total_count == 0:
+        # No history - create initial snapshot
         initial = await record_value_snapshot(user_id, current_g, current_a, "initial")
         return {
             "timeframe": timeframe,
+            "bucket_minutes": bucket_minutes,
+            "display_format": display_format,
             "data_points": [{
                 "timestamp": initial["timestamp"],
+                "open": initial["total_value"],
+                "close": initial["total_value"],
+                "high": initial["total_value"],
+                "low": initial["total_value"],
                 "total_value": initial["total_value"],
-                "balance_g": initial["balance_g"],
-                "balance_a": initial["balance_a"]
+                "count": 1
             }],
             "stats": {
                 "highest": current_value,
@@ -4380,43 +4401,142 @@ async def get_value_history(request: Request, timeframe: str = "daily"):
                 "range": 0,
                 "percent_change": 0,
                 "all_time_high": current_value,
-                "all_time_low": current_value
+                "all_time_low": current_value,
+                "total_snapshots": 1
             }
         }
     
-    # Build data points
-    data_points = []
-    for snap in snapshots:
-        data_points.append({
-            "timestamp": snap["timestamp"],
-            "total_value": snap["total_value"],
-            "balance_g": snap.get("balance_g", snap["total_value"]),
-            "balance_a": snap.get("balance_a", 0)
-        })
+    # MongoDB aggregation pipeline for OHLC-style data
+    # Convert ISO string timestamps to Date objects for aggregation
+    pipeline = [
+        # Match user and time range
+        {"$match": {
+            "user_id": user_id,
+            "timestamp": {"$gte": start_time.isoformat()}
+        }},
+        # Convert timestamp string to date
+        {"$addFields": {
+            "timestamp_date": {"$dateFromString": {"dateString": "$timestamp"}}
+        }},
+        # Sort by timestamp ascending
+        {"$sort": {"timestamp_date": 1}},
+        # Group into time buckets
+        {"$group": {
+            "_id": {
+                "$dateTrunc": {
+                    "date": "$timestamp_date",
+                    "unit": "minute",
+                    "binSize": bucket_minutes
+                }
+            },
+            "open": {"$first": "$total_value"},
+            "close": {"$last": "$total_value"},
+            "high": {"$max": "$total_value"},
+            "low": {"$min": "$total_value"},
+            "count": {"$sum": 1},
+            "first_timestamp": {"$first": "$timestamp"}
+        }},
+        # Sort buckets by time
+        {"$sort": {"_id": 1}},
+        # Project final format
+        {"$project": {
+            "_id": 0,
+            "bucket_time": "$_id",
+            "timestamp": "$first_timestamp",
+            "open": {"$round": ["$open", 2]},
+            "close": {"$round": ["$close", 2]},
+            "high": {"$round": ["$high", 2]},
+            "low": {"$round": ["$low", 2]},
+            "total_value": {"$round": ["$close", 2]},  # Use close as main value for chart
+            "count": 1
+        }}
+    ]
     
-    # Calculate ALL values including current for accurate ATH/ATL
-    all_values = [dp["total_value"] for dp in data_points] + [current_value]
+    try:
+        aggregated_data = await db.value_snapshots.aggregate(pipeline).to_list(1000)
+    except Exception as e:
+        # Fallback: If aggregation fails, use simple query
+        logging.error(f"Aggregation failed: {e}")
+        snapshots = await db.value_snapshots.find(
+            {"user_id": user_id, "timestamp": {"$gte": start_time.isoformat()}},
+            {"_id": 0, "total_value": 1, "timestamp": 1}
+        ).sort("timestamp", 1).to_list(1000)
+        
+        aggregated_data = [{
+            "timestamp": s["timestamp"],
+            "open": s["total_value"],
+            "close": s["total_value"],
+            "high": s["total_value"],
+            "low": s["total_value"],
+            "total_value": s["total_value"],
+            "count": 1
+        } for s in snapshots]
     
-    # Stats - ATH/ATL from ALL data, not just timeframe
-    all_snapshots = await db.value_snapshots.find(
-        {"user_id": user_id},
-        {"_id": 0, "total_value": 1}
-    ).to_list(100000)
+    # If no data in timeframe, get the most recent snapshot before the timeframe
+    if not aggregated_data:
+        last_snapshot = await db.value_snapshots.find_one(
+            {"user_id": user_id, "timestamp": {"$lt": start_time.isoformat()}},
+            {"_id": 0, "total_value": 1, "timestamp": 1},
+            sort=[("timestamp", -1)]
+        )
+        
+        if last_snapshot:
+            aggregated_data = [{
+                "timestamp": last_snapshot["timestamp"],
+                "open": last_snapshot["total_value"],
+                "close": last_snapshot["total_value"],
+                "high": last_snapshot["total_value"],
+                "low": last_snapshot["total_value"],
+                "total_value": last_snapshot["total_value"],
+                "count": 1
+            }]
+        else:
+            # Fallback to current value
+            aggregated_data = [{
+                "timestamp": now.isoformat(),
+                "open": current_value,
+                "close": current_value,
+                "high": current_value,
+                "low": current_value,
+                "total_value": current_value,
+                "count": 1
+            }]
     
-    all_time_values = [s["total_value"] for s in all_snapshots] + [current_value]
+    # Calculate stats from aggregated data
+    all_highs = [dp["high"] for dp in aggregated_data]
+    all_lows = [dp["low"] for dp in aggregated_data]
     
-    highest_in_range = max([dp["total_value"] for dp in data_points]) if data_points else current_value
-    lowest_in_range = min([dp["total_value"] for dp in data_points]) if data_points else current_value
+    highest_in_range = max(all_highs) if all_highs else current_value
+    lowest_in_range = min(all_lows) if all_lows else current_value
     
-    all_time_high = max(all_time_values)
-    all_time_low = min(all_time_values)
+    # Get ATH/ATL from ALL data
+    ath_atl_pipeline = [
+        {"$match": {"user_id": user_id}},
+        {"$group": {
+            "_id": None,
+            "ath": {"$max": "$total_value"},
+            "atl": {"$min": "$total_value"}
+        }}
+    ]
     
-    start_value = data_points[0]["total_value"] if data_points else current_value
+    ath_atl_result = await db.value_snapshots.aggregate(ath_atl_pipeline).to_list(1)
+    
+    if ath_atl_result:
+        all_time_high = max(ath_atl_result[0].get("ath", current_value), current_value)
+        all_time_low = min(ath_atl_result[0].get("atl", current_value), current_value)
+    else:
+        all_time_high = current_value
+        all_time_low = current_value
+    
+    # Calculate percent change
+    start_value = aggregated_data[0]["open"] if aggregated_data else current_value
     percent_change = ((current_value - start_value) / abs(start_value) * 100) if start_value != 0 else 0
     
     return {
         "timeframe": timeframe,
-        "data_points": data_points,
+        "bucket_minutes": bucket_minutes,
+        "display_format": display_format,
+        "data_points": aggregated_data,
         "stats": {
             "highest": round(highest_in_range, 2),
             "lowest": round(lowest_in_range, 2),
@@ -4424,7 +4544,8 @@ async def get_value_history(request: Request, timeframe: str = "daily"):
             "range": round(highest_in_range - lowest_in_range, 2),
             "percent_change": round(percent_change, 2),
             "all_time_high": round(all_time_high, 2),
-            "all_time_low": round(all_time_low, 2)
+            "all_time_low": round(all_time_low, 2),
+            "total_snapshots": total_count
         }
     }
 
