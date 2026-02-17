@@ -3994,6 +3994,16 @@ async def sell_inventory_item(sell_request: SellItemRequest, request: Request):
     }
     await db.bet_history.insert_one(activity_doc)
     
+    # Record inventory value event (sell = negative delta based on purchase price)
+    await record_inventory_value_event(
+        user_id=user["user_id"],
+        event_type="sell",
+        delta_value=-purchase_price,  # Negative - inventory value decreased
+        related_item_id=item["item_id"],
+        related_item_name=item["item_name"],
+        details={"sell_amount": sell_amount, "fee_amount": fee_amount, "rarity": item.get("item_rarity", "common")}
+    )
+    
     return {
         "success": True,
         "message": f"Sold {item['item_name']} for {sell_amount} G",
