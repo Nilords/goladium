@@ -94,12 +94,31 @@ const AccountValueChart = () => {
   const CustomTooltip = ({ active, payload }) => {
     if (!active || !payload?.length) return null;
     const p = payload[0].payload;
+    const hasOHLC = p.open !== undefined && p.high !== undefined;
+    
     return (
-      <div className="bg-black/90 border border-white/20 rounded-lg p-3 shadow-xl">
-        <p className="text-white/60 text-xs mb-1">{new Date(p.timestamp).toLocaleString()}</p>
-        <p className="text-white font-bold text-lg">{p.total_value.toFixed(2)} G</p>
+      <div className="bg-black/95 border border-white/20 rounded-lg p-3 shadow-xl min-w-[160px]">
+        <p className="text-white/60 text-xs mb-2">{new Date(p.timestamp).toLocaleString()}</p>
+        
+        {hasOHLC && p.count > 1 ? (
+          <>
+            <div className="grid grid-cols-2 gap-x-3 gap-y-1 text-xs mb-2">
+              <span className="text-white/50">Open:</span>
+              <span className="text-white font-mono">{p.open?.toFixed(2)} G</span>
+              <span className="text-white/50">High:</span>
+              <span className="text-green-400 font-mono">{p.high?.toFixed(2)} G</span>
+              <span className="text-white/50">Low:</span>
+              <span className="text-red-400 font-mono">{p.low?.toFixed(2)} G</span>
+              <span className="text-white/50">Close:</span>
+              <span className="text-white font-mono">{p.close?.toFixed(2)} G</span>
+            </div>
+          </>
+        ) : (
+          <p className="text-white font-bold text-lg">{p.total_value?.toFixed(2)} G</p>
+        )}
+        
         <p className={`text-sm ${p.change >= 0 ? 'text-green-400' : 'text-red-400'}`}>
-          {p.change >= 0 ? '+' : ''}{p.change.toFixed(2)} G
+          {p.change >= 0 ? '+' : ''}{p.change?.toFixed(2) || '0.00'} G
         </p>
       </div>
     );
