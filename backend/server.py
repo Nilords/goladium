@@ -6090,23 +6090,21 @@ async def claim_quest_reward(quest_id: str, request: Request):
 
 @api_router.get("/game-pass")
 async def get_game_pass_status(request: Request):
-    """Get user's Game Pass status"""
+    """Get user's Game Pass status - Now with chest per level system!"""
     user = await get_current_user(request)
     
     level = user.get("game_pass_level", 1)
     xp = user.get("game_pass_xp", 0)
     galadium_active = user.get("galadium_pass_active", False)
     
-    # Get claimed rewards
+    # Get claimed chest levels
     gp_data = await db.user_game_pass.find_one({"user_id": user["user_id"]})
-    claimed_rewards = gp_data.get("claimed_rewards", []) if gp_data else []
+    claimed_normal = gp_data.get("claimed_normal_chests", []) if gp_data else []
+    claimed_galadium = gp_data.get("claimed_galadium_chests", []) if gp_data else []
     
-    # Find next reward level
-    next_reward = None
-    for reward_level in sorted(GAME_PASS_REWARDS.keys()):
-        if reward_level > level or (reward_level == level and reward_level not in claimed_rewards):
-            next_reward = reward_level
-            break
+    # Build unclaimed levels list
+    unclaimed_normal = [l for l in range(1, level + 1) if l not in claimed_normal]
+    unclaimed_galadium = [l for l in range(1, level + 1) if l not in claimed_galadium] if galadium_active else []
     
     return {
         "level": level,
@@ -6114,82 +6112,249 @@ async def get_game_pass_status(request: Request):
         "xp_to_next": GAME_PASS_XP_PER_LEVEL,
         "max_level": GAME_PASS_MAX_LEVEL,
         "galadium_active": galadium_active,
-        "rewards_claimed": claimed_rewards,
-        "next_reward_level": next_reward,
-        "all_rewards": GAME_PASS_REWARDS
+        "chest_system": {
+            "normal_chest": GAMEPASS_CHEST,
+            "galadium_chest": GALADIUM_CHEST if galadium_active else None,
+            "claimed_normal": claimed_normal,
+            "claimed_galadium": claimed_galadium,
+            "unclaimed_normal": unclaimed_normal,
+            "unclaimed_galadium": unclaimed_galadium,
+            "total_unclaimed": len(unclaimed_normal) + len(unclaimed_galadium)
+        }
     }
 
-@api_router.post("/game-pass/claim/{level}")
-async def claim_game_pass_reward(level: int, request: Request):
-    """Claim a Game Pass reward at a specific level"""
+
+@api_router.post("/game-pass/claim-chest/{level}")
+async def claim_game_pass_chest(level: int, chest_type: str = "normal", request: Request = None):
+    """
+    Claim a GamePass chest at a specific level.
+    
+    chest_type: "normal" (everyone) or "galadium" (only if galadium_pass_active)
+    """
     user = await get_current_user(request)
+    user_id = user["user_id"]
+    now = datetime.now(timezone.utc)
     
     current_level = user.get("game_pass_level", 1)
     galadium_active = user.get("galadium_pass_active", False)
     
-    if level > current_level:
+    # Validate level
+    if level < 1 or level > current_level:
         raise HTTPException(status_code=400, detail="Level not reached yet")
     
-    if level not in GAME_PASS_REWARDS:
-        raise HTTPException(status_code=404, detail="No reward at this level")
+    # Validate chest type
+    if chest_type not in ["normal", "galadium"]:
+        raise HTTPException(status_code=400, detail="Invalid chest type")
     
-    # Check if already claimed
-    gp_data = await db.user_game_pass.find_one({"user_id": user["user_id"]})
+    if chest_type == "galadium" and not galadium_active:
+        raise HTTPException(status_code=403, detail="Galadium Pass required for bonus chests")
+    
+    # Get or create game pass data
+    gp_data = await db.user_game_pass.find_one({"user_id": user_id})
     if not gp_data:
-        gp_data = {"user_id": user["user_id"], "claimed_rewards": []}
+        gp_data = {
+            "user_id": user_id, 
+            "claimed_normal_chests": [],
+            "claimed_galadium_chests": [],
+            "claimed_rewards": []  # Legacy - keep for compatibility
+        }
         await db.user_game_pass.insert_one(gp_data)
     
-    if level in gp_data.get("claimed_rewards", []):
-        raise HTTPException(status_code=400, detail="Reward already claimed")
+    # Check if already claimed
+    claimed_field = "claimed_normal_chests" if chest_type == "normal" else "claimed_galadium_chests"
+    if level in gp_data.get(claimed_field, []):
+        raise HTTPException(status_code=400, detail=f"{chest_type.capitalize()} chest for level {level} already claimed")
     
-    # Get reward (free or galadium based on user status)
-    reward_tier = "galadium" if galadium_active else "free"
-    reward = GAME_PASS_REWARDS[level][reward_tier]
+    # Determine which chest to give
+    chest_config = GAMEPASS_CHEST if chest_type == "normal" else GALADIUM_CHEST
     
-    # Grant the reward (item)
-    if reward["type"] == "item":
-        # Get item definition for full details
-        item_def = await db.items.find_one({"item_id": reward["item_id"]}, {"_id": 0})
-        item_value = item_def.get("base_value", 0) if item_def else 0
-        item_rarity = item_def.get("rarity", "common") if item_def else "common"
-        item_flavor = item_def.get("flavor_text", "") if item_def else ""
-        
-        # Add item to inventory with full details
-        inventory_doc = {
-            "inventory_id": f"inv_{uuid.uuid4().hex[:12]}",
-            "user_id": user["user_id"],
-            "item_id": reward["item_id"],
-            "item_name": reward["name"],
-            "item_rarity": item_rarity,
-            "item_flavor_text": item_flavor,
-            "purchase_price": item_value,  # Use base_value as purchase_price for sell calculation
-            "acquired_at": datetime.now(timezone.utc).isoformat(),
-            "acquired_from": "gamepass",
-            "source": f"game_pass_level_{level}"
-        }
-        await db.user_inventory.insert_one(inventory_doc)
-        
-        # Record inventory value event
-        await record_inventory_value_event(
-            user_id=user["user_id"],
-            event_type="gamepass_reward",
-            delta_value=item_value,
-            related_item_id=reward["item_id"],
-            related_item_name=reward["name"],
-            details={"level": level, "tier": reward_tier, "rarity": item_rarity}
-        )
+    # Ensure chest item exists in DB
+    existing_chest = await db.items.find_one({"item_id": chest_config["item_id"]})
+    if not existing_chest:
+        # Create the chest item
+        await db.items.insert_one({
+            **chest_config,
+            "is_tradeable": True,
+            "is_sellable": True,
+            "created_at": now
+        })
+    
+    # Add chest to inventory
+    inventory_doc = {
+        "inventory_id": f"inv_{uuid.uuid4().hex[:12]}",
+        "user_id": user_id,
+        "item_id": chest_config["item_id"],
+        "item_name": chest_config["name"],
+        "item_rarity": chest_config["rarity"],
+        "item_flavor_text": chest_config["flavor_text"],
+        "purchase_price": chest_config["base_value"],
+        "acquired_at": now.isoformat(),
+        "acquired_from": f"gamepass_{chest_type}",
+        "source": f"game_pass_level_{level}_{chest_type}"
+    }
+    await db.user_inventory.insert_one(inventory_doc)
+    
+    # Record inventory value event
+    await record_inventory_value_event(
+        user_id=user_id,
+        event_type="gamepass_reward",
+        delta_value=chest_config["base_value"],
+        related_item_id=chest_config["item_id"],
+        related_item_name=chest_config["name"],
+        details={"level": level, "chest_type": chest_type, "rarity": chest_config["rarity"]}
+    )
     
     # Mark as claimed
     await db.user_game_pass.update_one(
-        {"user_id": user["user_id"]},
-        {"$push": {"claimed_rewards": level}}
+        {"user_id": user_id},
+        {"$push": {claimed_field: level}}
     )
     
     return {
         "success": True,
-        "reward": reward,
-        "tier": reward_tier
+        "chest": {
+            "inventory_id": inventory_doc["inventory_id"],
+            "item_id": chest_config["item_id"],
+            "name": chest_config["name"],
+            "rarity": chest_config["rarity"],
+            "flavor_text": chest_config["flavor_text"],
+            "value": chest_config["base_value"]
+        },
+        "level": level,
+        "chest_type": chest_type
     }
+
+
+@api_router.post("/game-pass/claim-all-chests")
+async def claim_all_unclaimed_chests(request: Request):
+    """Claim all unclaimed GamePass chests at once"""
+    user = await get_current_user(request)
+    user_id = user["user_id"]
+    now = datetime.now(timezone.utc)
+    
+    current_level = user.get("game_pass_level", 1)
+    galadium_active = user.get("galadium_pass_active", False)
+    
+    # Get game pass data
+    gp_data = await db.user_game_pass.find_one({"user_id": user_id})
+    if not gp_data:
+        gp_data = {
+            "user_id": user_id,
+            "claimed_normal_chests": [],
+            "claimed_galadium_chests": []
+        }
+        await db.user_game_pass.insert_one(gp_data)
+    
+    claimed_normal = gp_data.get("claimed_normal_chests", [])
+    claimed_galadium = gp_data.get("claimed_galadium_chests", [])
+    
+    # Find unclaimed levels
+    unclaimed_normal = [l for l in range(1, current_level + 1) if l not in claimed_normal]
+    unclaimed_galadium = [l for l in range(1, current_level + 1) if l not in claimed_galadium] if galadium_active else []
+    
+    chests_given = []
+    total_value = 0
+    
+    # Ensure chest items exist
+    for chest_config in [GAMEPASS_CHEST, GALADIUM_CHEST]:
+        existing = await db.items.find_one({"item_id": chest_config["item_id"]})
+        if not existing:
+            await db.items.insert_one({
+                **chest_config,
+                "is_tradeable": True,
+                "is_sellable": True,
+                "created_at": now
+            })
+    
+    # Give normal chests
+    for level in unclaimed_normal:
+        inventory_doc = {
+            "inventory_id": f"inv_{uuid.uuid4().hex[:12]}",
+            "user_id": user_id,
+            "item_id": GAMEPASS_CHEST["item_id"],
+            "item_name": GAMEPASS_CHEST["name"],
+            "item_rarity": GAMEPASS_CHEST["rarity"],
+            "item_flavor_text": GAMEPASS_CHEST["flavor_text"],
+            "purchase_price": GAMEPASS_CHEST["base_value"],
+            "acquired_at": now.isoformat(),
+            "acquired_from": "gamepass_normal",
+            "source": f"game_pass_level_{level}_normal"
+        }
+        await db.user_inventory.insert_one(inventory_doc)
+        
+        chests_given.append({
+            "inventory_id": inventory_doc["inventory_id"],
+            "type": "normal",
+            "level": level,
+            "name": GAMEPASS_CHEST["name"]
+        })
+        total_value += GAMEPASS_CHEST["base_value"]
+    
+    # Give galadium chests
+    for level in unclaimed_galadium:
+        inventory_doc = {
+            "inventory_id": f"inv_{uuid.uuid4().hex[:12]}",
+            "user_id": user_id,
+            "item_id": GALADIUM_CHEST["item_id"],
+            "item_name": GALADIUM_CHEST["name"],
+            "item_rarity": GALADIUM_CHEST["rarity"],
+            "item_flavor_text": GALADIUM_CHEST["flavor_text"],
+            "purchase_price": GALADIUM_CHEST["base_value"],
+            "acquired_at": now.isoformat(),
+            "acquired_from": "gamepass_galadium",
+            "source": f"game_pass_level_{level}_galadium"
+        }
+        await db.user_inventory.insert_one(inventory_doc)
+        
+        chests_given.append({
+            "inventory_id": inventory_doc["inventory_id"],
+            "type": "galadium",
+            "level": level,
+            "name": GALADIUM_CHEST["name"]
+        })
+        total_value += GALADIUM_CHEST["base_value"]
+    
+    # Record single inventory value event for all chests
+    if chests_given:
+        await record_inventory_value_event(
+            user_id=user_id,
+            event_type="gamepass_reward",
+            delta_value=total_value,
+            related_item_id="bulk_chest_claim",
+            related_item_name=f"{len(chests_given)} Chests",
+            details={
+                "normal_count": len(unclaimed_normal),
+                "galadium_count": len(unclaimed_galadium),
+                "levels": unclaimed_normal + unclaimed_galadium
+            }
+        )
+        
+        # Update claimed lists
+        await db.user_game_pass.update_one(
+            {"user_id": user_id},
+            {
+                "$push": {
+                    "claimed_normal_chests": {"$each": unclaimed_normal},
+                    "claimed_galadium_chests": {"$each": unclaimed_galadium}
+                }
+            }
+        )
+    
+    return {
+        "success": True,
+        "chests_claimed": len(chests_given),
+        "normal_chests": len(unclaimed_normal),
+        "galadium_chests": len(unclaimed_galadium),
+        "total_value": total_value,
+        "chests": chests_given
+    }
+
+
+# Legacy endpoint - keep for backwards compatibility but redirect to new system
+@api_router.post("/game-pass/claim/{level}")
+async def claim_game_pass_reward(level: int, request: Request):
+    """Legacy endpoint - now claims normal chest for that level"""
+    return await claim_game_pass_chest(level, "normal", request)
 
 # ============== INVENTORY VALUE TRACKING SYSTEM ==============
 # Event-based tracking of inventory value changes (not time-aggregated like account value)
