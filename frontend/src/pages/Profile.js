@@ -544,71 +544,9 @@ const Profile = () => {
             </Card>
           </TabsContent>
 
-          {/* Leaderboard Tab */}
-          <TabsContent value="leaderboard" className="mt-0">
-            <Card className="bg-[#0A0A0C] border-white/5">
-              <CardContent className="p-0">
-                <ScrollArea className="h-[500px]">
-                  <Table>
-                    <TableHeader>
-                      <TableRow className="border-white/10">
-                        <TableHead className="text-white/60 w-16">#</TableHead>
-                        <TableHead className="text-white/60">{language === 'de' ? 'Spieler' : 'Player'}</TableHead>
-                        <TableHead className="text-white/60 text-right">{t('level')}</TableHead>
-                        <TableHead className="text-white/60 text-right">{t('total_wins')}</TableHead>
-                        <TableHead className="text-white/60 text-right">{t('net_profit')}</TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {leaderboard.map((player, index) => (
-                        <TableRow 
-                          key={player.user_id} 
-                          className={`border-white/5 ${
-                            player.user_id === user?.user_id ? 'bg-primary/10' : ''
-                          }`}
-                        >
-                          <TableCell>
-                            <div className={`w-8 h-8 rounded-full flex items-center justify-center font-bold text-sm ${
-                              index === 0 ? 'bg-gold/20 text-gold' :
-                              index === 1 ? 'bg-white/20 text-white' :
-                              index === 2 ? 'bg-orange-500/20 text-orange-400' :
-                              'bg-white/10 text-white/60'
-                            }`}>
-                              {index + 1}
-                            </div>
-                          </TableCell>
-                          <TableCell>
-                            <div className="flex items-center gap-3">
-                              <Avatar className="h-8 w-8">
-                                <AvatarImage src={player.avatar} />
-                                <AvatarFallback className="bg-primary/20 text-primary text-xs">
-                                  {player.username?.charAt(0).toUpperCase()}
-                                </AvatarFallback>
-                              </Avatar>
-                              <span className="text-white font-medium">{player.username}</span>
-                              {player.vip_status && (
-                                <Crown className="w-4 h-4 text-gold" />
-                              )}
-                            </div>
-                          </TableCell>
-                          <TableCell className="text-right text-white font-mono">
-                            {player.level}
-                          </TableCell>
-                          <TableCell className="text-right text-green-500 font-mono">
-                            {player.total_wins}
-                          </TableCell>
-                          <TableCell className={`text-right font-mono ${
-                            player.net_profit >= 0 ? 'text-green-500' : 'text-red-500'
-                          }`}>
-                            {player.net_profit >= 0 ? '+' : ''}{player.net_profit.toFixed(2)} G
-                          </TableCell>
-                        </TableRow>
-                      ))}
-                    </TableBody>
-                  </Table>
-                </ScrollArea>
-              </CardContent>
-            </Card>
+          {/* Analytics Tab */}
+          <TabsContent value="analytics" className="mt-0">
+            <AccountValueChart />
           </TabsContent>
         </Tabs>
       </main>
