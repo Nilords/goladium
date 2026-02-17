@@ -240,8 +240,6 @@ const Profile = () => {
                 <div className="flex items-center justify-center md:justify-start gap-4 text-white/60 text-sm mb-4">
                   <span>{t('level')} {user?.level || 1}</span>
                   <span>•</span>
-                  <span>Rank #{getUserRank()}</span>
-                  <span>•</span>
                   <span>{language === 'de' ? 'Beigetreten' : 'Joined'} {new Date(user?.created_at).toLocaleDateString()}</span>
                 </div>
 
