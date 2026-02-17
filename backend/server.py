@@ -3987,6 +3987,7 @@ async def open_chest(data: OpenChestRequest, request: Request):
     """
     Open a chest item from inventory and receive random rewards.
     The chest is consumed in the process.
+    1% chance to get a random shop item!
     """
     user = await get_current_user(request)
     user_id = user["user_id"]
@@ -4011,14 +4012,84 @@ async def open_chest(data: OpenChestRequest, request: Request):
     chest_rarity = chest_item.get("item_rarity", item_def.get("rarity", "common"))
     chest_value = chest_item.get("purchase_price", item_def.get("base_value", 0))
     
-    # Generate reward using simple system
-    reward = generate_simple_chest_reward()
+    # Generate reward
+    reward = generate_simple_chest_reward_sync()
     
     processed_reward = None
     total_g_gained = 0
     item_gained = None
     
-    if reward["type"] == "currency":
+    if reward["type"] == "item_roll":
+        # 1% item drop - get random shop item!
+        shop_item = await get_random_shop_item()
+        
+        if shop_item:
+            # Get full item definition
+            item_id = shop_item.get("item_id")
+            reward_item_def = await db.items.find_one({"item_id": item_id})
+            
+            if reward_item_def:
+                # Add item to inventory
+                new_inventory_item = {
+                    "inventory_id": f"inv_{uuid.uuid4().hex[:12]}",
+                    "user_id": user_id,
+                    "item_id": item_id,
+                    "item_name": reward_item_def.get("name", shop_item.get("item_name", "Unknown Item")),
+                    "item_rarity": reward_item_def.get("rarity", shop_item.get("item_rarity", "common")),
+                    "item_flavor_text": reward_item_def.get("flavor_text", ""),
+                    "purchase_price": reward_item_def.get("base_value", shop_item.get("price", 0)),
+                    "acquired_at": now.isoformat(),
+                    "acquired_from": "chest_1%_drop",
+                    "source": "gamepass_chest_jackpot"
+                }
+                await db.user_inventory.insert_one(new_inventory_item)
+                
+                item_value = reward_item_def.get("base_value", shop_item.get("price", 0))
+                item_gained = {
+                    "inventory_id": new_inventory_item["inventory_id"],
+                    "item_id": item_id,
+                    "name": reward_item_def.get("name", shop_item.get("item_name")),
+                    "rarity": reward_item_def.get("rarity", shop_item.get("item_rarity")),
+                    "value": item_value,
+                    "flavor_text": reward_item_def.get("flavor_text", "")
+                }
+                
+                processed_reward = {
+                    "type": "item",
+                    "item_id": item_id,
+                    "name": reward_item_def.get("name", shop_item.get("item_name")),
+                    "rarity": reward_item_def.get("rarity", shop_item.get("item_rarity")),
+                    "value": item_value,
+                    "tier": "legendary",
+                    "tier_label": "🎉 JACKPOT!",
+                    "tier_color": "#eab308"
+                }
+                
+                # Record inventory value event
+                await record_inventory_value_event(
+                    user_id=user_id,
+                    event_type="drop",
+                    delta_value=item_value,
+                    related_item_id=item_id,
+                    related_item_name=reward_item_def.get("name"),
+                    details={"source": "chest_1%_jackpot", "chest_name": chest_name}
+                )
+        
+        # If no shop item found, give rare G instead
+        if not processed_reward:
+            import random
+            g_amount = round(random.uniform(41, 100), 2)
+            total_g_gained = g_amount
+            processed_reward = {
+                "type": "currency",
+                "currency": "G",
+                "amount": g_amount,
+                "tier": "rare",
+                "tier_label": "Selten",
+                "tier_color": "#a855f7"
+            }
+    
+    elif reward["type"] == "currency":
         # G reward
         total_g_gained = reward["amount"]
         processed_reward = {
@@ -4029,8 +4100,9 @@ async def open_chest(data: OpenChestRequest, request: Request):
             "tier_label": reward["tier_label"],
             "tier_color": reward["tier_color"]
         }
-        
-        # Add G to user balance
+    
+    # Apply G reward to user balance
+    if total_g_gained > 0:
         await db.users.update_one(
             {"user_id": user_id},
             {"$inc": {"balance": total_g_gained}}
@@ -4044,56 +4116,6 @@ async def open_chest(data: OpenChestRequest, request: Request):
             updated_user.get("balance_a", 0),
             "chest_opening"
         )
-    
-    elif reward["type"] == "item":
-        # Item reward - super rare!
-        reward_item_def = await db.items.find_one({"item_id": reward["item_id"]})
-        if reward_item_def:
-            # Add item to inventory
-            new_inventory_item = {
-                "inventory_id": f"inv_{uuid.uuid4().hex[:12]}",
-                "user_id": user_id,
-                "item_id": reward["item_id"],
-                "item_name": reward_item_def.get("name", "Unknown Item"),
-                "item_rarity": reward_item_def.get("rarity", "common"),
-                "item_flavor_text": reward_item_def.get("flavor_text", ""),
-                "purchase_price": reward_item_def.get("base_value", 0),
-                "acquired_at": now.isoformat(),
-                "acquired_from": "chest_item_drop",
-                "source": "gamepass_chest_1%_drop"
-            }
-            await db.user_inventory.insert_one(new_inventory_item)
-            
-            item_value = reward_item_def.get("base_value", 0)
-            item_gained = {
-                "inventory_id": new_inventory_item["inventory_id"],
-                "item_id": reward["item_id"],
-                "name": reward_item_def.get("name"),
-                "rarity": reward_item_def.get("rarity"),
-                "value": item_value,
-                "flavor_text": reward_item_def.get("flavor_text", "")
-            }
-            
-            processed_reward = {
-                "type": "item",
-                "item_id": reward["item_id"],
-                "name": reward_item_def.get("name"),
-                "rarity": reward_item_def.get("rarity"),
-                "value": item_value,
-                "tier": "legendary",
-                "tier_label": "ITEM DROP!",
-                "tier_color": "#eab308"
-            }
-            
-            # Record inventory value event for gained item
-            await record_inventory_value_event(
-                user_id=user_id,
-                event_type="drop",
-                delta_value=item_value,
-                related_item_id=reward["item_id"],
-                related_item_name=reward_item_def.get("name"),
-                details={"source": "chest_1%_drop", "chest_name": chest_name}
-            )
     
     # Remove the chest from inventory
     await db.user_inventory.delete_one({"inventory_id": data.inventory_id})
