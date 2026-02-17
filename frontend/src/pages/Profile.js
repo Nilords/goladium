@@ -54,7 +54,6 @@ const Profile = () => {
   const [historyPage, setHistoryPage] = useState(1);
   const [historyTotal, setHistoryTotal] = useState(0);
   const [historyTotalPages, setHistoryTotalPages] = useState(0);
-  const [leaderboard, setLeaderboard] = useState([]);
   const [loading, setLoading] = useState(true);
   const [historyLoading, setHistoryLoading] = useState(false);
   const [activeTab, setActiveTab] = useState('stats');
@@ -73,7 +72,7 @@ const Profile = () => {
 
   const loadProfileData = async () => {
     try {
-      const [statsRes, historyRes, leaderboardRes] = await Promise.all([
+      const [statsRes, historyRes] = await Promise.all([
         fetch(`/api/user/stats`, {
           headers: { 'Authorization': `Bearer ${token}` },
           credentials: 'include'
@@ -81,8 +80,7 @@ const Profile = () => {
         fetch(`/api/user/history?limit=100&page=1`, {
           headers: { 'Authorization': `Bearer ${token}` },
           credentials: 'include'
-        }),
-        fetch(`/api/leaderboard?limit=20`)
+        })
       ]);
 
       if (statsRes.ok) setStats(await statsRes.json());
@@ -92,7 +90,6 @@ const Profile = () => {
         setHistoryTotal(historyData.total || 0);
         setHistoryTotalPages(historyData.total_pages || 0);
       }
-      if (leaderboardRes.ok) setLeaderboard(await leaderboardRes.json());
     } catch (error) {
       console.error('Failed to load profile data:', error);
     } finally {
