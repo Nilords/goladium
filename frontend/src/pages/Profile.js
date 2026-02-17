@@ -1,11 +1,12 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { useLanguage } from '../contexts/LanguageContext';
 import { formatCurrency, formatCurrencyFull } from '../lib/formatCurrency';
 import Navbar from '../components/Navbar';
 import Footer from '../components/Footer';
 import Chat from '../components/Chat';
-import AccountValueChart from '../components/AccountValueChart';
+import AnalyticsCharts from '../components/AnalyticsCharts';
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card';
 import { Badge } from '../components/ui/badge';
 import { Button } from '../components/ui/button';
@@ -48,6 +49,7 @@ import {
 
 const Profile = () => {
   const { user, token, refreshUser } = useAuth();
+  const [searchParams] = useSearchParams();
   const { t, language } = useLanguage();
   
   const [history, setHistory] = useState([]);
