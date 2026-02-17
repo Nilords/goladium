@@ -159,6 +159,14 @@ const AppRouter = () => {
         }
       />
       <Route
+        path="/game-pass"
+        element={
+          <ProtectedRoute>
+            <GamePass />
+          </ProtectedRoute>
+        }
+      />
+      <Route
         path="/trading"
         element={
           <ProtectedRoute>
