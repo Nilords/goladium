@@ -93,9 +93,27 @@ const ChestOpening = ({
   };
 
   const startAutoOpen = async () => {
-    const chestsToOpen = allChests.filter(c => c.item_id === chestItem?.item_id).slice(0, autoOpenAmount);
+    // Get inventory_ids from the stacked chest item
+    // The backend now returns stacked items with inventory_ids array
+    let inventoryIds = [];
     
-    if (chestsToOpen.length === 0) {
+    if (chestItem?.inventory_ids && chestItem.inventory_ids.length > 0) {
+      // Backend returns stacked items with inventory_ids
+      inventoryIds = chestItem.inventory_ids.slice(0, autoOpenAmount);
+    } else {
+      // Fallback: collect from allChests array
+      const matchingChests = allChests.filter(c => c.item_id === chestItem?.item_id);
+      for (const chest of matchingChests) {
+        if (chest.inventory_ids) {
+          inventoryIds.push(...chest.inventory_ids);
+        } else if (chest.inventory_id) {
+          inventoryIds.push(chest.inventory_id);
+        }
+      }
+      inventoryIds = inventoryIds.slice(0, autoOpenAmount);
+    }
+    
+    if (inventoryIds.length === 0) {
       toast.error(language === 'de' ? 'Keine Truhen verfügbar' : 'No chests available');
       return;
     }
@@ -108,14 +126,14 @@ const ChestOpening = ({
     
     const results = [];
     
-    for (let i = 0; i < chestsToOpen.length; i++) {
+    for (let i = 0; i < inventoryIds.length; i++) {
       // Check if user wants to stop
       if (stopAutoOpen) {
         break;
       }
       
       try {
-        const data = await openSingleChest(chestsToOpen[i].inventory_id);
+        const data = await openSingleChest(inventoryIds[i]);
         results.push(data.reward);
         setAutoOpenResults([...results]);
         setAutoOpenProgress(i + 1);
