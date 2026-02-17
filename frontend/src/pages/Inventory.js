@@ -5,6 +5,7 @@ import Navbar from '../components/Navbar';
 import Footer from '../components/Footer';
 import Chat from '../components/Chat';
 import LiveWinFeed from '../components/LiveWinFeed';
+import ChestOpening from '../components/ChestOpening';
 import { Card, CardContent } from '../components/ui/card';
 import { Badge } from '../components/ui/badge';
 import { Button } from '../components/ui/button';
@@ -46,6 +47,28 @@ const Inventory = () => {
   const [selectedItem, setSelectedItem] = useState(null);
   const [showSellConfirm, setShowSellConfirm] = useState(false);
   const [selling, setSelling] = useState(false);
+  
+  // Chest opening state
+  const [chestToOpen, setChestToOpen] = useState(null);
+  const [showChestDialog, setShowChestDialog] = useState(false);
+
+  const isChest = (item) => {
+    return item?.item_id?.includes('chest') || item?.category === 'chest';
+  };
+
+  const handleItemClick = (item) => {
+    if (isChest(item)) {
+      setChestToOpen(item);
+      setShowChestDialog(true);
+    } else {
+      setSelectedItem(item);
+    }
+  };
+
+  const handleChestOpened = async () => {
+    await loadInventory();
+    await refreshUser();
+  };
 
   useEffect(() => {
     loadInventory();
