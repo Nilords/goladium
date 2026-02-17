@@ -43,7 +43,7 @@ DISCORD_WEBHOOK_URL = os.environ.get('DISCORD_WEBHOOK_URL', '')
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
 # ALPHA REGISTRATION LOCK
-ALPHA_REGISTRATION_OPEN = False
+ALPHA_REGISTRATION_OPEN = True
 
 # Create the main app
 app = FastAPI(
