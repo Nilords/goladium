@@ -2696,6 +2696,9 @@ async def spin_slot(bet_request: SlotBetRequest, request: Request):
         }
         await db.bet_history.insert_one(win_entry)
     
+    # Record value snapshot after balance change
+    await record_value_snapshot(user["user_id"], new_balance, user.get("balance_a", 0), "slot_spin")
+    
     # Update quest progress
     await update_quest_progress(user["user_id"], "spins", 1, bet_amount=total_bet)
     await update_quest_progress(user["user_id"], "total_wagered", int(total_bet))
