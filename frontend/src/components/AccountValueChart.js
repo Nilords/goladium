@@ -66,8 +66,29 @@ const AccountValueChart = () => {
 
   function formatTime(ts, tf) {
     const d = new Date(ts);
-    if (tf === 'hourly') return d.toLocaleTimeString(language === 'de' ? 'de-DE' : 'en-US', { hour: '2-digit', minute: '2-digit' });
-    return d.toLocaleDateString(language === 'de' ? 'de-DE' : 'en-US', { month: 'short', day: 'numeric' });
+    const locale = language === 'de' ? 'de-DE' : 'en-US';
+    
+    // Format based on timeframe bucket
+    switch(tf) {
+      case '1m':
+      case '15m':
+        // Show time with seconds for minute-level data
+        return d.toLocaleTimeString(locale, { hour: '2-digit', minute: '2-digit' });
+      case '1h':
+        // Show time for hourly data
+        return d.toLocaleTimeString(locale, { hour: '2-digit', minute: '2-digit' });
+      case '3d':
+        // Show day and time
+        return d.toLocaleDateString(locale, { weekday: 'short', hour: '2-digit' });
+      case '1w':
+        // Show day and time
+        return d.toLocaleDateString(locale, { weekday: 'short', day: 'numeric' });
+      case '1mo':
+        // Show date
+        return d.toLocaleDateString(locale, { month: 'short', day: 'numeric' });
+      default:
+        return d.toLocaleDateString(locale, { month: 'short', day: 'numeric' });
+    }
   }
 
   const CustomTooltip = ({ active, payload }) => {
