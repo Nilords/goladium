@@ -425,9 +425,9 @@ const Profile = () => {
             </Card>
           </TabsContent>
 
-          {/* Analytics Tab */}
+          {/* Analytics Tab - Combined Account & Inventory Charts */}
           <TabsContent value="analytics" className="mt-0">
-            <AccountValueChart />
+            <AnalyticsCharts defaultView={searchParams.get('view') || 'account'} />
           </TabsContent>
         </Tabs>
       </main>
