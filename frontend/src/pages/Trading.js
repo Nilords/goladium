@@ -514,14 +514,26 @@ const Trading = () => {
               <ArrowLeftRight className="w-8 h-8 text-blue-400" />
               <h1 className="text-2xl font-bold text-white">Trading</h1>
             </div>
-            <Button 
-              onClick={() => setShowNewTrade(true)}
-              className="bg-blue-600 hover:bg-blue-700"
-              data-testid="new-trade-btn"
-            >
-              <ArrowLeftRight className="w-4 h-4 mr-2" />
-              Neuer Trade
-            </Button>
+            <div className="flex items-center gap-2">
+              {/* Inventory Analytics Shortcut */}
+              <Button 
+                onClick={goToInventoryAnalytics}
+                variant="outline"
+                className="border-purple-500/50 text-purple-400 hover:bg-purple-500/10 hover:text-purple-300"
+                data-testid="inventory-analytics-btn"
+              >
+                <TrendingUp className="w-4 h-4 mr-2" />
+                {language === 'de' ? 'Inventar-Analyse' : 'Inventory Analytics'}
+              </Button>
+              <Button 
+                onClick={() => setShowNewTrade(true)}
+                className="bg-blue-600 hover:bg-blue-700"
+                data-testid="new-trade-btn"
+              >
+                <ArrowLeftRight className="w-4 h-4 mr-2" />
+                {language === 'de' ? 'Neuer Trade' : 'New Trade'}
+              </Button>
+            </div>
           </div>
 
         {/* Tabs */}
