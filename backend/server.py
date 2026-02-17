@@ -4493,6 +4493,136 @@ async def sell_inventory_item(sell_request: SellItemRequest, request: Request):
         "new_balance": new_balance
     }
 
+
+class SellItemsBatchRequest(BaseModel):
+    inventory_ids: list[str]
+
+@api_router.post("/inventory/sell-batch")
+async def sell_inventory_items_batch(data: SellItemsBatchRequest, request: Request):
+    """Sell multiple items at once for 70% of purchase price (30% fee). Chests cannot be sold."""
+    user = await get_current_user(request)
+    user_id = user["user_id"]
+    
+    if not data.inventory_ids:
+        raise HTTPException(status_code=400, detail="No items provided")
+    
+    if len(data.inventory_ids) > 1000:
+        raise HTTPException(status_code=400, detail="Maximum 1000 items per batch")
+    
+    SELL_FEE_PERCENT = 30
+    SELL_RETURN_PERCENT = 100 - SELL_FEE_PERCENT
+    
+    # Find all items and verify ownership
+    items = await db.user_inventory.find({
+        "inventory_id": {"$in": data.inventory_ids},
+        "user_id": user_id
+    }).to_list(1000)
+    
+    if not items:
+        raise HTTPException(status_code=404, detail="No valid items found")
+    
+    # Filter out chests - they cannot be sold
+    sellable_items = []
+    skipped_chests = 0
+    
+    for item in items:
+        item_id = item.get("item_id", "")
+        category = item.get("category", "")
+        
+        if "chest" in item_id.lower() or category == "chest":
+            skipped_chests += 1
+            continue
+        
+        purchase_price = item.get("purchase_price", 0)
+        if purchase_price <= 0:
+            continue  # Skip items without value
+        
+        sellable_items.append(item)
+    
+    if not sellable_items:
+        if skipped_chests > 0:
+            raise HTTPException(status_code=400, detail="Chests cannot be sold")
+        raise HTTPException(status_code=400, detail="No sellable items found")
+    
+    # Calculate totals
+    total_value = 0
+    total_sell_amount = 0
+    total_fee = 0
+    sold_items = []
+    
+    for item in sellable_items:
+        purchase_price = item.get("purchase_price", 0)
+        sell_amount = round(purchase_price * SELL_RETURN_PERCENT / 100, 2)
+        fee_amount = round(purchase_price * SELL_FEE_PERCENT / 100, 2)
+        
+        total_value += purchase_price
+        total_sell_amount += sell_amount
+        total_fee += fee_amount
+        
+        sold_items.append({
+            "inventory_id": item["inventory_id"],
+            "item_id": item["item_id"],
+            "item_name": item["item_name"],
+            "value": purchase_price,
+            "sell_amount": sell_amount
+        })
+    
+    # Delete all items at once
+    delete_ids = [item["inventory_id"] for item in sellable_items]
+    await db.user_inventory.delete_many({
+        "inventory_id": {"$in": delete_ids},
+        "user_id": user_id
+    })
+    
+    # Add total sell amount to user balance
+    user_doc = await db.users.find_one({"user_id": user_id})
+    new_balance = round(user_doc.get("balance", 0) + total_sell_amount, 2)
+    await db.users.update_one(
+        {"user_id": user_id},
+        {"$set": {"balance": new_balance}}
+    )
+    
+    # Record single batch activity
+    now = datetime.now(timezone.utc)
+    activity_doc = {
+        "bet_id": f"batch_sale_{uuid.uuid4().hex[:12]}",
+        "user_id": user_id,
+        "game_type": "item_sale_batch",
+        "bet_amount": 0,
+        "win_amount": total_sell_amount,
+        "net_outcome": total_sell_amount,
+        "result": "sale",
+        "timestamp": now.isoformat(),
+        "details": {
+            "items_sold": len(sold_items),
+            "total_value": total_value,
+            "fee_amount": total_fee,
+            "fee_percent": SELL_FEE_PERCENT
+        }
+    }
+    await db.bet_history.insert_one(activity_doc)
+    
+    # Record inventory value event
+    await record_inventory_value_event(
+        user_id=user_id,
+        event_type="sell",
+        delta_value=-total_value,
+        related_item_id="batch_sale",
+        related_item_name=f"{len(sold_items)} items",
+        details={"items_count": len(sold_items), "sell_amount": total_sell_amount}
+    )
+    
+    return {
+        "success": True,
+        "items_sold": len(sold_items),
+        "skipped_chests": skipped_chests,
+        "total_value": round(total_value, 2),
+        "total_sell_amount": round(total_sell_amount, 2),
+        "total_fee": round(total_fee, 2),
+        "fee_percent": SELL_FEE_PERCENT,
+        "new_balance": new_balance
+    }
+
 # ============== PRESTIGE SYSTEM ENDPOINTS ==============
 
 @api_router.get("/prestige/shop")
