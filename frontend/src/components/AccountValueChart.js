@@ -12,13 +12,23 @@ import {
   Clock, Calendar, CalendarDays, Gamepad2, Trophy, Sparkles, Coins
 } from 'lucide-react';
 
+// Stock-market style timeframe configuration
+const TIMEFRAME_OPTIONS = [
+  { key: '1m', label: '1m', labelDe: '1m', description: 'Last hour, per minute' },
+  { key: '15m', label: '15m', labelDe: '15m', description: 'Last 6 hours, 15-min intervals' },
+  { key: '1h', label: '1h', labelDe: '1h', description: 'Last 24 hours, hourly' },
+  { key: '3d', label: '3D', labelDe: '3T', description: 'Last 3 days' },
+  { key: '1w', label: '1W', labelDe: '1W', description: 'Last week' },
+  { key: '1mo', label: '1M', labelDe: '1M', description: 'Last month' },
+];
+
 const AccountValueChart = () => {
   const { token } = useAuth();
   const { t, language } = useLanguage();
   const [chartData, setChartData] = useState(null);
   const [stats, setStats] = useState(null);
   const [loading, setLoading] = useState(true);
-  const [timeframe, setTimeframe] = useState('daily');
+  const [timeframe, setTimeframe] = useState('1h');
 
   useEffect(() => {
     loadData();
