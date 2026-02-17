@@ -6162,6 +6162,10 @@ async def initialize_item_system():
     await db.moderation_logs.create_index([("user_id", 1), ("timestamp", -1)])
     await db.moderation_logs.create_index("violation_type")
     
+    # Create indexes for value snapshots
+    await db.value_snapshots.create_index("snapshot_id", unique=True)
+    await db.value_snapshots.create_index([("user_id", 1), ("timestamp", -1)])
+    
     # Seed items if they don't exist
     for item_data in SEED_ITEMS:
         existing = await db.items.find_one({"item_id": item_data["item_id"]})
