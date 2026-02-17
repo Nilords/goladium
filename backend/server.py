@@ -3864,7 +3864,7 @@ async def get_user_inventory(request: Request):
     
     return {
         "items": items,
-        "total_items": len(items)
+        "total_items": total_count
     }
 
 # ============== CHEST OPENING SYSTEM ==============
