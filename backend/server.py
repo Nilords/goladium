@@ -2084,11 +2084,16 @@ async def get_user_stats_from_history(user_id: str) -> dict:
         {"$match": {"user_id": user_id, "game_type": {"$ne": "wheel"}}},  # Exclude free wheel spins
         {"$group": {
             "_id": None,
-            "total_wagered": {"$sum": "$bet_amount"},
-            "total_won": {"$sum": "$win_amount"},
-            "total_bets": {"$sum": 1},
-            "wins": {"$sum": {"$cond": [{"$gt": ["$win_amount", "$bet_amount"]}, 1, 0]}},
-            "losses": {"$sum": {"$cond": [{"$lte": ["$win_amount", "$bet_amount"]}, 1, 0]}}
+            "total_wagered": {"$sum": {"$cond": [{"$eq": ["$transaction_type", "bet"]}, "$bet_amount", 0]}},
+            "total_won": {"$sum": {"$cond": [{"$eq": ["$transaction_type", "win"]}, "$win_amount", 0]}},
+            "total_bets": {"$sum": {"$cond": [{"$eq": ["$transaction_type", "bet"]}, 1, 0]}},
+            "wins": {"$sum": {"$cond": [{"$eq": ["$transaction_type", "win"]}, 1, 0]}},
+            "losses": {"$sum": {"$cond": [
+                {"$and": [
+                    {"$eq": ["$transaction_type", "bet"]},
+                    {"$not": {"$gt": ["$win_amount", 0]}}
+                ]}, 1, 0
+            ]}}
         }}
     ]
     
@@ -2096,13 +2101,15 @@ async def get_user_stats_from_history(user_id: str) -> dict:
     
     if result:
         stats = result[0]
+        total_wagered = round(stats.get("total_wagered", 0), 2)
+        total_won = round(stats.get("total_won", 0), 2)
         return {
-            "total_wagered": round(stats.get("total_wagered", 0), 2),
-            "total_won": round(stats.get("total_won", 0), 2),
-            "net_profit": round(stats.get("total_won", 0) - stats.get("total_wagered", 0), 2),
+            "total_wagered": total_wagered,
+            "total_won": total_won,
+            "net_profit": round(total_won - total_wagered, 2),
             "total_spins": stats.get("total_bets", 0),
             "total_wins": stats.get("wins", 0),
-            "total_losses": stats.get("losses", 0)
+            "total_losses": stats.get("total_bets", 0) - stats.get("wins", 0)
         }
     
     return {
