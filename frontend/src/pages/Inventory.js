@@ -522,6 +522,17 @@ const Inventory = () => {
       <Footer />
       <LiveWinFeed />
       <Chat />
+      
+      {/* Chest Opening Dialog */}
+      <ChestOpening
+        isOpen={showChestDialog}
+        onClose={() => {
+          setShowChestDialog(false);
+          setChestToOpen(null);
+        }}
+        chestItem={chestToOpen}
+        onChestOpened={handleChestOpened}
+      />
     </div>
   );
 };
