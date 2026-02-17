@@ -3863,6 +3863,280 @@ async def get_user_inventory(request: Request):
         "total_items": len(items)
     }
 
+# ============== CHEST OPENING SYSTEM ==============
+# Reward tables for different chest rarities
+
+CHEST_REWARD_TABLES = {
+    "common_chest": {
+        "g_range": (5, 25),
+        "g_weight": 70,  # 70% chance for G
+        "item_pool": [
+            {"item_id": "placeholder_relic", "weight": 30}
+        ]
+    },
+    "uncommon_chest": {
+        "g_range": (15, 50),
+        "g_weight": 60,
+        "item_pool": [
+            {"item_id": "placeholder_relic", "weight": 25},
+            {"item_id": "gamblers_instinct", "weight": 15}
+        ]
+    },
+    "rare_chest": {
+        "g_range": (30, 100),
+        "g_weight": 50,
+        "item_pool": [
+            {"item_id": "placeholder_relic", "weight": 20},
+            {"item_id": "gamblers_instinct", "weight": 25},
+            {"item_id": "common_chest", "weight": 5}  # Can get another chest!
+        ]
+    },
+    "epic_chest": {
+        "g_range": (75, 200),
+        "g_weight": 45,
+        "item_pool": [
+            {"item_id": "gamblers_instinct", "weight": 30},
+            {"item_id": "uncommon_chest", "weight": 15},
+            {"item_id": "rare_chest", "weight": 10}
+        ]
+    },
+    "legendary_chest": {
+        "g_range": (150, 400),
+        "g_weight": 40,
+        "item_pool": [
+            {"item_id": "gamblers_instinct", "weight": 25},
+            {"item_id": "rare_chest", "weight": 20},
+            {"item_id": "epic_chest", "weight": 15}
+        ]
+    },
+    "mythic_chest": {
+        "g_range": (300, 750),
+        "g_weight": 35,
+        "item_pool": [
+            {"item_id": "gamblers_instinct", "weight": 20},
+            {"item_id": "epic_chest", "weight": 25},
+            {"item_id": "legendary_chest", "weight": 20}
+        ]
+    }
+}
+
+def generate_chest_rewards(chest_id: str) -> list:
+    """Generate random rewards from a chest"""
+    import random
+    
+    if chest_id not in CHEST_REWARD_TABLES:
+        return []
+    
+    table = CHEST_REWARD_TABLES[chest_id]
+    rewards = []
+    
+    # Determine if reward is G or item
+    roll = random.randint(1, 100)
+    
+    if roll <= table["g_weight"]:
+        # G reward
+        g_min, g_max = table["g_range"]
+        g_amount = round(random.uniform(g_min, g_max), 2)
+        rewards.append({
+            "type": "currency",
+            "currency": "G",
+            "amount": g_amount
+        })
+    else:
+        # Item reward - weighted random selection
+        item_pool = table["item_pool"]
+        total_weight = sum(item["weight"] for item in item_pool)
+        roll = random.randint(1, total_weight)
+        
+        cumulative = 0
+        selected_item = None
+        for item in item_pool:
+            cumulative += item["weight"]
+            if roll <= cumulative:
+                selected_item = item["item_id"]
+                break
+        
+        if selected_item:
+            rewards.append({
+                "type": "item",
+                "item_id": selected_item
+            })
+    
+    # Bonus roll for rare chests and above - small chance for extra reward
+    bonus_chance = {
+        "rare_chest": 10,
+        "epic_chest": 15,
+        "legendary_chest": 25,
+        "mythic_chest": 35
+    }
+    
+    if chest_id in bonus_chance:
+        if random.randint(1, 100) <= bonus_chance[chest_id]:
+            # Bonus G
+            g_min, g_max = table["g_range"]
+            bonus_g = round(random.uniform(g_min * 0.5, g_max * 0.5), 2)
+            rewards.append({
+                "type": "currency",
+                "currency": "G",
+                "amount": bonus_g,
+                "is_bonus": True
+            })
+    
+    return rewards
+
+
+class OpenChestRequest(BaseModel):
+    inventory_id: str
+
+
+@api_router.post("/inventory/open-chest")
+async def open_chest(data: OpenChestRequest, request: Request):
+    """
+    Open a chest item from inventory and receive random rewards.
+    The chest is consumed in the process.
+    """
+    user = await get_current_user(request)
+    user_id = user["user_id"]
+    now = datetime.now(timezone.utc)
+    
+    # Find the chest in inventory
+    chest_item = await db.user_inventory.find_one({
+        "inventory_id": data.inventory_id,
+        "user_id": user_id
+    })
+    
+    if not chest_item:
+        raise HTTPException(status_code=404, detail="Chest not found in inventory")
+    
+    # Verify it's a chest
+    item_def = await db.items.find_one({"item_id": chest_item["item_id"]})
+    if not item_def or item_def.get("category") != "chest":
+        raise HTTPException(status_code=400, detail="This item is not a chest")
+    
+    chest_id = chest_item["item_id"]
+    chest_name = chest_item.get("item_name", item_def.get("name", "Chest"))
+    chest_rarity = chest_item.get("item_rarity", item_def.get("rarity", "common"))
+    chest_value = chest_item.get("purchase_price", item_def.get("base_value", 0))
+    
+    # Generate rewards
+    rewards = generate_chest_rewards(chest_id)
+    
+    if not rewards:
+        raise HTTPException(status_code=500, detail="Failed to generate rewards")
+    
+    # Process rewards
+    processed_rewards = []
+    total_g_gained = 0
+    items_gained = []
+    
+    for reward in rewards:
+        if reward["type"] == "currency" and reward["currency"] == "G":
+            # Add G to user balance
+            total_g_gained += reward["amount"]
+            processed_rewards.append({
+                "type": "currency",
+                "currency": "G",
+                "amount": reward["amount"],
+                "is_bonus": reward.get("is_bonus", False)
+            })
+        
+        elif reward["type"] == "item":
+            # Get item definition
+            reward_item_def = await db.items.find_one({"item_id": reward["item_id"]})
+            if reward_item_def:
+                # Add item to inventory
+                new_inventory_item = {
+                    "inventory_id": f"inv_{uuid.uuid4().hex[:12]}",
+                    "user_id": user_id,
+                    "item_id": reward["item_id"],
+                    "item_name": reward_item_def.get("name", "Unknown Item"),
+                    "item_rarity": reward_item_def.get("rarity", "common"),
+                    "item_flavor_text": reward_item_def.get("flavor_text", ""),
+                    "purchase_price": reward_item_def.get("base_value", 0),
+                    "acquired_at": now.isoformat(),
+                    "acquired_from": "chest",
+                    "source": f"opened_{chest_id}"
+                }
+                await db.user_inventory.insert_one(new_inventory_item)
+                
+                item_value = reward_item_def.get("base_value", 0)
+                items_gained.append({
+                    "inventory_id": new_inventory_item["inventory_id"],
+                    "item_id": reward["item_id"],
+                    "name": reward_item_def.get("name"),
+                    "rarity": reward_item_def.get("rarity"),
+                    "value": item_value,
+                    "flavor_text": reward_item_def.get("flavor_text", ""),
+                    "category": reward_item_def.get("category", "collectible")
+                })
+                
+                # Record inventory value event for gained item
+                await record_inventory_value_event(
+                    user_id=user_id,
+                    event_type="drop",
+                    delta_value=item_value,
+                    related_item_id=reward["item_id"],
+                    related_item_name=reward_item_def.get("name"),
+                    details={"source": "chest_opening", "chest_id": chest_id, "chest_name": chest_name}
+                )
+                
+                processed_rewards.append({
+                    "type": "item",
+                    "item_id": reward["item_id"],
+                    "name": reward_item_def.get("name"),
+                    "rarity": reward_item_def.get("rarity"),
+                    "value": item_value,
+                    "category": reward_item_def.get("category", "collectible")
+                })
+    
+    # Apply G reward to user balance
+    if total_g_gained > 0:
+        await db.users.update_one(
+            {"user_id": user_id},
+            {"$inc": {"balance": total_g_gained}}
+        )
+        
+        # Record account value snapshot
+        updated_user = await db.users.find_one({"user_id": user_id})
+        await record_value_snapshot(
+            user_id,
+            updated_user.get("balance", 0),
+            updated_user.get("balance_a", 0),
+            "chest_opening"
+        )
+    
+    # Remove the chest from inventory
+    await db.user_inventory.delete_one({"inventory_id": data.inventory_id})
+    
+    # Record inventory value event for consumed chest (negative delta)
+    await record_inventory_value_event(
+        user_id=user_id,
+        event_type="drop",  # Using drop for chest consumption
+        delta_value=-chest_value,  # Negative because chest is removed
+        related_item_id=chest_id,
+        related_item_name=chest_name,
+        details={"action": "chest_opened", "rewards_count": len(processed_rewards)}
+    )
+    
+    # Get rarity info for display
+    rarity_info = ITEM_RARITIES.get(chest_rarity, ITEM_RARITIES["common"])
+    
+    return {
+        "success": True,
+        "chest_opened": {
+            "item_id": chest_id,
+            "name": chest_name,
+            "rarity": chest_rarity,
+            "rarity_display": rarity_info["name"],
+            "rarity_color": rarity_info["color"]
+        },
+        "rewards": processed_rewards,
+        "total_g_gained": total_g_gained,
+        "items_gained": items_gained,
+        "new_balance": (await db.users.find_one({"user_id": user_id})).get("balance", 0)
+    }
+
+
 @api_router.get("/inventory/{user_id}")
 async def get_user_inventory_public(user_id: str):
     """Get a user's inventory (public view - for profiles)"""
