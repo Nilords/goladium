@@ -57,7 +57,7 @@ const Profile = () => {
   const [historyTotalPages, setHistoryTotalPages] = useState(0);
   const [loading, setLoading] = useState(true);
   const [historyLoading, setHistoryLoading] = useState(false);
-  const [activeTab, setActiveTab] = useState('stats');
+  const [activeTab, setActiveTab] = useState('history');
 
   useEffect(() => {
     // Refresh user data to get latest XP/level
