@@ -203,8 +203,9 @@ class TestShopPurchaseTriggersInventoryEvent:
         assert response.status_code == 200, f"Shop failed: {response.status_code}"
         
         data = response.json()
-        assert 'listings' in data, "Shop response missing 'listings'"
-        print(f"✓ Shop accessible with {len(data['listings'])} listings")
+        # Shop endpoint returns a list directly
+        assert isinstance(data, list), "Shop response should be a list"
+        print(f"✓ Shop accessible with {len(data)} listings")
     
     def test_shop_purchase_workflow(self, auth_headers):
         """Test that purchasing from shop adds to inventory"""
@@ -215,7 +216,8 @@ class TestShopPurchaseTriggersInventoryEvent:
         )
         assert shop_response.status_code == 200
         
-        listings = shop_response.json().get('listings', [])
+        # Shop returns a list directly
+        listings = shop_response.json()
         
         if not listings:
             pytest.skip("No shop listings available for purchase test")
@@ -235,7 +237,7 @@ class TestGamePassRewardsClaim:
     def test_game_pass_status_endpoint(self, auth_headers):
         """Test game pass status endpoint exists"""
         response = requests.get(
-            f"{BASE_URL}/api/game-pass/status",
+            f"{BASE_URL}/api/game-pass",
             headers=auth_headers
         )
         assert response.status_code == 200, f"Game pass status failed: {response.status_code}"
@@ -247,9 +249,9 @@ class TestGamePassRewardsClaim:
         print(f"✓ GamePass status: level={data['level']}, xp={data['xp']}")
     
     def test_game_pass_rewards_structure(self, auth_headers):
-        """Test game pass rewards are configured"""
+        """Test game pass rewards are configured with chest items"""
         response = requests.get(
-            f"{BASE_URL}/api/game-pass/status",
+            f"{BASE_URL}/api/game-pass",
             headers=auth_headers
         )
         assert response.status_code == 200
@@ -257,11 +259,23 @@ class TestGamePassRewardsClaim:
         data = response.json()
         
         # Check for reward-related fields
-        expected_fields = ['level', 'xp', 'claimed_rewards']
-        for field in expected_fields:
-            assert field in data or True, f"Missing field: {field}"  # Some fields may be optional
+        assert 'level' in data, "Missing 'level' field"
+        assert 'xp' in data, "Missing 'xp' field"
+        assert 'all_rewards' in data, "Missing 'all_rewards' field"
+        assert 'rewards_claimed' in data, "Missing 'rewards_claimed' field"
         
-        print(f"✓ GamePass rewards structure validated")
+        # Verify chest items are in the rewards
+        all_rewards = data.get('all_rewards', {})
+        chest_items_found = set()
+        for level, rewards in all_rewards.items():
+            for tier in ['free', 'galadium']:
+                if tier in rewards and rewards[tier].get('type') == 'item':
+                    chest_items_found.add(rewards[tier].get('item_id'))
+        
+        expected_chests = {'common_chest', 'uncommon_chest', 'rare_chest', 'epic_chest', 'legendary_chest', 'mythic_chest'}
+        assert chest_items_found == expected_chests, f"Missing chest items in rewards: {expected_chests - chest_items_found}"
+        
+        print(f"✓ GamePass rewards contain all chest items: {chest_items_found}")
 
 
 class TestTradingTriggersInventoryEvents:
