@@ -435,14 +435,26 @@ const Inventory = () => {
                 
                 {/* Actions */}
                 <div className="flex gap-2">
-                  <Button 
-                    onClick={handleSellClick}
-                    className="flex-1 bg-red-500/20 hover:bg-red-500/30 text-red-400 border border-red-500/30"
-                    data-testid="sell-item-btn"
-                  >
-                    <Coins className="w-4 h-4 mr-2" />
-                    {language === 'de' ? 'Verkaufen' : 'Sell'}
-                  </Button>
+                  {!isChest(selectedItem) ? (
+                    <Button 
+                      onClick={handleSellClick}
+                      className="flex-1 bg-red-500/20 hover:bg-red-500/30 text-red-400 border border-red-500/30"
+                      data-testid="sell-item-btn"
+                    >
+                      <Coins className="w-4 h-4 mr-2" />
+                      {language === 'de' ? 'Verkaufen' : 'Sell'}
+                      {(selectedItem.count || 1) > 1 && ` (${selectedItem.count})`}
+                    </Button>
+                  ) : (
+                    <Button 
+                      variant="outline" 
+                      className="flex-1 border-white/10 text-white/40"
+                      disabled
+                    >
+                      <Lock className="w-4 h-4 mr-2" />
+                      {language === 'de' ? 'Nicht verkaufbar' : 'Cannot sell'}
+                    </Button>
+                  )}
                   <Button 
                     variant="outline" 
                     className="flex-1 border-white/10 text-white/40"
