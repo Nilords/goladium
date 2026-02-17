@@ -50,7 +50,6 @@ const Profile = () => {
   const { user, token, refreshUser } = useAuth();
   const { t, language } = useLanguage();
   
-  const [stats, setStats] = useState(null);
   const [history, setHistory] = useState([]);
   const [historyPage, setHistoryPage] = useState(1);
   const [historyTotal, setHistoryTotal] = useState(0);
@@ -73,18 +72,11 @@ const Profile = () => {
 
   const loadProfileData = async () => {
     try {
-      const [statsRes, historyRes] = await Promise.all([
-        fetch(`/api/user/stats`, {
-          headers: { 'Authorization': `Bearer ${token}` },
-          credentials: 'include'
-        }),
-        fetch(`/api/user/history?limit=100&page=1`, {
-          headers: { 'Authorization': `Bearer ${token}` },
-          credentials: 'include'
-        })
-      ]);
+      const historyRes = await fetch(`/api/user/history?limit=100&page=1`, {
+        headers: { 'Authorization': `Bearer ${token}` },
+        credentials: 'include'
+      });
 
-      if (statsRes.ok) setStats(await statsRes.json());
       if (historyRes.ok) {
         const historyData = await historyRes.json();
         setHistory(historyData.items || []);
