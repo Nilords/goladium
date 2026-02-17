@@ -7,41 +7,52 @@ import {
   AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, 
   ResponsiveContainer, ReferenceLine
 } from 'recharts';
-import { TrendingUp, TrendingDown, Activity, ArrowUp, ArrowDown, Clock, Calendar, CalendarDays } from 'lucide-react';
+import { 
+  TrendingUp, TrendingDown, Activity, ArrowUp, ArrowDown, 
+  Clock, Calendar, CalendarDays, Gamepad2, Trophy, Sparkles, Coins
+} from 'lucide-react';
 
 const AccountValueChart = () => {
   const { token } = useAuth();
-  const { language } = useLanguage();
-  const [data, setData] = useState(null);
+  const { t, language } = useLanguage();
+  const [chartData, setChartData] = useState(null);
+  const [stats, setStats] = useState(null);
   const [loading, setLoading] = useState(true);
   const [timeframe, setTimeframe] = useState('daily');
 
   useEffect(() => {
-    loadValueHistory();
+    loadData();
   }, [timeframe]);
 
-  const loadValueHistory = async () => {
+  const loadData = async () => {
     setLoading(true);
     try {
-      const res = await fetch(`/api/user/value-history?timeframe=${timeframe}`, {
-        headers: { 'Authorization': `Bearer ${token}` }
-      });
-      if (res.ok) setData(await res.json());
+      const [chartRes, statsRes] = await Promise.all([
+        fetch(`/api/user/value-history?timeframe=${timeframe}`, {
+          headers: { 'Authorization': `Bearer ${token}` }
+        }),
+        fetch(`/api/user/stats`, {
+          headers: { 'Authorization': `Bearer ${token}` }
+        })
+      ]);
+      
+      if (chartRes.ok) setChartData(await chartRes.json());
+      if (statsRes.ok) setStats(await statsRes.json());
     } catch (err) {
-      console.error('Failed to load value history:', err);
+      console.error('Failed to load data:', err);
     } finally {
       setLoading(false);
     }
   };
 
-  const chartData = useMemo(() => {
-    if (!data?.data_points) return [];
-    return data.data_points.map((point, i, arr) => ({
+  const processedChartData = useMemo(() => {
+    if (!chartData?.data_points) return [];
+    return chartData.data_points.map((point, i, arr) => ({
       ...point,
       displayTime: formatTime(point.timestamp, timeframe),
       change: i > 0 ? point.total_value - arr[i-1].total_value : 0
     }));
-  }, [data, timeframe]);
+  }, [chartData, timeframe]);
 
   function formatTime(ts, tf) {
     const d = new Date(ts);
@@ -59,43 +70,74 @@ const AccountValueChart = () => {
         <p className={`text-sm ${p.change >= 0 ? 'text-green-400' : 'text-red-400'}`}>
           {p.change >= 0 ? '+' : ''}{p.change.toFixed(2)} G
         </p>
-        <div className="text-xs text-white/40 mt-1">G: {p.balance_g?.toFixed(2)} | A: {p.balance_a?.toFixed(2)}</div>
       </div>
     );
   };
 
   const yDomain = useMemo(() => {
-    if (!chartData.length) return [-10, 100];
-    const vals = chartData.map(d => d.total_value);
+    if (!processedChartData.length) return [-10, 100];
+    const vals = processedChartData.map(d => d.total_value);
     const min = Math.min(...vals), max = Math.max(...vals);
     const pad = Math.max((max - min) * 0.15, 5);
     return [Math.floor(min - pad), Math.ceil(max + pad)];
-  }, [chartData]);
+  }, [processedChartData]);
 
   if (loading) {
     return (
-      <Card className="bg-[#0A0A0C] border-white/5">
-        <CardContent className="p-8 flex justify-center">
-          <div className="w-8 h-8 border-2 border-primary border-t-transparent rounded-full animate-spin" />
-        </CardContent>
-      </Card>
+      <div className="flex justify-center p-8">
+        <div className="w-8 h-8 border-2 border-primary border-t-transparent rounded-full animate-spin" />
+      </div>
     );
   }
 
-  const stats = data?.stats || {};
-  const trend = stats.percent_change >= 0;
+  const chartStats = chartData?.stats || {};
+  const overallStats = stats?.overall || {};
+  const trend = chartStats.percent_change >= 0;
+
+  // Get game-specific stats
+  const slotStats = Object.values(stats?.by_game || {}).find(g => g.game_type === 'slot');
+  const jackpotStats = Object.values(stats?.by_game || {}).find(g => g.game_type === 'jackpot');
 
   return (
-    <div className="space-y-4">
-      {/* Stats Panel */}
+    <div className="space-y-6">
+      {/* Overview Stats Row */}
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+        <StatCard 
+          label={language === 'de' ? 'Gesamt Spins' : 'Total Spins'} 
+          value={overallStats.total_spins || 0} 
+          icon={<Sparkles className="w-4 h-4" />}
+          isNumber
+        />
+        <StatCard 
+          label={language === 'de' ? 'Gewettet' : 'Wagered'} 
+          value={overallStats.total_wagered || 0} 
+          icon={<Coins className="w-4 h-4" />}
+          color="gold"
+        />
+        <StatCard 
+          label={language === 'de' ? 'Gewonnen' : 'Won'} 
+          value={overallStats.total_won || 0} 
+          icon={<TrendingUp className="w-4 h-4" />}
+          color="green"
+        />
+        <StatCard 
+          label={language === 'de' ? 'Net Profit' : 'Net Profit'} 
+          value={overallStats.net_profit || 0} 
+          icon={(overallStats.net_profit || 0) >= 0 ? <TrendingUp className="w-4 h-4" /> : <TrendingDown className="w-4 h-4" />}
+          color={(overallStats.net_profit || 0) >= 0 ? 'green' : 'red'}
+          showSign
+        />
+      </div>
+
+      {/* Chart Stats Row */}
       <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
-        <StatCard label={language === 'de' ? 'Aktuell' : 'Current'} value={stats.current} />
-        <StatCard label="ATH" value={stats.all_time_high} color="green" icon={<ArrowUp className="w-3 h-3" />} />
-        <StatCard label="ATL" value={stats.all_time_low} color="red" icon={<ArrowDown className="w-3 h-3" />} />
-        <StatCard label={language === 'de' ? 'Spanne' : 'Range'} value={stats.range} color="purple" icon={<Activity className="w-3 h-3" />} />
+        <StatCard label={language === 'de' ? 'Aktuell' : 'Current'} value={chartStats.current || 0} />
+        <StatCard label="ATH" value={chartStats.all_time_high || 0} color="green" icon={<ArrowUp className="w-3 h-3" />} />
+        <StatCard label="ATL" value={chartStats.all_time_low || 0} color="red" icon={<ArrowDown className="w-3 h-3" />} />
+        <StatCard label={language === 'de' ? 'Spanne' : 'Range'} value={chartStats.range || 0} color="purple" icon={<Activity className="w-3 h-3" />} />
         <StatCard 
           label={language === 'de' ? 'Änderung' : 'Change'} 
-          value={`${trend ? '+' : ''}${stats.percent_change}%`} 
+          value={`${trend ? '+' : ''}${chartStats.percent_change || 0}%`} 
           color={trend ? 'green' : 'red'} 
           icon={trend ? <TrendingUp className="w-3 h-3" /> : <TrendingDown className="w-3 h-3" />}
           isPercent
@@ -131,14 +173,14 @@ const AccountValueChart = () => {
           </div>
         </CardHeader>
         <CardContent className="p-4">
-          {chartData.length === 0 ? (
-            <div className="h-[300px] flex items-center justify-center text-white/40">
+          {processedChartData.length === 0 ? (
+            <div className="h-[250px] flex items-center justify-center text-white/40">
               {language === 'de' ? 'Noch keine Daten. Spiele um Daten zu generieren!' : 'No data yet. Play to generate data!'}
             </div>
           ) : (
-            <div className="h-[300px]">
+            <div className="h-[250px]">
               <ResponsiveContainer width="100%" height="100%">
-                <AreaChart data={chartData} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
+                <AreaChart data={processedChartData} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
                   <defs>
                     <linearGradient id="gradPos" x1="0" y1="0" x2="0" y2="1">
                       <stop offset="5%" stopColor="#22c55e" stopOpacity={0.3}/>
@@ -169,14 +211,56 @@ const AccountValueChart = () => {
           )}
         </CardContent>
       </Card>
+
+      {/* Game Stats */}
+      <div className="grid md:grid-cols-2 gap-4">
+        {/* Slots */}
+        <Card className="bg-[#0A0A0C] border-white/5">
+          <CardHeader className="pb-2">
+            <CardTitle className="text-base text-white flex items-center gap-2">
+              <Gamepad2 className="w-4 h-4 text-primary" />
+              {slotStats?.slot_name || (language === 'de' ? 'Slot Machine' : 'Slot Machine')}
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-2 text-sm">
+            <StatRow label={language === 'de' ? 'Spins' : 'Spins'} value={slotStats?.total_bets || 0} />
+            <StatRow label={language === 'de' ? 'Gewettet' : 'Wagered'} value={`${(slotStats?.total_wagered || 0).toFixed(2)} G`} color="gold" />
+            <StatRow label={language === 'de' ? 'Gewonnen' : 'Won'} value={`${(slotStats?.total_won || 0).toFixed(2)} G`} color="green" />
+            <StatRow label={language === 'de' ? 'Gewinnrate' : 'Win Rate'} value={`${slotStats?.win_rate || 0}%`} color="primary" />
+          </CardContent>
+        </Card>
+
+        {/* Jackpot */}
+        <Card className="bg-[#0A0A0C] border-white/5 border-purple-500/20">
+          <CardHeader className="pb-2">
+            <CardTitle className="text-base text-white flex items-center gap-2">
+              <Trophy className="w-4 h-4 text-purple-400" />
+              Jackpot
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-2 text-sm">
+            <StatRow label={language === 'de' ? 'Teilnahmen' : 'Entries'} value={jackpotStats?.total_bets || 0} />
+            <StatRow label={language === 'de' ? 'Gewettet' : 'Wagered'} value={`${(jackpotStats?.total_wagered || 0).toFixed(2)} G`} color="gold" />
+            <StatRow label={language === 'de' ? 'Gewonnen' : 'Won'} value={`${(jackpotStats?.total_won || 0).toFixed(2)} G`} color="green" />
+            <StatRow label={language === 'de' ? 'Gewinnrate' : 'Win Rate'} value={`${jackpotStats?.win_rate || 0}%`} color="purple" />
+          </CardContent>
+        </Card>
+      </div>
     </div>
   );
 };
 
-const StatCard = ({ label, value, color, icon, isPercent }) => {
-  const colorClass = color === 'green' ? 'text-green-500' : color === 'red' ? 'text-red-500' : color === 'purple' ? 'text-purple-400' : 'text-white';
-  const borderClass = color === 'green' ? 'border-green-500/20' : color === 'red' ? 'border-red-500/20' : 'border-white/5';
+const StatCard = ({ label, value, color, icon, isPercent, isNumber, showSign }) => {
+  const colorClass = color === 'green' ? 'text-green-500' : color === 'red' ? 'text-red-500' : color === 'purple' ? 'text-purple-400' : color === 'gold' ? 'text-yellow-500' : 'text-white';
+  const borderClass = color === 'green' ? 'border-green-500/20' : color === 'red' ? 'border-red-500/20' : color === 'gold' ? 'border-yellow-500/20' : 'border-white/5';
   
+  let displayValue = value;
+  if (!isPercent && !isNumber) {
+    displayValue = `${showSign && value >= 0 ? '+' : ''}${typeof value === 'number' ? value.toFixed(2) : value} G`;
+  } else if (isNumber) {
+    displayValue = value;
+  }
+
   return (
     <Card className={`bg-[#0A0A0C] ${borderClass}`}>
       <CardContent className="p-3">
@@ -184,11 +268,19 @@ const StatCard = ({ label, value, color, icon, isPercent }) => {
           {icon && <span className={colorClass}>{icon}</span>}
           {label}
         </p>
-        <p className={`font-bold text-lg font-mono ${colorClass}`}>
-          {isPercent ? value : `${typeof value === 'number' ? value.toFixed(2) : value} G`}
-        </p>
+        <p className={`font-bold text-lg font-mono ${colorClass}`}>{displayValue}</p>
       </CardContent>
     </Card>
+  );
+};
+
+const StatRow = ({ label, value, color }) => {
+  const colorClass = color === 'green' ? 'text-green-500' : color === 'gold' ? 'text-yellow-500' : color === 'purple' ? 'text-purple-400' : color === 'primary' ? 'text-primary' : 'text-white';
+  return (
+    <div className="flex justify-between">
+      <span className="text-white/60">{label}</span>
+      <span className={`font-mono ${colorClass}`}>{value}</span>
+    </div>
   );
 };
 
