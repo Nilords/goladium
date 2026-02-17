@@ -58,7 +58,18 @@ const Profile = () => {
   const [historyTotalPages, setHistoryTotalPages] = useState(0);
   const [loading, setLoading] = useState(true);
   const [historyLoading, setHistoryLoading] = useState(false);
-  const [activeTab, setActiveTab] = useState('history');
+  
+  // Check URL params for tab and view selection
+  const urlTab = searchParams.get('tab');
+  const initialTab = urlTab === 'analytics' ? 'analytics' : 'history';
+  const [activeTab, setActiveTab] = useState(initialTab);
+
+  // Update active tab when URL changes
+  useEffect(() => {
+    if (urlTab === 'analytics') {
+      setActiveTab('analytics');
+    }
+  }, [urlTab]);
 
   useEffect(() => {
     // Refresh user data to get latest XP/level
