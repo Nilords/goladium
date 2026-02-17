@@ -5903,15 +5903,36 @@ async def claim_game_pass_reward(level: int, request: Request):
     
     # Grant the reward (item)
     if reward["type"] == "item":
-        # Add item to inventory
+        # Get item definition for full details
+        item_def = await db.items.find_one({"item_id": reward["item_id"]}, {"_id": 0})
+        item_value = item_def.get("base_value", 0) if item_def else 0
+        item_rarity = item_def.get("rarity", "common") if item_def else "common"
+        item_flavor = item_def.get("flavor_text", "") if item_def else ""
+        
+        # Add item to inventory with full details
         inventory_doc = {
             "inventory_id": f"inv_{uuid.uuid4().hex[:12]}",
             "user_id": user["user_id"],
             "item_id": reward["item_id"],
+            "item_name": reward["name"],
+            "item_rarity": item_rarity,
+            "item_flavor_text": item_flavor,
+            "purchase_price": item_value,  # Use base_value as purchase_price for sell calculation
             "acquired_at": datetime.now(timezone.utc).isoformat(),
+            "acquired_from": "gamepass",
             "source": f"game_pass_level_{level}"
         }
         await db.user_inventory.insert_one(inventory_doc)
+        
+        # Record inventory value event
+        await record_inventory_value_event(
+            user_id=user["user_id"],
+            event_type="gamepass_reward",
+            delta_value=item_value,
+            related_item_id=reward["item_id"],
+            related_item_name=reward["name"],
+            details={"level": level, "tier": reward_tier, "rarity": item_rarity}
+        )
     
     # Mark as claimed
     await db.user_game_pass.update_one(
