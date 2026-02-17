@@ -3865,35 +3865,47 @@ async def get_user_inventory(request: Request):
 # ============== CHEST OPENING SYSTEM ==============
 # Simple chest system - one chest per GamePass level up
 
-# Configurable item drop pool - add/remove items here!
-ITEM_DROP_POOL = [
-    {"item_id": "placeholder_relic", "name": "Placeholder Relic", "rarity": "uncommon"},
-    {"item_id": "gamblers_instinct", "name": "Gambler's Instinct", "rarity": "rare"},
-]
-
 # G Drop rates and ranges
 CHEST_G_DROPS = {
     "normal": {"min": 5, "max": 15, "chance": 80, "label": "Normal", "color": "#9ca3af"},
     "good": {"min": 16, "max": 40, "chance": 15, "label": "Gut", "color": "#22c55e"},
     "rare": {"min": 41, "max": 100, "chance": 4, "label": "Selten", "color": "#a855f7"},
 }
-ITEM_DROP_CHANCE = 1  # 1% chance for item
+ITEM_DROP_CHANCE = 1  # 1% chance for item from shop
 
 
-def generate_simple_chest_reward() -> dict:
-    """Generate reward from a GamePass chest"""
+async def get_random_shop_item():
+    """Get a random item from the shop for 1% chest drop"""
+    # Get all active shop listings
+    now = datetime.now(timezone.utc)
+    shop_items = await db.shop_listings.find({
+        "available_until": {"$gt": now.isoformat()},
+        "stock": {"$gt": 0}
+    }).to_list(100)
+    
+    if not shop_items:
+        # Fallback to items collection if no shop listings
+        items = await db.items.find({
+            "category": {"$ne": "chest"}  # Exclude chests
+        }).to_list(100)
+        if items:
+            import random
+            return random.choice(items)
+        return None
+    
+    import random
+    return random.choice(shop_items)
+
+
+def generate_simple_chest_reward_sync() -> dict:
+    """Generate G reward from a chest (sync version for non-item drops)"""
     import random
     
     roll = random.randint(1, 100)
     
-    # 1% item drop
-    if roll <= ITEM_DROP_CHANCE and ITEM_DROP_POOL:
-        selected_item = random.choice(ITEM_DROP_POOL)
-        return {
-            "type": "item",
-            "item_id": selected_item["item_id"],
-            "tier": "legendary"  # Item drops are always legendary tier
-        }
+    # 1% item drop - handled separately in async function
+    if roll <= ITEM_DROP_CHANCE:
+        return {"type": "item_roll"}  # Signal to fetch shop item
     
     # G drops (remaining 99%)
     cumulative = ITEM_DROP_CHANCE
@@ -3910,7 +3922,7 @@ def generate_simple_chest_reward() -> dict:
                 "tier_color": config["color"]
             }
     
-    # Fallback to normal (should never reach here)
+    # Fallback to normal
     g_amount = round(random.uniform(5, 15), 2)
     return {
         "type": "currency",
@@ -3925,6 +3937,13 @@ def generate_simple_chest_reward() -> dict:
 @api_router.get("/chest/payout-table")
 async def get_chest_payout_table():
     """Get the chest payout table for display"""
+    # Count shop items for display
+    now = datetime.now(timezone.utc)
+    shop_count = await db.shop_listings.count_documents({
+        "available_until": {"$gt": now.isoformat()},
+        "stock": {"$gt": 0}
+    })
+    
     return {
         "g_drops": [
             {
@@ -3952,10 +3971,10 @@ async def get_chest_payout_table():
         "item_drop": {
             "chance": ITEM_DROP_CHANCE,
             "label": "Item Drop",
-            "description": "Mysteriöses Item aus der Drop-Liste!",
-            "color": "#eab308"
-        },
-        "total_items_in_pool": len(ITEM_DROP_POOL)
+            "description": "Zufälliges Shop-Item!",
+            "color": "#eab308",
+            "pool_size": shop_count
+        }
     }
 
 
