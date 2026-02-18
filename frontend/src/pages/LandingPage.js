@@ -9,6 +9,8 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '../components/ui/tabs'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../components/ui/card';
 import { toast } from 'sonner';
 import { Gamepad2, Sparkles, Trophy, Gift, Eye, EyeOff, MessageCircle } from 'lucide-react';
+import Turnstile from '../components/Turnstile';
+import { useCallback } from 'react';
 
 const LandingPage = () => {
   const navigate = useNavigate();
@@ -22,22 +24,46 @@ const LandingPage = () => {
   // Form state
   const [loginData, setLoginData] = useState({ username: '', password: '' });
   const [registerData, setRegisterData] = useState({ password: '', confirmPassword: '', username: '' });
+  
+  // Turnstile state
+  const [turnstileToken, setTurnstileToken] = useState(null);
+  const handleTurnstileVerify = React.useCallback((token) => {
+    setTurnstileToken(token);
+  }, []);
+
+  const handleTurnstileError = React.useCallback((code) => {
+    console.error('[Turnstile] Error:', code);
+  }, []);
+
+  const handleTurnstileExpire = React.useCallback(() => {
+  }, []);
 
   useEffect(() => {
     if (user) {
       navigate('/dashboard', { replace: true });
     }
   }, [user, navigate]);
-
+  
+  // Reset turnstile when switching tabs
   const handleLogin = async (e) => {
     e.preventDefault();
+    
+    // Check Turnstile
+    if (!turnstileToken) {
+      toast.error(language === 'de' ? 'Bitte bestätige, dass du kein Roboter bist' : 'Please verify you are not a robot');
+      return;
+    }
+    
+    console.log('[Login] Submitting with token:', turnstileToken?.substring(0, 20) + '...');
+    
     setLoading(true);
     try {
-      await login(loginData.username, loginData.password);
+      await login(loginData.username, loginData.password, turnstileToken);
       toast.success(language === 'de' ? 'Erfolgreich angemeldet!' : 'Successfully logged in!');
       navigate('/dashboard');
     } catch (error) {
       toast.error(error.message);
+      // Reset Turnstile on error
     } finally {
       setLoading(false);
     }
@@ -53,13 +79,24 @@ const LandingPage = () => {
       toast.error(language === 'de' ? 'Passwörter stimmen nicht überein' : 'Passwords do not match');
       return;
     }
+    
+    // Check Turnstile
+    if (!turnstileToken) {
+      toast.error(language === 'de' ? 'Bitte bestätige, dass du kein Roboter bist' : 'Please verify you are not a robot');
+      return;
+    }
+    
+    console.log('[Register] Submitting with token:', turnstileToken?.substring(0, 20) + '...');
+    
     setLoading(true);
     try {
-      await register(registerData.password, registerData.username);
+      await register(registerData.username, registerData.password, turnstileToken);
       toast.success(language === 'de' ? 'Konto erstellt!' : 'Account created!');
       navigate('/dashboard');
     } catch (error) {
       toast.error(error.message);
+      // Reset Turnstile on error
+      setTurnstileToken(null);
     } finally {
       setLoading(false);
     }
@@ -274,10 +311,20 @@ const LandingPage = () => {
                           </button>
                         </div>
                       </div>
+                      
+                      {/* Cloudflare Turnstile */}
+                      <div className="flex justify-center py-2">
+                        <Turnstile
+                          onVerify={handleTurnstileVerify}
+                          onError={handleTurnstileError}
+                          onExpire={handleTurnstileExpire}
+                        />
+                      </div>
+                      
                       <Button
                         type="submit"
-                        disabled={loading}
-                        className="w-full h-12 bg-primary hover:bg-primary/90 text-black font-bold uppercase tracking-wider"
+                        disabled={loading || !turnstileToken}
+                        className="w-full h-12 bg-primary hover:bg-primary/90 text-black font-bold uppercase tracking-wider disabled:opacity-50"
                         data-testid="login-submit-btn"
                       >
                         {loading ? (
@@ -369,10 +416,20 @@ const LandingPage = () => {
                           </p>
                         )}
                       </div>
+              
+                {/* Cloudflare Turnstile */}
+                      <div className="flex justify-center py-2">
+                        <Turnstile
+                          onVerify={handleTurnstileVerify}
+                          onError={handleTurnstileError}
+                          onExpire={handleTurnstileExpire}
+                        />
+                      </div>
+
                       <Button
                         type="submit"
-                        disabled={loading || (registerData.confirmPassword && registerData.password !== registerData.confirmPassword)}
-                        className="w-full h-12 bg-primary hover:bg-primary/90 text-black font-bold uppercase tracking-wider"
+                        disabled={loading || !turnstileToken || (registerData.confirmPassword && registerData.password !== registerData.confirmPassword)}
+                        className="w-full h-12 bg-primary hover:bg-primary/90 text-black font-bold uppercase tracking-wider disabled:opacity-50"
                         data-testid="register-submit-btn"
                       >
                         {loading ? (
@@ -383,7 +440,9 @@ const LandingPage = () => {
                       </Button>
                     </form>
                   </TabsContent>
-                </Tabs>
+              </Tabs>
+
+
               </CardContent>
             </Card>
           </div>

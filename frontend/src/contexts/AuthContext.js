@@ -110,14 +110,19 @@ export const AuthProvider = ({ children }) => {
     setUser(null);
   };
 
-  const login = async (username, password) => {
+  const login = async (username, password, turnstileToken) => {
+
     // Clear any stale cached data from previous sessions
     sessionStorage.removeItem('goladium_user');
     
     const response = await fetch(`/api/auth/login`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ username, password })
+      body: JSON.stringify({
+        password,
+        username,
+        turnstile_token: turnstileToken
+      })
     });
 
     const data = await response.json();
@@ -133,14 +138,18 @@ export const AuthProvider = ({ children }) => {
     return data.user;
   };
 
-  const register = async (password, username) => {
+    const register = async (username, password, turnstileToken) => {
     // Clear any stale cached data from previous sessions
     sessionStorage.removeItem('goladium_user');
     
     const response = await fetch(`/api/auth/register`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ password, username })
+      body: JSON.stringify({
+        username,
+        password,
+        turnstile_token: turnstileToken
+      })
     });
 
     const data = await response.json();

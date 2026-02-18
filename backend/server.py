@@ -14,6 +14,7 @@ import random
 import hashlib
 import secrets
 import httpx
+import httpx
 from passlib.context import CryptContext
 import jwt
 import asyncio
@@ -44,6 +45,63 @@ pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
 # ALPHA REGISTRATION LOCK
 ALPHA_REGISTRATION_OPEN = True
+
+# Cloudflare Turnstile Configuration
+TURNSTILE_SECRET_KEY = os.environ.get('TURNSTILE_SECRET_KEY', '')
+logging.info(f"Turnstile Secret Key loaded: {'YES' if TURNSTILE_SECRET_KEY else 'NO'}")
+
+async def verify_turnstile(token: str, ip: str = None) -> dict:
+    """
+    Verify Cloudflare Turnstile token
+    Returns dict with 'success' and 'error' keys
+    """
+    # Debug: Log what we're working with
+    logging.info(f"[Turnstile] Verifying token: {token[:20] if token else 'NONE'}...")
+    logging.info(f"[Turnstile] Secret key configured: {'YES' if TURNSTILE_SECRET_KEY else 'NO'}")
+    logging.info(f"[Turnstile] Client IP: {ip}")
+    
+    if not TURNSTILE_SECRET_KEY:
+        logging.warning("[Turnstile] No secret key configured - SKIPPING verification (dev mode)")
+        return {"success": True, "error": None}
+    
+    if not token:
+        logging.error("[Turnstile] No token provided!")
+        return {"success": False, "error": "No captcha token provided"}
+    
+    try:
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            payload = {
+                "secret": TURNSTILE_SECRET_KEY,
+                "response": token,
+            }
+            # Only add IP if provided
+            if ip:
+                payload["remoteip"] = ip
+            
+            logging.info(f"[Turnstile] Sending verification request to Cloudflare...")
+            
+            response = await client.post(
+                "https://challenges.cloudflare.com/turnstile/v0/siteverify",
+                data=payload
+            )
+            
+            result = response.json()
+            logging.info(f"[Turnstile] Cloudflare response: {result}")
+            
+            if result.get("success"):
+                logging.info("[Turnstile] Verification SUCCESS")
+                return {"success": True, "error": None}
+            else:
+                error_codes = result.get("error-codes", [])
+                logging.error(f"[Turnstile] Verification FAILED: {error_codes}")
+                return {"success": False, "error": f"Verification failed: {error_codes}"}
+                
+    except httpx.TimeoutException:
+        logging.error("[Turnstile] Request timeout!")
+        return {"success": False, "error": "Verification timeout"}
+    except Exception as e:
+        logging.error(f"[Turnstile] Exception: {e}")
+        return {"success": False, "error": str(e)}
 
 # Create the main app
 app = FastAPI(
@@ -613,10 +671,12 @@ class UserCreate(BaseModel):
     email: Optional[str] = None  # Optional - auto-generated from username if not provided
     password: str
     username: str
+    turnstile_token: Optional[str] = None  # Cloudflare Turnstile token
 
 class UserLogin(BaseModel):
     username: str
     password: str
+    turnstile_token: Optional[str] = None  # Cloudflare Turnstile token
 
 class UserResponse(BaseModel):
     model_config = ConfigDict(extra="ignore")
@@ -2147,10 +2207,27 @@ async def send_discord_webhook(event_type: str, data: dict):
 # ============== AUTH ENDPOINTS ==============
 
 @api_router.post("/auth/register", response_model=TokenResponse)
-async def register(user_data: UserCreate):
+async def register(user_data: UserCreate, request: Request):
     # 🔒 ALPHA LOCK
     if not ALPHA_REGISTRATION_OPEN:
         raise HTTPException(status_code=403, detail="Registration temporarily disabled during Alpha testing.")
+
+    # 🛡️ Cloudflare Turnstile verification
+    logging.info(f"[Register] Received turnstile_token: {user_data.turnstile_token[:20] if user_data.turnstile_token else 'NONE'}...")
+    
+    if TURNSTILE_SECRET_KEY:
+        client_ip = request.client.host if request.client else None
+        # Get real IP from X-Forwarded-For header if behind proxy
+        forwarded_for = request.headers.get("x-forwarded-for")
+        if forwarded_for:
+            client_ip = forwarded_for.split(",")[0].strip()
+        
+        verification = await verify_turnstile(user_data.turnstile_token, client_ip)
+        if not verification["success"]:
+            logging.error(f"[Register] Turnstile verification failed: {verification['error']}")
+            raise HTTPException(status_code=400, detail=f"CAPTCHA verification failed: {verification['error']}")
+    else:
+        logging.warning("[Register] Turnstile verification SKIPPED - no secret key configured")
 
     # Auto-generate email from username if not provided
     email = user_data.email if user_data.email else f"{user_data.username.lower()}@goladium.local"
@@ -2229,7 +2306,24 @@ async def register(user_data: UserCreate):
     return TokenResponse(access_token=token, user=user_response)
 
 @api_router.post("/auth/login", response_model=TokenResponse)
-async def login(credentials: UserLogin):
+async def login(credentials: UserLogin, request: Request):
+    # 🛡️ Cloudflare Turnstile verification
+    logging.info(f"[Login] Received turnstile_token: {credentials.turnstile_token[:20] if credentials.turnstile_token else 'NONE'}...")
+    
+    if TURNSTILE_SECRET_KEY:
+        client_ip = request.client.host if request.client else None
+        # Get real IP from X-Forwarded-For header if behind proxy
+        forwarded_for = request.headers.get("x-forwarded-for")
+        if forwarded_for:
+            client_ip = forwarded_for.split(",")[0].strip()
+        
+        verification = await verify_turnstile(credentials.turnstile_token, client_ip)
+        if not verification["success"]:
+            logging.error(f"[Login] Turnstile verification failed: {verification['error']}")
+            raise HTTPException(status_code=400, detail=f"CAPTCHA verification failed: {verification['error']}")
+    else:
+        logging.warning("[Login] Turnstile verification SKIPPED - no secret key configured")
+
     user = await db.users.find_one({"username": credentials.username}, {"_id": 0})
     if not user:
         raise HTTPException(status_code=401, detail="Invalid username or password")
@@ -6987,6 +7081,43 @@ class AdminBalanceRequest(BaseModel):
     currency: str  # "g" or "a"
     amount: float
     action: str  # "set" or "add"
+
+class AdminGaladiumPassRequest(BaseModel):
+    username: str
+    activate: bool  # True = activate, False = deactivate
+
+@api_router.post("/admin/galadium-pass")
+async def admin_toggle_galadium_pass(data: AdminGaladiumPassRequest, request: Request):
+    """Activate or deactivate Galadium Pass for a user (Discord bot endpoint)"""
+    if not verify_admin_key(request):
+        raise HTTPException(status_code=401, detail="Invalid admin key")
+    
+    # Case-insensitive username search
+    user = await db.users.find_one(
+        {"username": {"$regex": f"^{data.username}$", "$options": "i"}},
+        {"_id": 0}
+    )
+    if not user:
+        raise HTTPException(status_code=404, detail=f"User '{data.username}' not found")
+    
+    actual_username = user["username"]
+    now = datetime.now(timezone.utc)
+    
+    # Update galadium pass status
+    result = await db.users.update_one(
+        {"user_id": user["user_id"]},
+        {"$set": {
+            "galadium_pass_active": data.activate,
+            "galadium_pass_updated_at": now.isoformat()
+        }}
+    )
+    
+    return {
+        "success": True,
+        "username": actual_username,
+        "galadium_pass_active": data.activate,
+        "action": "activated" if data.activate else "deactivated"
+    }
 
 @api_router.post("/admin/mute")
 async def admin_mute_user(data: AdminMuteRequest, request: Request):
