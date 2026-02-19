@@ -21,6 +21,7 @@ import Settings from './pages/Settings';
 import Trading from './pages/Trading';
 import GamePass from './pages/GamePass';
 import AuthCallback from './components/AuthCallback';
+import PrivacyPolicy from "./pages/PrivacyPolicy";
 
 // Protected Route wrapper
 const ProtectedRoute = ({ children }) => {
@@ -174,7 +175,13 @@ const AppRouter = () => {
           </ProtectedRoute>
         }
       />
-      <Route path="*" element={<Navigate to="/" replace />} />
+      <Route
+        path="/privacy"
+        element={
+            <PrivacyPolicy />
+        }
+       />
+     <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
   );
 };

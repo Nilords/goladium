@@ -53,7 +53,7 @@ const Shop = () => {
     if (!user) return;
     
     if (user.balance < item.price) {
-      toast.error(language === 'de' ? 'Nicht genügend Guthaben!' : 'Insufficient balance!');
+      toast.error(language === 'de' ? 'Spar ein wenig mehr :)' : 'To Poor!');
       return;
     }
     
@@ -127,8 +127,8 @@ const Shop = () => {
           </h1>
           <p className="text-white/50 max-w-lg mx-auto">
             {language === 'de' 
-              ? 'Sammle einzigartige Gegenstände. Gegenstände im Shop sind nicht handelbar.' 
-              : 'Collect unique items. Items in the shop are not tradeable.'}
+              ? 'Sammle einzigartige Gegenstände.' 
+              : 'Collect unique items.'}
           </p>
         </div>
 
@@ -142,8 +142,8 @@ const Shop = () => {
               </p>
               <p className="text-white/60">
                 {language === 'de' 
-                  ? 'Diese Gegenstände sind Sammlerstücke, die nach Ablauf des Shop-Zeitraums "out of print" werden. Sie überstehen Wirtschafts-Resets und repräsentieren dauerhaften Wert.'
-                  : 'These items are collectibles that become "out of print" after the shop period ends. They persist across economy resets and represent lasting value.'}
+                  ? 'Die Sammelobjekte werden nach Ablauf des Shop-Zeitraums nicht mehr erhältlich sein.'
+                  : 'The items become unobtainable after the shop period ends.'}
               </p>
             </div>
           </div>
@@ -159,7 +159,7 @@ const Shop = () => {
             <CardContent className="flex flex-col items-center justify-center py-16">
               <Package className="w-16 h-16 text-white/20 mb-4" />
               <p className="text-white/50 text-lg">
-                {language === 'de' ? 'Der Shop ist derzeit leer' : 'The shop is currently empty'}
+                {language === 'de' ? 'Zur Zeit ist hier nichts zu holen.' : 'The shop is currently empty.'}
               </p>
               <p className="text-white/30 text-sm mt-1">
                 {language === 'de' ? 'Schau später wieder vorbei!' : 'Check back later!'}
@@ -269,8 +269,8 @@ const Shop = () => {
         {shopItems.some(item => item.stock_sold > 0) && (
           <div className="mt-8 text-center text-white/40 text-sm">
             {language === 'de' 
-              ? 'Verkaufte Einheiten werden unter jedem Gegenstand angezeigt'
-              : 'Units sold are shown under each item'}
+              ? '✨ Du hast kreative Ideen für neue Items? Dann komm in unseren Discord und teile deine Vorschläge mit uns! Wir freuen uns über jede Inspiration aus der Community – vielleicht wird deine Idee schon bald Teil des Spiels! 🚀'
+              : '✨ Got creative ideas for new items? Join our Discord and share your suggestions with us! We love hearing ideas from our community — your concept might become part of the game soon! 🚀'}
           </div>
         )}
       </main>

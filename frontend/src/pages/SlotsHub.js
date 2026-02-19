@@ -113,15 +113,15 @@ const SlotsHub = () => {
               </div>
               <div>
                 <h3 className="text-lg font-bold text-white mb-2">
-                  {language === 'de' ? 'Über unsere Spielautomaten' : 'About Our Slots'}
+                  {language === 'de' ? '' : ''}
                 </h3>
                 <p className="text-white/50 text-sm">
                   {language === 'de' 
-                    ? 'Alle Spielautomaten verwenden server-seitige RNG für faire Ergebnisse. Die RTP (Return to Player) liegt bei 95.5%. Gewinne erfordern 5 übereinstimmende Symbole auf einer aktiven Gewinnlinie.'
-                    : 'All slot machines use server-side RNG for fair results. RTP (Return to Player) is 95.5%. Wins require 5 matching symbols on an active payline.'}
+                    ? ''
+                    : ''}
                 </p>
                 <p className="text-red-400/80 text-xs mt-2">
-                  {t('disclaimer')}
+                  {t('')}
                 </p>
               </div>
             </div>

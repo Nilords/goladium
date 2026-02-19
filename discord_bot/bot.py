@@ -20,6 +20,8 @@ intents = discord.Intents.default()
 intents.members = True
 intents.message_content = True
 
+print("ADMIN_API_KEY:", ADMIN_API_KEY)
+
 bot = commands.Bot(command_prefix="!", intents=intents)
 
 def is_admin(interaction: discord.Interaction) -> bool:
@@ -30,14 +32,24 @@ async def api_request(method: str, endpoint: str, data: dict = None) -> dict:
     """Make authenticated request to backend API"""
     url = f"{API_BASE_URL}/api{endpoint}"
     headers = {"X-Admin-Key": ADMIN_API_KEY, "Content-Type": "application/json"}
-    
+
     async with aiohttp.ClientSession() as session:
         if method == "GET":
             async with session.get(url, headers=headers) as resp:
-                return {"status": resp.status, "data": await resp.json()}
+                result = {"status": resp.status, "data": await resp.json()}
         elif method == "POST":
             async with session.post(url, headers=headers, json=data) as resp:
-                return {"status": resp.status, "data": await resp.json()}
+                result = {"status": resp.status, "data": await resp.json()}
+        else:
+            raise ValueError("Unsupported HTTP method")
+
+    # 🔥 GLOBAL ERROR HANDLING
+    if result["status"] >= 400:
+        raise app_commands.AppCommandError(
+            result["data"].get("detail", f"API Error {result['status']}")
+        )
+
+    return result
 
 def parse_duration(duration_str: str) -> int:
     """Parse duration string like '1h', '30m', '7d' to seconds. Returns -1 for permanent."""
@@ -122,10 +134,14 @@ async def mute(interaction: discord.Interaction, username: str, duration: str):
         await interaction.followup.send("Invalid duration. Use format: 1h, 30m, 7d, perm")
         return
     
-    result = await api_request("POST", "/admin/mute", {
-        "username": username,
-        "duration_seconds": seconds
-    })
+    try:
+        result = await api_request("POST", "/admin/mute", {
+            "username": username,
+            "duration_seconds": seconds
+        })
+    except app_commands.AppCommandError as e:
+        await interaction.followup.send(f"❌ {e}")
+        return
     
     if result["status"] == 200:
         data = result["data"]
@@ -407,6 +423,72 @@ async def userinfo(interaction: discord.Interaction, username: str):
 @app_commands.guilds(discord.Object(id=GUILD_ID)) if GUILD_ID else app_commands.guilds()
 async def ping(interaction: discord.Interaction):
     await interaction.response.send_message(f"Pong! Latency: {round(bot.latency * 1000)}ms")
+
+@bot.event
+async def on_app_command_completion(interaction: discord.Interaction, command: app_commands.Command):
+
+    guild = interaction.guild
+    user = interaction.user
+    channel = interaction.channel
+
+    log_channel = discord.utils.get(guild.text_channels, name="bot-logs")
+
+    if not log_channel:
+        return
+
+    embed = discord.Embed(
+        title="📌 Command Used",
+        color=0x2b2d31
+    )
+
+    embed.add_field(name="User", value=f"{user} ({user.id})", inline=False)
+    embed.add_field(name="Command", value=f"/{command.name}", inline=True)
+    embed.add_field(name="Channel", value=f"#{channel.name}", inline=True)
+    embed.add_field(name="Server", value=f"{guild.name}", inline=False)
+    embed.add_field(name="Time (UTC)", value=str(discord.utils.utcnow()), inline=False)
+
+    # Parameters
+    if interaction.data and "options" in interaction.data:
+        params = "\n".join(
+            f"{opt['name']}: {opt.get('value')}"
+            for opt in interaction.data["options"]
+        )
+        embed.add_field(name="Parameters", value=params, inline=False)
+
+    await log_channel.send(embed=embed)
+
+@bot.event
+async def on_app_command_error(interaction: discord.Interaction, error):
+
+    try:
+        if interaction.response.is_done():
+            await interaction.followup.send(
+                f"❌ Error: {error}",
+                ephemeral=True
+            )
+        else:
+            await interaction.response.send_message(
+                f"❌ Error: {error}",
+                ephemeral=True
+            )
+    except:
+        pass  # verhindert doppeltes senden
+
+    # Logging
+    guild = interaction.guild
+    log_channel = discord.utils.get(guild.text_channels, name="bot-logs")
+
+    if log_channel:
+        embed = discord.Embed(
+            title=f"🚨 /{interaction.command.name}",
+            color=0xff0000
+        )
+        embed.add_field(name="Error", value=str(error), inline=False)
+        embed.add_field(name="User", value=f"{interaction.user} ({interaction.user.id})", inline=False)
+        embed.add_field(name="Channel", value=f"#{interaction.channel.name}", inline=True)
+        embed.add_field(name="Server", value=guild.name, inline=True)
+
+        await log_channel.send(embed=embed)
 
 # Run bot
 if __name__ == "__main__":

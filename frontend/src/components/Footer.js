@@ -1,6 +1,7 @@
 import React from 'react';
 import { useLanguage } from '../contexts/LanguageContext';
 import { AlertTriangle } from 'lucide-react';
+import { Link } from "react-router-dom";
 
 const Footer = () => {
   const { language } = useLanguage();
@@ -21,10 +22,19 @@ const Footer = () => {
             </span>
           </div>
           
-          {/* Center - Brand */}
-          <div className="text-slate-500 text-sm">
-            © {new Date().getFullYear()} Goladium
-          </div>
+          {/* Center - Brand + Privacy */}
+           <div className="flex items-center gap-4 text-slate-500 text-sm">
+             <span>
+               © {new Date().getFullYear()} Goladium
+             </span>
+             <Link
+               to="/privacy"
+               className="px-3 py-1 rounded-md border border-teal-500/40 text-teal-400 hover:bg-teal-500/10 transition duration-200 font-medium"
+             >
+               {language === "de" ? "Datenschutz" : "Privacy Policy"}
+             </Link>
+           </div>
+
           
           {/* Right - Simulation Notice */}
           <div className="flex items-center gap-2 text-slate-400 text-sm">

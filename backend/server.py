@@ -4,6 +4,7 @@ from dotenv import load_dotenv
 from starlette.middleware.cors import CORSMiddleware
 from motor.motor_asyncio import AsyncIOMotorClient
 import os
+import aiohttp
 import logging
 from pathlib import Path
 from pydantic import BaseModel, Field, ConfigDict, EmailStr
@@ -18,6 +19,10 @@ import httpx
 from passlib.context import CryptContext
 import jwt
 import asyncio
+from slowapi import Limiter
+from slowapi.util import get_remote_address
+from slowapi.errors import RateLimitExceeded
+from fastapi.responses import JSONResponse
 
 # ================= HOTFIX =================
 # Disable broken quest definitions temporarily
@@ -109,6 +114,16 @@ app = FastAPI(
     description="Demo Casino Simulation Platform",
     version="0.1.0",
     root_path="/api"
+)
+
+limiter = Limiter(key_func=get_remote_address)
+app.state.limiter = limiter
+app.add_exception_handler(
+    RateLimitExceeded,
+    lambda request, exc: JSONResponse(
+        status_code=429,
+        content={"detail": "Too many requests"}
+    ),
 )
 
 # Create router with /api prefix
@@ -274,6 +289,29 @@ async def get_moderation_counters(user_id: str) -> dict:
     }
 
 
+async def send_discord_auto_mute_log(username: str, violation_type: str, duration_seconds: int, is_permanent: bool):
+    webhook = os.getenv("DISCORD_LOG_WEBHOOK")
+    if not webhook:
+        return
+
+    color = 0xff0000 if is_permanent else 0xffaa00
+    duration_text = "PERMANENT" if is_permanent else f"{duration_seconds} seconds"
+
+    embed = {
+        "title": "🤖 AUTO MUTE",
+        "color": color,
+        "fields": [
+            {"name": "User", "value": username, "inline": False},
+            {"name": "Reason", "value": violation_type, "inline": True},
+            {"name": "Duration", "value": duration_text, "inline": True},
+            {"name": "Time (UTC)", "value": datetime.now(timezone.utc).isoformat(), "inline": False}
+        ]
+    }
+
+    async with aiohttp.ClientSession() as session:
+        await session.post(webhook, json={"embeds": [embed]})
+
+
 async def apply_chat_mute(user_id: str, username: str, duration_seconds: int, reason: str, violation_type: str):
     """Apply a chat mute to a user and log it"""
     now = datetime.now(timezone.utc)
@@ -310,6 +348,8 @@ async def apply_chat_mute(user_id: str, username: str, duration_seconds: int, re
     }
     await db.moderation_logs.insert_one(log_entry)
     
+    await send_discord_auto_mute_log(username, violation_type, duration_seconds, is_permanent)
+
     return mute_until, is_permanent
 
 
@@ -2207,7 +2247,24 @@ async def send_discord_webhook(event_type: str, data: dict):
 # ============== AUTH ENDPOINTS ==============
 
 @api_router.post("/auth/register", response_model=TokenResponse)
-async def register(user_data: UserCreate, request: Request):
+@limiter.limit("1/minute")
+@limiter.limit("3/hour")
+@limiter.limit("5/day")
+async def register(request: Request, user_data: UserCreate):
+    client_ip = request.client.host if request.client else None
+    forwarded_for = request.headers.get("x-forwarded-for")
+
+    if forwarded_for:
+        client_ip = forwarded_for.split(",")[0].strip()
+    existing_accounts = await db.users.count_documents({
+        "register_ip": client_ip
+    })
+
+    if existing_accounts >= 2:
+        raise HTTPException(
+            status_code=403,
+            detail="Maximum accounts reached for this IP"
+        )
     # 🔒 ALPHA LOCK
     if not ALPHA_REGISTRATION_OPEN:
         raise HTTPException(status_code=403, detail="Registration temporarily disabled during Alpha testing.")
@@ -2216,12 +2273,6 @@ async def register(user_data: UserCreate, request: Request):
     logging.info(f"[Register] Received turnstile_token: {user_data.turnstile_token[:20] if user_data.turnstile_token else 'NONE'}...")
     
     if TURNSTILE_SECRET_KEY:
-        client_ip = request.client.host if request.client else None
-        # Get real IP from X-Forwarded-For header if behind proxy
-        forwarded_for = request.headers.get("x-forwarded-for")
-        if forwarded_for:
-            client_ip = forwarded_for.split(",")[0].strip()
-        
         verification = await verify_turnstile(user_data.turnstile_token, client_ip)
         if not verification["success"]:
             logging.error(f"[Register] Turnstile verification failed: {verification['error']}")
@@ -2254,6 +2305,7 @@ async def register(user_data: UserCreate, request: Request):
         "email": email,
         "username": user_data.username,
         "password_hash": hashed_password,
+        "register_ip": client_ip,
         "balance": 10.0,
         "balance_a": 0.0,  # Prestige currency
         "level": 1,
@@ -2306,6 +2358,7 @@ async def register(user_data: UserCreate, request: Request):
     return TokenResponse(access_token=token, user=user_response)
 
 @api_router.post("/auth/login", response_model=TokenResponse)
+@limiter.limit("5/minute")
 async def login(credentials: UserLogin, request: Request):
     # 🛡️ Cloudflare Turnstile verification
     logging.info(f"[Login] Received turnstile_token: {credentials.turnstile_token[:20] if credentials.turnstile_token else 'NONE'}...")

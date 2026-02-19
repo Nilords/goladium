@@ -117,11 +117,6 @@ const LandingPage = () => {
       <div className="absolute top-0 left-1/4 w-96 h-96 bg-primary/10 rounded-full blur-[128px]" />
       <div className="absolute bottom-0 right-1/4 w-96 h-96 bg-secondary/10 rounded-full blur-[128px]" />
 
-      {/* Disclaimer */}
-      <div className="disclaimer-bar relative z-10">
-        {t('disclaimer')}
-      </div>
-
       {/* Language Toggle & Discord - Below 18+ banner */}
       <div className="absolute top-28 right-6 z-50 flex items-center gap-3">
         <a
@@ -146,7 +141,7 @@ const LandingPage = () => {
         </Button>
       </div>
 
-      {/* Prominent 18+ Age Restriction Banner - Visible without scrolling */}
+      {/* Prominent 18+ Age Restriction Banner - Visible without scrolling w*/}
       <div className="relative z-20 w-full bg-amber-500/10 border-b border-amber-500/30 py-3">
         <div className="container mx-auto px-4 flex items-center justify-center gap-4">
           <div className="flex items-center justify-center w-12 h-12 rounded-full bg-amber-500 text-black font-bold text-lg shadow-lg shadow-amber-500/30">
@@ -417,55 +412,39 @@ const LandingPage = () => {
                         )}
                       </div>
               
-                {/* Cloudflare Turnstile */}
-                      <div className="flex justify-center py-2">
-                        <Turnstile
-                          onVerify={handleTurnstileVerify}
-                          onError={handleTurnstileError}
-                          onExpire={handleTurnstileExpire}
-                        />
-                      </div>
+            {/* Cloudflare Turnstile */}
+            <div className="flex justify-center py-2">
+              <Turnstile
+                onVerify={handleTurnstileVerify}
+                onError={handleTurnstileError}
+                onExpire={handleTurnstileExpire}
+              />
+            </div>
 
-                      <Button
-                        type="submit"
-                        disabled={loading || !turnstileToken || (registerData.confirmPassword && registerData.password !== registerData.confirmPassword)}
-                        className="w-full h-12 bg-primary hover:bg-primary/90 text-black font-bold uppercase tracking-wider disabled:opacity-50"
-                        data-testid="register-submit-btn"
-                      >
-                        {loading ? (
-                          <div className="w-5 h-5 border-2 border-black border-t-transparent rounded-full animate-spin" />
-                        ) : (
-                          t('register')
-                        )}
-                      </Button>
-                    </form>
-                  </TabsContent>
-              </Tabs>
-
-
-              </CardContent>
-            </Card>
-          </div>
-        </div>
-      </div>
-
-      {/* Footer - Simple without duplicate 18+ notice (already shown in top banner) */}
-      <footer className="relative z-10 border-t border-white/5 mt-20 bg-slate-950/50">
-        <div className="container mx-auto px-4 py-6">
-          <div className="text-center space-y-2">
-            <p className="text-white/30 text-sm">
-              © {new Date().getFullYear()} {t('app_name')}. {language === 'de' ? 'Alle Rechte vorbehalten.' : 'All rights reserved.'}
-            </p>
-            <p className="text-white/20 text-xs">
-              {language === 'de' 
-                ? 'Simulation ohne echten Geldwert. Kein echtes Glücksspiel.'
-                : 'Simulation with no real monetary value. Not real gambling.'}
-            </p>
-          </div>
-        </div>
-      </footer>
-    </div>
-  );
+            <Button
+              type="submit"          
+              disabled={
+                loading || 
+                !turnstileToken || 
+                (registerData.confirmPassword && 
+                  registerData.password !== registerData.confirmPassword)
+              }
+              className="w-full h-12 bg-primary hover:bg-primary/90 text-black font-bold uppercase tracking-wider disabled:opacity-50"
+              data-testid="register-submit-btn"
+            >
+              {loading ? (
+                <div className="w-5 h-5 border-2 border-black border-t-transparent rounded-full animate-spin" />
+              ) : (
+                t('register')
+              )}
+            </Button>
+          </form>
+        </TabsContent>
+      </Tabs>
+    </CardContent>
+  </Card>
+</div>
+);
 };
 
 export default LandingPage;
