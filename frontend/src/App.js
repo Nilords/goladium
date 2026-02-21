@@ -214,16 +214,8 @@ function App() {
   );
 }
 
-// Footer wrapper that hides on landing page
+// Global footer wrapper
 const FooterWrapper = () => {
-  const location = useLocation();
-  const { user } = useAuth();
-  
-  // Hide footer on landing page (unauthenticated users see landing page footer)
-  if (location.pathname === '/' && !user) {
-    return null;
-  }
-  
   return <Footer />;
 };
 
