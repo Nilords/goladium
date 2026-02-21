@@ -3,6 +3,7 @@ import { BrowserRouter, Routes, Route, useLocation, Navigate } from 'react-route
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 import { LanguageProvider } from './contexts/LanguageContext';
 import { Toaster } from './components/ui/sonner';
+import Footer from './components/Footer';
 
 // Pages
 import LandingPage from './pages/LandingPage';
