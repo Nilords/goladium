@@ -192,8 +192,11 @@ function App() {
     <BrowserRouter>
       <AuthProvider>
         <LanguageProvider>
-          <div className="min-h-screen bg-[#050505]">
-            <AppRouter />
+          <div className="min-h-screen bg-[#050505] flex flex-col">
+            <div className="flex-1">
+              <AppRouter />
+            </div>
+            <FooterWrapper />
             <Toaster 
               position="top-right" 
               toastOptions={{
@@ -210,5 +213,18 @@ function App() {
     </BrowserRouter>
   );
 }
+
+// Footer wrapper that hides on landing page
+const FooterWrapper = () => {
+  const location = useLocation();
+  const { user } = useAuth();
+  
+  // Hide footer on landing page (unauthenticated users see landing page footer)
+  if (location.pathname === '/' && !user) {
+    return null;
+  }
+  
+  return <Footer />;
+};
 
 export default App;
