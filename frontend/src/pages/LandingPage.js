@@ -411,42 +411,43 @@ const LandingPage = () => {
                           </p>
                         )}
                       </div>
-              
-            {/* Cloudflare Turnstile */}
-            <div className="flex justify-center py-2">
-              <Turnstile
-                onVerify={handleTurnstileVerify}
-                onError={handleTurnstileError}
-                onExpire={handleTurnstileExpire}
-              />
-            </div>
+                      
+                      {/* Cloudflare Turnstile */}
+                      <div className="flex justify-center py-2">
+                        <Turnstile
+                          onVerify={handleTurnstileVerify}
+                          onError={handleTurnstileError}
+                          onExpire={handleTurnstileExpire}
+                        />
+                      </div>
 
-            <Button
-              type="submit"          
-              disabled={
-                loading || 
-                !turnstileToken || 
-                (registerData.confirmPassword && 
-                  registerData.password !== registerData.confirmPassword)
-              }
-              className="w-full h-12 bg-primary hover:bg-primary/90 text-black font-bold uppercase tracking-wider disabled:opacity-50"
-              data-testid="register-submit-btn"
-            >
-              {loading ? (
-                <div className="w-5 h-5 border-2 border-black border-t-transparent rounded-full animate-spin" />
-              ) : (
-                t('register')
-              )}
-            </Button>
-          </form>
-        </TabsContent>
-      </Tabs>
-    </CardContent>
-  </Card>
-</div>
-</div>
-</div>
-);
+                      <Button
+                        type="submit"          
+                        disabled={
+                          loading || 
+                          !turnstileToken || 
+                          (registerData.confirmPassword && 
+                            registerData.password !== registerData.confirmPassword)
+                        }
+                        className="w-full h-12 bg-primary hover:bg-primary/90 text-black font-bold uppercase tracking-wider disabled:opacity-50"
+                        data-testid="register-submit-btn"
+                      >
+                        {loading ? (
+                          <div className="w-5 h-5 border-2 border-black border-t-transparent rounded-full animate-spin" />
+                        ) : (
+                          t('register')
+                        )}
+                      </Button>
+                    </form>
+                  </TabsContent>
+                </Tabs>
+              </CardContent>
+            </Card>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
 };
 
 export default LandingPage;
