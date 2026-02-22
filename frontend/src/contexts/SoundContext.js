@@ -2,45 +2,16 @@ import React, { createContext, useContext, useState, useEffect, useRef, useCallb
 
 const SoundContext = createContext();
 
-// Music tracks - Add your own MP3/OGG files to /public/sounds/
-// Example: /public/sounds/lounge.mp3
-const MUSIC_TRACKS = {
-  'lounge': {
-    name: 'Casino Lounge',
-    description: 'Relaxed ambient vibes',
-    file: '/sounds/lounge.mp3'
-  },
-  'jazz': {
-    name: 'Smooth Jazz', 
-    description: 'Classic casino atmosphere',
-    file: '/sounds/jazz.mp3'
-  },
-  'electronic': {
-    name: 'Chill Electronic',
-    description: 'Modern ambient beats',
-    file: '/sounds/electronic.mp3'
-  },
-  'none': {
-    name: 'No Music',
-    description: 'Silence',
-    file: null
-  }
-};
-
 // Default settings
 const DEFAULT_SETTINGS = {
-  masterEnabled: true,
-  masterVolume: 70,
-  musicVolume: 40,
-  effectsVolume: 60,
-  currentTrack: 'none',
+  soundEnabled: true,
+  volume: 60,
   hoverSoundsEnabled: true
 };
 
 const STORAGE_KEY = 'goladium_audio_settings';
 
 export const SoundProvider = ({ children }) => {
-  // Audio state
   const [settings, setSettings] = useState(() => {
     try {
       const saved = localStorage.getItem(STORAGE_KEY);
@@ -50,274 +21,379 @@ export const SoundProvider = ({ children }) => {
     }
   });
 
-  // Track if user has interacted (for autoplay policy)
   const [userInteracted, setUserInteracted] = useState(false);
-  
-  // Audio refs
-  const musicPlayerRef = useRef(null);
   const audioContextRef = useRef(null);
-  const effectsGainRef = useRef(null);
+  const gainNodeRef = useRef(null);
 
-  // Initialize Audio Context for effects
+  // Initialize Web Audio API
   const initAudioContext = useCallback(() => {
     if (audioContextRef.current) return audioContextRef.current;
 
     try {
       const AudioContext = window.AudioContext || window.webkitAudioContext;
       audioContextRef.current = new AudioContext();
-      effectsGainRef.current = audioContextRef.current.createGain();
-      effectsGainRef.current.connect(audioContextRef.current.destination);
+      gainNodeRef.current = audioContextRef.current.createGain();
+      gainNodeRef.current.connect(audioContextRef.current.destination);
+      gainNodeRef.current.gain.setValueAtTime(settings.volume / 100, audioContextRef.current.currentTime);
       return audioContextRef.current;
     } catch (e) {
-      console.error('Failed to initialize audio:', e);
+      console.error('Audio init failed:', e);
       return null;
     }
-  }, []);
+  }, [settings.volume]);
 
-  // Update music volume
+  // Update volume
   useEffect(() => {
-    if (musicPlayerRef.current) {
-      const effectiveVolume = settings.masterEnabled 
-        ? (settings.masterVolume / 100) * (settings.musicVolume / 100)
-        : 0;
-      musicPlayerRef.current.volume = effectiveVolume;
+    if (gainNodeRef.current && audioContextRef.current) {
+      gainNodeRef.current.gain.setValueAtTime(
+        settings.soundEnabled ? settings.volume / 100 : 0,
+        audioContextRef.current.currentTime
+      );
     }
-  }, [settings.masterEnabled, settings.masterVolume, settings.musicVolume]);
+  }, [settings.soundEnabled, settings.volume]);
 
-  // Update effects volume
+  // Save to localStorage
   useEffect(() => {
-    if (effectsGainRef.current && audioContextRef.current) {
-      const effectiveVolume = settings.masterEnabled
-        ? (settings.masterVolume / 100) * (settings.effectsVolume / 100)
-        : 0;
-      effectsGainRef.current.gain.setValueAtTime(effectiveVolume, audioContextRef.current.currentTime);
-    }
-  }, [settings.masterEnabled, settings.masterVolume, settings.effectsVolume]);
-
-  // Save settings to localStorage
-  useEffect(() => {
-    try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(settings));
-    } catch (e) {
-      console.error('Failed to save audio settings:', e);
-    }
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(settings));
   }, [settings]);
 
-  // Handle user interaction for autoplay
+  // Track user interaction
   const handleUserInteraction = useCallback(() => {
     if (!userInteracted) {
       setUserInteracted(true);
       const ctx = initAudioContext();
-      if (ctx && ctx.state === 'suspended') {
-        ctx.resume();
-      }
+      if (ctx?.state === 'suspended') ctx.resume();
     }
   }, [userInteracted, initAudioContext]);
 
-  // Track user interaction
   useEffect(() => {
-    const handleInteraction = () => handleUserInteraction();
-    
-    document.addEventListener('click', handleInteraction, { once: true });
-    document.addEventListener('keydown', handleInteraction, { once: true });
-    document.addEventListener('touchstart', handleInteraction, { once: true });
-
-    return () => {
-      document.removeEventListener('click', handleInteraction);
-      document.removeEventListener('keydown', handleInteraction);
-      document.removeEventListener('touchstart', handleInteraction);
-    };
+    const handler = () => handleUserInteraction();
+    ['click', 'keydown', 'touchstart'].forEach(e => 
+      document.addEventListener(e, handler, { once: true })
+    );
+    return () => ['click', 'keydown', 'touchstart'].forEach(e => 
+      document.removeEventListener(e, handler)
+    );
   }, [handleUserInteraction]);
 
-  // Play background music
-  const playMusic = useCallback((trackId) => {
-    // Stop current music
-    if (musicPlayerRef.current) {
-      musicPlayerRef.current.pause();
-      musicPlayerRef.current.src = '';
-      musicPlayerRef.current = null;
-    }
+  // === SOUND EFFECTS ===
 
-    if (trackId === 'none' || !MUSIC_TRACKS[trackId] || !MUSIC_TRACKS[trackId].file) {
-      setSettings(s => ({ ...s, currentTrack: 'none' }));
-      return;
-    }
-
-    try {
-      const audio = new Audio(MUSIC_TRACKS[trackId].file);
-      audio.loop = true;
-      
-      const effectiveVolume = settings.masterEnabled 
-        ? (settings.masterVolume / 100) * (settings.musicVolume / 100)
-        : 0;
-      audio.volume = effectiveVolume;
-      
-      audio.play().catch(err => {
-        console.log('Music autoplay blocked, will play on interaction:', err);
-      });
-      
-      musicPlayerRef.current = audio;
-      setSettings(s => ({ ...s, currentTrack: trackId }));
-    } catch (e) {
-      console.error('Failed to play music:', e);
-    }
-  }, [settings.masterEnabled, settings.masterVolume, settings.musicVolume]);
-
-  // Stop music
-  const stopMusic = useCallback(() => {
-    if (musicPlayerRef.current) {
-      musicPlayerRef.current.pause();
-      musicPlayerRef.current.src = '';
-      musicPlayerRef.current = null;
-    }
-    setSettings(s => ({ ...s, currentTrack: 'none' }));
-  }, []);
-
-  // Play hover sound (short tick)
-  const playHoverSound = useCallback(() => {
-    if (!settings.masterEnabled || !settings.hoverSoundsEnabled || !userInteracted) return;
-    
+  // Generic hover sound - subtle tick
+  const playHover = useCallback(() => {
+    if (!settings.soundEnabled || !settings.hoverSoundsEnabled || !userInteracted) return;
     const ctx = initAudioContext();
-    if (!ctx || !effectsGainRef.current) return;
+    if (!ctx || !gainNodeRef.current) return;
 
-    // Short click sound
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    
+    osc.type = 'sine';
+    osc.frequency.setValueAtTime(1200, ctx.currentTime);
+    osc.frequency.exponentialRampToValueAtTime(800, ctx.currentTime + 0.03);
+    
+    gain.gain.setValueAtTime(0.08, ctx.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.05);
+    
+    osc.connect(gain);
+    gain.connect(gainNodeRef.current);
+    osc.start();
+    osc.stop(ctx.currentTime + 0.05);
+  }, [settings.soundEnabled, settings.hoverSoundsEnabled, userInteracted, initAudioContext]);
+
+  // Generic click sound
+  const playClick = useCallback(() => {
+    if (!settings.soundEnabled || !userInteracted) return;
+    const ctx = initAudioContext();
+    if (!ctx || !gainNodeRef.current) return;
+
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    
+    osc.type = 'sine';
+    osc.frequency.setValueAtTime(600, ctx.currentTime);
+    osc.frequency.exponentialRampToValueAtTime(300, ctx.currentTime + 0.08);
+    
+    gain.gain.setValueAtTime(0.15, ctx.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.1);
+    
+    osc.connect(gain);
+    gain.connect(gainNodeRef.current);
+    osc.start();
+    osc.stop(ctx.currentTime + 0.1);
+  }, [settings.soundEnabled, userInteracted, initAudioContext]);
+
+  // SPIN sound - slot machine / wheel
+  const playSpin = useCallback(() => {
+    if (!settings.soundEnabled || !userInteracted) return;
+    const ctx = initAudioContext();
+    if (!ctx || !gainNodeRef.current) return;
+
+    // Whoosh + tick sequence
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    
+    osc.type = 'sawtooth';
+    osc.frequency.setValueAtTime(150, ctx.currentTime);
+    osc.frequency.exponentialRampToValueAtTime(600, ctx.currentTime + 0.15);
+    osc.frequency.exponentialRampToValueAtTime(200, ctx.currentTime + 0.3);
+    
+    gain.gain.setValueAtTime(0.12, ctx.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.35);
+    
+    osc.connect(gain);
+    gain.connect(gainNodeRef.current);
+    osc.start();
+    osc.stop(ctx.currentTime + 0.35);
+  }, [settings.soundEnabled, userInteracted, initAudioContext]);
+
+  // WIN sound - celebration
+  const playWin = useCallback(() => {
+    if (!settings.soundEnabled || !userInteracted) return;
+    const ctx = initAudioContext();
+    if (!ctx || !gainNodeRef.current) return;
+
+    // Ascending arpeggio - triumphant
+    const notes = [523.25, 659.25, 783.99, 1046.50, 1318.51];
+    notes.forEach((freq, i) => {
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      
+      osc.type = 'sine';
+      osc.frequency.setValueAtTime(freq, ctx.currentTime + i * 0.07);
+      
+      gain.gain.setValueAtTime(0.2, ctx.currentTime + i * 0.07);
+      gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + i * 0.07 + 0.3);
+      
+      osc.connect(gain);
+      gain.connect(gainNodeRef.current);
+      osc.start(ctx.currentTime + i * 0.07);
+      osc.stop(ctx.currentTime + i * 0.07 + 0.3);
+    });
+  }, [settings.soundEnabled, userInteracted, initAudioContext]);
+
+  // BIG WIN / JACKPOT sound - epic
+  const playJackpot = useCallback(() => {
+    if (!settings.soundEnabled || !userInteracted) return;
+    const ctx = initAudioContext();
+    if (!ctx || !gainNodeRef.current) return;
+
+    // Epic fanfare with harmonics
+    const chords = [
+      [261.63, 329.63, 392.00], // C major
+      [293.66, 369.99, 440.00], // D major
+      [329.63, 415.30, 493.88], // E major
+      [349.23, 440.00, 523.25], // F major
+      [392.00, 493.88, 587.33], // G major
+      [523.25, 659.25, 783.99], // C major (octave up)
+    ];
+
+    chords.forEach((chord, chordIdx) => {
+      chord.forEach((freq) => {
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        
+        osc.type = 'sine';
+        osc.frequency.setValueAtTime(freq, ctx.currentTime + chordIdx * 0.12);
+        
+        gain.gain.setValueAtTime(0.15, ctx.currentTime + chordIdx * 0.12);
+        gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + chordIdx * 0.12 + 0.25);
+        
+        osc.connect(gain);
+        gain.connect(gainNodeRef.current);
+        osc.start(ctx.currentTime + chordIdx * 0.12);
+        osc.stop(ctx.currentTime + chordIdx * 0.12 + 0.25);
+      });
+    });
+  }, [settings.soundEnabled, userInteracted, initAudioContext]);
+
+  // PURCHASE / coin sound
+  const playPurchase = useCallback(() => {
+    if (!settings.soundEnabled || !userInteracted) return;
+    const ctx = initAudioContext();
+    if (!ctx || !gainNodeRef.current) return;
+
+    // Coin clink
+    const osc = ctx.createOscillator();
+    const osc2 = ctx.createOscillator();
+    const gain = ctx.createGain();
+    
+    osc.type = 'sine';
+    osc.frequency.setValueAtTime(2500, ctx.currentTime);
+    osc.frequency.exponentialRampToValueAtTime(1500, ctx.currentTime + 0.1);
+    
+    osc2.type = 'sine';
+    osc2.frequency.setValueAtTime(3500, ctx.currentTime + 0.05);
+    osc2.frequency.exponentialRampToValueAtTime(2000, ctx.currentTime + 0.15);
+    
+    gain.gain.setValueAtTime(0.15, ctx.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.2);
+    
+    osc.connect(gain);
+    osc2.connect(gain);
+    gain.connect(gainNodeRef.current);
+    
+    osc.start();
+    osc2.start(ctx.currentTime + 0.05);
+    osc.stop(ctx.currentTime + 0.15);
+    osc2.stop(ctx.currentTime + 0.2);
+  }, [settings.soundEnabled, userInteracted, initAudioContext]);
+
+  // ERROR sound
+  const playError = useCallback(() => {
+    if (!settings.soundEnabled || !userInteracted) return;
+    const ctx = initAudioContext();
+    if (!ctx || !gainNodeRef.current) return;
+
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    
+    osc.type = 'square';
+    osc.frequency.setValueAtTime(200, ctx.currentTime);
+    osc.frequency.setValueAtTime(150, ctx.currentTime + 0.1);
+    osc.frequency.setValueAtTime(100, ctx.currentTime + 0.2);
+    
+    gain.gain.setValueAtTime(0.1, ctx.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.3);
+    
+    osc.connect(gain);
+    gain.connect(gainNodeRef.current);
+    osc.start();
+    osc.stop(ctx.currentTime + 0.3);
+  }, [settings.soundEnabled, userInteracted, initAudioContext]);
+
+  // LEVEL UP / achievement
+  const playLevelUp = useCallback(() => {
+    if (!settings.soundEnabled || !userInteracted) return;
+    const ctx = initAudioContext();
+    if (!ctx || !gainNodeRef.current) return;
+
+    // Magical ascending
+    const notes = [392, 523.25, 659.25, 783.99, 1046.50];
+    notes.forEach((freq, i) => {
+      const osc = ctx.createOscillator();
+      const osc2 = ctx.createOscillator();
+      const gain = ctx.createGain();
+      
+      osc.type = 'sine';
+      osc.frequency.setValueAtTime(freq, ctx.currentTime + i * 0.1);
+      
+      osc2.type = 'triangle';
+      osc2.frequency.setValueAtTime(freq * 2, ctx.currentTime + i * 0.1);
+      
+      gain.gain.setValueAtTime(0.15, ctx.currentTime + i * 0.1);
+      gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + i * 0.1 + 0.35);
+      
+      osc.connect(gain);
+      osc2.connect(gain);
+      gain.connect(gainNodeRef.current);
+      
+      osc.start(ctx.currentTime + i * 0.1);
+      osc2.start(ctx.currentTime + i * 0.1);
+      osc.stop(ctx.currentTime + i * 0.1 + 0.35);
+      osc2.stop(ctx.currentTime + i * 0.1 + 0.35);
+    });
+  }, [settings.soundEnabled, userInteracted, initAudioContext]);
+
+  // CHEST OPEN sound
+  const playChestOpen = useCallback(() => {
+    if (!settings.soundEnabled || !userInteracted) return;
+    const ctx = initAudioContext();
+    if (!ctx || !gainNodeRef.current) return;
+
+    // Creaky open + sparkle
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    
+    osc.type = 'sawtooth';
+    osc.frequency.setValueAtTime(80, ctx.currentTime);
+    osc.frequency.exponentialRampToValueAtTime(200, ctx.currentTime + 0.2);
+    
+    gain.gain.setValueAtTime(0.08, ctx.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.25);
+    
+    osc.connect(gain);
+    gain.connect(gainNodeRef.current);
+    osc.start();
+    osc.stop(ctx.currentTime + 0.25);
+
+    // Sparkle
+    setTimeout(() => {
+      if (!audioContextRef.current) return;
+      const sparkleNotes = [1500, 2000, 2500, 3000];
+      sparkleNotes.forEach((freq, i) => {
+        const o = audioContextRef.current.createOscillator();
+        const g = audioContextRef.current.createGain();
+        o.type = 'sine';
+        o.frequency.setValueAtTime(freq, audioContextRef.current.currentTime + i * 0.05);
+        g.gain.setValueAtTime(0.1, audioContextRef.current.currentTime + i * 0.05);
+        g.gain.exponentialRampToValueAtTime(0.001, audioContextRef.current.currentTime + i * 0.05 + 0.15);
+        o.connect(g);
+        g.connect(gainNodeRef.current);
+        o.start(audioContextRef.current.currentTime + i * 0.05);
+        o.stop(audioContextRef.current.currentTime + i * 0.05 + 0.15);
+      });
+    }, 200);
+  }, [settings.soundEnabled, userInteracted, initAudioContext]);
+
+  // WHEEL TICK sound (for wheel spinning)
+  const playWheelTick = useCallback(() => {
+    if (!settings.soundEnabled || !userInteracted) return;
+    const ctx = initAudioContext();
+    if (!ctx || !gainNodeRef.current) return;
+
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    
+    osc.type = 'sine';
+    osc.frequency.setValueAtTime(1000, ctx.currentTime);
+    
+    gain.gain.setValueAtTime(0.1, ctx.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.02);
+    
+    osc.connect(gain);
+    gain.connect(gainNodeRef.current);
+    osc.start();
+    osc.stop(ctx.currentTime + 0.02);
+  }, [settings.soundEnabled, userInteracted, initAudioContext]);
+
+  // NAV / menu sound
+  const playNav = useCallback(() => {
+    if (!settings.soundEnabled || !userInteracted) return;
+    const ctx = initAudioContext();
+    if (!ctx || !gainNodeRef.current) return;
+
     const osc = ctx.createOscillator();
     const gain = ctx.createGain();
     
     osc.type = 'sine';
     osc.frequency.setValueAtTime(800, ctx.currentTime);
-    osc.frequency.exponentialRampToValueAtTime(400, ctx.currentTime + 0.05);
+    osc.frequency.exponentialRampToValueAtTime(1200, ctx.currentTime + 0.05);
     
-    gain.gain.setValueAtTime(0.15, ctx.currentTime);
+    gain.gain.setValueAtTime(0.08, ctx.currentTime);
     gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.08);
     
     osc.connect(gain);
-    gain.connect(effectsGainRef.current);
-    
-    osc.start(ctx.currentTime);
-    osc.stop(ctx.currentTime + 0.1);
-  }, [settings.masterEnabled, settings.hoverSoundsEnabled, userInteracted, initAudioContext]);
+    gain.connect(gainNodeRef.current);
+    osc.start();
+    osc.stop(ctx.currentTime + 0.08);
+  }, [settings.soundEnabled, userInteracted, initAudioContext]);
 
-  // Play effect sound
-  const playEffect = useCallback((effectType) => {
-    if (!settings.masterEnabled || !userInteracted) return;
-    
-    const ctx = initAudioContext();
-    if (!ctx || !effectsGainRef.current) return;
-
-    const osc = ctx.createOscillator();
-    const gain = ctx.createGain();
-
-    switch (effectType) {
-      case 'win':
-        // Ascending arpeggio
-        const winNotes = [523.25, 659.25, 783.99, 1046.50];
-        winNotes.forEach((freq, i) => {
-          const o = ctx.createOscillator();
-          const g = ctx.createGain();
-          o.type = 'sine';
-          o.frequency.setValueAtTime(freq, ctx.currentTime + i * 0.08);
-          g.gain.setValueAtTime(0.25, ctx.currentTime + i * 0.08);
-          g.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + i * 0.08 + 0.25);
-          o.connect(g);
-          g.connect(effectsGainRef.current);
-          o.start(ctx.currentTime + i * 0.08);
-          o.stop(ctx.currentTime + i * 0.08 + 0.25);
-        });
-        return;
-
-      case 'spin':
-        osc.type = 'square';
-        osc.frequency.setValueAtTime(200, ctx.currentTime);
-        osc.frequency.linearRampToValueAtTime(400, ctx.currentTime + 0.15);
-        gain.gain.setValueAtTime(0.1, ctx.currentTime);
-        gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.2);
-        break;
-
-      case 'click':
-        osc.type = 'sine';
-        osc.frequency.setValueAtTime(600, ctx.currentTime);
-        gain.gain.setValueAtTime(0.2, ctx.currentTime);
-        gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.05);
-        break;
-
-      case 'purchase':
-        osc.type = 'sine';
-        osc.frequency.setValueAtTime(1200, ctx.currentTime);
-        osc.frequency.exponentialRampToValueAtTime(800, ctx.currentTime + 0.15);
-        gain.gain.setValueAtTime(0.25, ctx.currentTime);
-        gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.3);
-        break;
-
-      case 'error':
-        osc.type = 'sawtooth';
-        osc.frequency.setValueAtTime(200, ctx.currentTime);
-        osc.frequency.setValueAtTime(150, ctx.currentTime + 0.1);
-        gain.gain.setValueAtTime(0.15, ctx.currentTime);
-        gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.2);
-        break;
-
-      case 'levelup':
-        const notes = [523.25, 659.25, 783.99, 1046.50];
-        notes.forEach((freq, i) => {
-          const o = ctx.createOscillator();
-          const g = ctx.createGain();
-          o.type = 'sine';
-          o.frequency.setValueAtTime(freq, ctx.currentTime + i * 0.1);
-          g.gain.setValueAtTime(0.2, ctx.currentTime + i * 0.1);
-          g.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + i * 0.1 + 0.3);
-          o.connect(g);
-          g.connect(effectsGainRef.current);
-          o.start(ctx.currentTime + i * 0.1);
-          o.stop(ctx.currentTime + i * 0.1 + 0.3);
-        });
-        return;
-
-      default:
-        return;
-    }
-
-    osc.connect(gain);
-    gain.connect(effectsGainRef.current);
-    osc.start(ctx.currentTime);
-    osc.stop(ctx.currentTime + 0.3);
-  }, [settings.masterEnabled, userInteracted, initAudioContext]);
-
-  // Settings updaters
-  const setMasterEnabled = useCallback((enabled) => {
-    setSettings(s => ({ ...s, masterEnabled: enabled }));
-    if (!enabled) {
-      stopMusic();
-    }
-  }, [stopMusic]);
-
-  const setMasterVolume = useCallback((volume) => {
-    setSettings(s => ({ ...s, masterVolume: Math.max(0, Math.min(100, volume)) }));
+  // Settings setters
+  const setSoundEnabled = useCallback((enabled) => {
+    setSettings(s => ({ ...s, soundEnabled: enabled }));
   }, []);
 
-  const setMusicVolume = useCallback((volume) => {
-    setSettings(s => ({ ...s, musicVolume: Math.max(0, Math.min(100, volume)) }));
-  }, []);
-
-  const setEffectsVolume = useCallback((volume) => {
-    setSettings(s => ({ ...s, effectsVolume: Math.max(0, Math.min(100, volume)) }));
+  const setVolume = useCallback((volume) => {
+    setSettings(s => ({ ...s, volume: Math.max(0, Math.min(100, volume)) }));
   }, []);
 
   const setHoverSoundsEnabled = useCallback((enabled) => {
     setSettings(s => ({ ...s, hoverSoundsEnabled: enabled }));
   }, []);
 
-  const selectTrack = useCallback((trackId) => {
-    playMusic(trackId);
-  }, [playMusic]);
-
-  // Cleanup on unmount
+  // Cleanup
   useEffect(() => {
     return () => {
-      if (musicPlayerRef.current) {
-        musicPlayerRef.current.pause();
-        musicPlayerRef.current = null;
-      }
       if (audioContextRef.current) {
         audioContextRef.current.close();
       }
@@ -327,20 +403,24 @@ export const SoundProvider = ({ children }) => {
   const value = {
     settings,
     userInteracted,
-    musicTracks: MUSIC_TRACKS,
     
-    playHoverSound,
-    playEffect,
-    playMusic,
-    stopMusic,
+    // Sounds
+    playHover,
+    playClick,
+    playSpin,
+    playWin,
+    playJackpot,
+    playPurchase,
+    playError,
+    playLevelUp,
+    playChestOpen,
+    playWheelTick,
+    playNav,
     
-    setMasterEnabled,
-    setMasterVolume,
-    setMusicVolume,
-    setEffectsVolume,
+    // Settings
+    setSoundEnabled,
+    setVolume,
     setHoverSoundsEnabled,
-    selectTrack,
-    
     handleUserInteraction
   };
 
