@@ -419,14 +419,14 @@ async def moderate_message(user_id: str, username: str, message: str) -> Moderat
         duration = ADVERTISING_ESCALATION[offense_index]
         
         if duration == -1:
-            await apply_chat_mute(user_id, username, -1, "Repeated advertising", "advertising")
+            await apply_chat_mute(user_id, username, -1, "Repeated advertising", "advertising", message)
             return ModerationResult(
                 allowed=False,
                 error_message="You have been permanently muted in chat due to unauthorized advertising. If you believe this was a mistake, please contact us on Discord.",
                 muted=True
             )
         else:
-            mute_until, _ = await apply_chat_mute(user_id, username, duration, "Advertising detected", "advertising")
+            mute_until, _ = await apply_chat_mute(user_id, username, duration, "Advertising detected", "advertising", message)
             minutes = duration // 60
             return ModerationResult(
                 allowed=False,
@@ -441,7 +441,7 @@ async def moderate_message(user_id: str, username: str, message: str) -> Moderat
         duration = PROFANITY_ESCALATION[offense_index]
         
         if duration == -1:
-            await apply_chat_mute(user_id, username, -1, "Repeated profanity", "profanity")
+            await apply_chat_mute(user_id, username, -1, "Repeated profanity", "profanity", message)
             return ModerationResult(
                 allowed=False,
                 error_message="You have been permanently muted in chat due to repeated offensive language. If you believe this was a mistake, please contact us on Discord.",
@@ -466,7 +466,7 @@ async def moderate_message(user_id: str, username: str, message: str) -> Moderat
                 error_message="That was not very nice. Please keep the chat respectful."
             )
         else:
-            await apply_chat_mute(user_id, username, duration, "Profanity detected", "profanity")
+            await apply_chat_mute(user_id, username, duration, "Profanity detected", "profanity", message)
             minutes = duration // 60
             return ModerationResult(
                 allowed=False,
