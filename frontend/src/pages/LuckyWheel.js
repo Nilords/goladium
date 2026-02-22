@@ -163,6 +163,7 @@ const LuckyWheel = () => {
 
   return (
     <div className="min-h-screen bg-[#050505] flex flex-col">
+      <WheelSEO />
       <Navbar />
       
       <main className="flex-1 max-w-4xl mx-auto px-4 w-full sm:px-6 lg:px-8 py-8">
