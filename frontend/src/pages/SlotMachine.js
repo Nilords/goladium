@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
+import { useSound } from '../contexts/SoundContext';
 import { formatCurrency } from '../lib/formatCurrency';
 import Navbar from '../components/Navbar';
 import LiveWinFeed from '../components/LiveWinFeed';
