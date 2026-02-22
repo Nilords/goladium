@@ -198,28 +198,6 @@ const AccountActivityChart = () => {
     );
   };
 
-  // Custom dot that shows event type color
-  const CustomDot = (props) => {
-    const { cx, cy, payload, index } = props;
-    if (!cx || !cy) return null;
-    
-    const config = EVENT_CONFIG[payload.eventType] || EVENT_CONFIG.slot;
-    const isSelected = selectedPoint?.index === index;
-    const size = isSelected ? 8 : 5;
-    
-    return (
-      <circle
-        cx={cx}
-        cy={cy}
-        r={size}
-        fill={config.color}
-        stroke={isSelected ? '#fff' : 'transparent'}
-        strokeWidth={2}
-        style={{ cursor: 'pointer', transition: 'all 0.2s' }}
-      />
-    );
-  };
-
   if (loading) {
     return (
       <div className="flex justify-center p-8">
