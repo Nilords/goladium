@@ -1,15 +1,15 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { useLanguage } from '../contexts/LanguageContext';
-import { Card, CardContent, CardHeader, CardTitle } from './ui/card';
+import { Card, CardContent, CardHeader } from './ui/card';
 import { Button } from './ui/button';
 import { 
-  ComposedChart, Area, Line, Bar, XAxis, YAxis, CartesianGrid, Tooltip, 
-  ResponsiveContainer, ReferenceLine
+  ComposedChart, Area, Line, XAxis, YAxis, CartesianGrid, Tooltip, 
+  ResponsiveContainer, ReferenceLine, Scatter
 } from 'recharts';
 import { 
-  TrendingUp, TrendingDown, Activity, BarChart3, LineChart,
-  Gamepad2, Gift, Trophy, ShoppingBag, ArrowLeftRight, Shield
+  TrendingUp, TrendingDown, Activity,
+  Gamepad2, Gift, Trophy, ShoppingBag, ArrowLeftRight, Shield, Target
 } from 'lucide-react';
 
 // Range configurations
@@ -23,16 +23,17 @@ const RANGES = [
   { key: 'ALL', label: 'ALL', labelDe: 'ALLE' }
 ];
 
-// Event type colors
-const EVENT_COLORS = {
-  slot: '#00F0FF',
-  jackpot: '#A855F7',
-  wheel: '#22C55E',
-  chest: '#F59E0B',
-  item_sale: '#10B981',
-  item_purchase: '#EF4444',
-  trade: '#6366F1',
-  admin: '#F97316'
+// Event type config
+const EVENT_CONFIG = {
+  slot: { icon: Gamepad2, label: 'Slot', color: '#00F0FF' },
+  jackpot: { icon: Trophy, label: 'Jackpot', color: '#A855F7' },
+  wheel: { icon: Gift, label: 'Wheel', color: '#22C55E' },
+  chest: { icon: Gift, label: 'Chest', color: '#F59E0B' },
+  item_sale: { icon: ShoppingBag, label: 'Verkauf', color: '#10B981' },
+  item_purchase: { icon: ShoppingBag, label: 'Kauf', color: '#EF4444' },
+  trade: { icon: ArrowLeftRight, label: 'Trade', color: '#6366F1' },
+  admin: { icon: Shield, label: 'Admin', color: '#F97316' },
+  quest: { icon: Target, label: 'Quest', color: '#EC4899' }
 };
 
 const AccountActivityChart = () => {
@@ -41,7 +42,7 @@ const AccountActivityChart = () => {
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [selectedRange, setSelectedRange] = useState('1M');
-  const [chartType, setChartType] = useState('line'); // 'line' or 'candle'
+  const [selectedPoint, setSelectedPoint] = useState(null);
 
   const loadData = useCallback(async () => {
     if (!token) return;
@@ -52,6 +53,7 @@ const AccountActivityChart = () => {
       });
       if (res.ok) {
         setData(await res.json());
+        setSelectedPoint(null);
       }
     } catch (err) {
       console.error('Failed to load chart data:', err);
@@ -70,6 +72,8 @@ const AccountActivityChart = () => {
     return data.candles.map((candle, idx) => {
       const date = new Date(candle.timestamp);
       const isShortRange = selectedRange === '1D' || selectedRange === '1W';
+      const eventType = candle.event_type || Object.keys(candle.breakdown || {})[0] || 'slot';
+      const config = EVENT_CONFIG[eventType] || EVENT_CONFIG.slot;
       
       return {
         ...candle,
@@ -77,89 +81,142 @@ const AccountActivityChart = () => {
         displayTime: isShortRange 
           ? date.toLocaleTimeString(language === 'de' ? 'de-DE' : 'en-US', { hour: '2-digit', minute: '2-digit' })
           : date.toLocaleDateString(language === 'de' ? 'de-DE' : 'en-US', { day: '2-digit', month: 'short' }),
-        // For area chart
+        fullDate: date.toLocaleString(language === 'de' ? 'de-DE' : 'en-US'),
         value: candle.close,
-        // For candle coloring
-        isPositive: candle.close >= candle.open,
-        candleBody: Math.abs(candle.close - candle.open),
-        candleBottom: Math.min(candle.open, candle.close)
+        eventType,
+        eventColor: config.color,
+        eventLabel: config.label
       };
     });
   }, [data, selectedRange, language]);
 
   const yDomain = useMemo(() => {
     if (!chartData.length) return [-100, 100];
-    const allValues = chartData.flatMap(d => [d.high, d.low]);
+    const allValues = chartData.flatMap(d => [d.high || d.close, d.low || d.close]);
     const min = Math.min(...allValues, 0);
     const max = Math.max(...allValues, 0);
-    const padding = Math.max(Math.abs(max - min) * 0.1, 10);
+    const padding = Math.max(Math.abs(max - min) * 0.15, 20);
     return [Math.floor(min - padding), Math.ceil(max + padding)];
   }, [chartData]);
 
   const stats = data?.stats || {};
   const isPositive = stats.current_profit >= 0;
-  const periodPositive = stats.period_change >= 0;
+  const periodPositive = (stats.period_change || 0) >= 0;
+
+  const handlePointClick = (data) => {
+    if (data && data.activePayload) {
+      setSelectedPoint(data.activePayload[0].payload);
+    }
+  };
 
   const CustomTooltip = ({ active, payload }) => {
     if (!active || !payload?.length) return null;
-    const candle = payload[0].payload;
+    const point = payload[0].payload;
+    const config = EVENT_CONFIG[point.eventType] || EVENT_CONFIG.slot;
+    const Icon = config.icon;
     
     return (
-      <div className="bg-black/95 border border-white/20 rounded-lg p-3 shadow-xl min-w-[200px]">
-        <p className="text-white/60 text-xs mb-2">
-          {new Date(candle.timestamp).toLocaleString(language === 'de' ? 'de-DE' : 'en-US')}
-        </p>
-        
-        {/* OHLC Data */}
-        <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-sm mb-3">
-          <div className="flex justify-between">
-            <span className="text-white/50">O:</span>
-            <span className={`font-mono ${candle.open >= 0 ? 'text-green-400' : 'text-red-400'}`}>
-              {candle.open?.toFixed(2)}
-            </span>
+      <div className="bg-black/95 border border-white/20 rounded-lg p-3 shadow-xl min-w-[220px] backdrop-blur-sm">
+        {/* Header */}
+        <div className="flex items-center gap-2 mb-2 pb-2 border-b border-white/10">
+          <div className="w-8 h-8 rounded-lg flex items-center justify-center" style={{ backgroundColor: `${config.color}20` }}>
+            <Icon className="w-4 h-4" style={{ color: config.color }} />
           </div>
-          <div className="flex justify-between">
-            <span className="text-white/50">H:</span>
-            <span className="text-green-400 font-mono">{candle.high?.toFixed(2)}</span>
-          </div>
-          <div className="flex justify-between">
-            <span className="text-white/50">L:</span>
-            <span className="text-red-400 font-mono">{candle.low?.toFixed(2)}</span>
-          </div>
-          <div className="flex justify-between">
-            <span className="text-white/50">C:</span>
-            <span className={`font-mono ${candle.close >= 0 ? 'text-green-400' : 'text-red-400'}`}>
-              {candle.close?.toFixed(2)}
-            </span>
+          <div>
+            <p className="text-white font-medium text-sm">{point.source || config.label}</p>
+            <p className="text-white/40 text-xs">{point.fullDate}</p>
           </div>
         </div>
+        
+        {/* OHLC for aggregated data */}
+        {point.volume > 1 && (
+          <div className="grid grid-cols-2 gap-2 text-xs mb-2">
+            <div className="flex justify-between">
+              <span className="text-white/50">Open:</span>
+              <span className={`font-mono ${point.open >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+                {point.open?.toFixed(1)}G
+              </span>
+            </div>
+            <div className="flex justify-between">
+              <span className="text-white/50">High:</span>
+              <span className="text-green-400 font-mono">{point.high?.toFixed(1)}G</span>
+            </div>
+            <div className="flex justify-between">
+              <span className="text-white/50">Low:</span>
+              <span className="text-red-400 font-mono">{point.low?.toFixed(1)}G</span>
+            </div>
+            <div className="flex justify-between">
+              <span className="text-white/50">Close:</span>
+              <span className={`font-mono ${point.close >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+                {point.close?.toFixed(1)}G
+              </span>
+            </div>
+          </div>
+        )}
 
         {/* Change */}
-        <div className="flex justify-between items-center pt-2 border-t border-white/10">
+        <div className="flex justify-between items-center py-2 border-t border-white/10">
           <span className="text-white/60 text-sm">{language === 'de' ? 'Änderung' : 'Change'}</span>
-          <span className={`font-mono font-bold ${candle.net_change >= 0 ? 'text-green-400' : 'text-red-400'}`}>
-            {candle.net_change >= 0 ? '+' : ''}{candle.net_change?.toFixed(2)} G
+          <span className={`font-mono font-bold text-lg ${point.net_change >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+            {point.net_change >= 0 ? '+' : ''}{point.net_change?.toFixed(2)} G
+          </span>
+        </div>
+
+        {/* Current Position */}
+        <div className="flex justify-between items-center">
+          <span className="text-white/60 text-sm">{language === 'de' ? 'Position' : 'Position'}</span>
+          <span className={`font-mono font-bold ${point.close >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+            {point.close >= 0 ? '+' : ''}{point.close?.toFixed(2)} G
           </span>
         </div>
 
         {/* Volume */}
-        <div className="flex justify-between items-center mt-1">
-          <span className="text-white/60 text-sm">{language === 'de' ? 'Events' : 'Volume'}</span>
-          <span className="text-white font-mono">{candle.volume}</span>
-        </div>
+        {point.volume > 1 && (
+          <div className="flex justify-between items-center mt-1 text-xs text-white/40">
+            <span>Events</span>
+            <span>{point.volume}</span>
+          </div>
+        )}
 
         {/* Breakdown */}
-        {candle.breakdown && Object.keys(candle.breakdown).length > 0 && (
+        {point.breakdown && Object.keys(point.breakdown).length > 1 && (
           <div className="mt-2 pt-2 border-t border-white/10 text-xs">
-            {Object.entries(candle.breakdown).map(([type, count]) => (
-              <div key={type} className="flex justify-between text-white/50">
-                <span style={{ color: EVENT_COLORS[type] }}>{type}</span>
-                <span>{count}x</span>
-              </div>
-            ))}
+            <p className="text-white/40 mb-1">Breakdown:</p>
+            <div className="flex flex-wrap gap-2">
+              {Object.entries(point.breakdown).map(([type, count]) => {
+                const cfg = EVENT_CONFIG[type];
+                return (
+                  <span key={type} className="px-1.5 py-0.5 rounded text-white/70" style={{ backgroundColor: `${cfg?.color}20` }}>
+                    {type}: {count}
+                  </span>
+                );
+              })}
+            </div>
           </div>
         )}
       </div>
+    );
+  };
+
+  // Custom dot that shows event type color
+  const CustomDot = (props) => {
+    const { cx, cy, payload, index } = props;
+    if (!cx || !cy) return null;
+    
+    const config = EVENT_CONFIG[payload.eventType] || EVENT_CONFIG.slot;
+    const isSelected = selectedPoint?.index === index;
+    const size = isSelected ? 8 : 5;
+    
+    return (
+      <circle
+        cx={cx}
+        cy={cy}
+        r={size}
+        fill={config.color}
+        stroke={isSelected ? '#fff' : 'transparent'}
+        strokeWidth={2}
+        style={{ cursor: 'pointer', transition: 'all 0.2s' }}
+      />
     );
   };
 
@@ -263,40 +320,37 @@ const AccountActivityChart = () => {
         <CardHeader className="pb-2">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2 text-white/50 text-xs">
-              <span>{data.resolution?.toUpperCase() || 'RAW'}</span>
-              <span>•</span>
-              <span>{chartData.length} {language === 'de' ? 'Punkte' : 'points'}</span>
+              <span className="px-2 py-0.5 bg-white/5 rounded">{data.resolution?.toUpperCase() || 'RAW'}</span>
+              <span>{chartData.length} {language === 'de' ? 'Datenpunkte' : 'data points'}</span>
             </div>
             
-            {/* Chart Type Toggle */}
-            <div className="flex gap-1 bg-black/30 rounded p-0.5">
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => setChartType('line')}
-                className={`h-6 w-6 p-0 ${chartType === 'line' ? 'bg-white/10 text-primary' : 'text-white/40'}`}
-              >
-                <LineChart className="w-3.5 h-3.5" />
-              </Button>
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => setChartType('candle')}
-                className={`h-6 w-6 p-0 ${chartType === 'candle' ? 'bg-white/10 text-primary' : 'text-white/40'}`}
-              >
-                <BarChart3 className="w-3.5 h-3.5" />
-              </Button>
+            {/* Legend inline */}
+            <div className="flex gap-2 flex-wrap justify-end">
+              {Object.entries(EVENT_CONFIG).slice(0, 5).map(([key, cfg]) => (
+                <div key={key} className="flex items-center gap-1 text-xs text-white/40">
+                  <div className="w-2 h-2 rounded-full" style={{ backgroundColor: cfg.color }} />
+                  <span>{cfg.label}</span>
+                </div>
+              ))}
             </div>
           </div>
         </CardHeader>
         <CardContent className="p-4 pt-0">
           <div className="h-[320px]">
             <ResponsiveContainer width="100%" height="100%">
-              <ComposedChart data={chartData} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
+              <ComposedChart 
+                data={chartData} 
+                margin={{ top: 10, right: 10, left: 0, bottom: 0 }}
+                onClick={handlePointClick}
+              >
                 <defs>
-                  <linearGradient id="profitGradient" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%" stopColor={isPositive ? "#22c55e" : "#ef4444"} stopOpacity={0.3}/>
-                    <stop offset="95%" stopColor={isPositive ? "#22c55e" : "#ef4444"} stopOpacity={0}/>
+                  <linearGradient id="profitGradientPos" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="5%" stopColor="#22c55e" stopOpacity={0.3}/>
+                    <stop offset="95%" stopColor="#22c55e" stopOpacity={0}/>
+                  </linearGradient>
+                  <linearGradient id="profitGradientNeg" x1="0" y1="1" x2="0" y2="0">
+                    <stop offset="5%" stopColor="#ef4444" stopOpacity={0.3}/>
+                    <stop offset="95%" stopColor="#ef4444" stopOpacity={0}/>
                   </linearGradient>
                 </defs>
                 
@@ -322,7 +376,7 @@ const AccountActivityChart = () => {
                   tickFormatter={v => `${v > 0 ? '+' : ''}${v}`}
                   tickLine={false}
                   axisLine={false}
-                  width={60}
+                  width={55}
                 />
                 
                 <ReferenceLine 
@@ -330,65 +384,78 @@ const AccountActivityChart = () => {
                   stroke="rgba(255,255,255,0.3)" 
                   strokeWidth={1} 
                   strokeDasharray="5 5"
+                  label={{ value: '0', position: 'left', fill: 'rgba(255,255,255,0.3)', fontSize: 10 }}
                 />
                 
                 <Tooltip content={<CustomTooltip />} />
 
-                {chartType === 'line' ? (
-                  <>
-                    <Area
-                      type="monotone"
-                      dataKey="close"
-                      stroke={isPositive ? "#22c55e" : "#ef4444"}
-                      strokeWidth={2}
-                      fill="url(#profitGradient)"
-                      dot={false}
-                      activeDot={{ r: 5, fill: '#00F0FF', stroke: '#000', strokeWidth: 2 }}
-                    />
-                  </>
-                ) : (
-                  <>
-                    {/* Candle Wicks (high-low line) */}
-                    {chartData.map((entry, index) => (
-                      <ReferenceLine
-                        key={`wick-${index}`}
-                        segment={[
-                          { x: entry.displayTime, y: entry.low },
-                          { x: entry.displayTime, y: entry.high }
-                        ]}
-                        stroke={entry.isPositive ? "#22c55e" : "#ef4444"}
-                        strokeWidth={1}
-                      />
-                    ))}
-                    {/* Candle Bodies */}
-                    <Bar
-                      dataKey="candleBody"
-                      stackId="candle"
-                      fill="transparent"
-                    >
-                      {chartData.map((entry, index) => (
-                        <rect
-                          key={`body-${index}`}
-                          fill={entry.isPositive ? "#22c55e" : "#ef4444"}
-                        />
-                      ))}
-                    </Bar>
-                  </>
-                )}
+                {/* Area fill */}
+                <Area
+                  type="monotone"
+                  dataKey="close"
+                  stroke="transparent"
+                  fill={isPositive ? "url(#profitGradientPos)" : "url(#profitGradientNeg)"}
+                />
+
+                {/* Main line */}
+                <Line
+                  type="monotone"
+                  dataKey="close"
+                  stroke={isPositive ? "#22c55e" : "#ef4444"}
+                  strokeWidth={2}
+                  dot={<CustomDot />}
+                  activeDot={{ r: 8, fill: '#00F0FF', stroke: '#000', strokeWidth: 2 }}
+                />
               </ComposedChart>
             </ResponsiveContainer>
           </div>
         </CardContent>
       </Card>
 
-      {/* Legend */}
-      <div className="flex flex-wrap gap-4 justify-center text-xs">
-        {Object.entries(EVENT_COLORS).map(([type, color]) => (
-          <div key={type} className="flex items-center gap-1.5 text-white/40">
-            <div className="w-2 h-2 rounded-full" style={{ backgroundColor: color }} />
-            <span className="capitalize">{type.replace('_', ' ')}</span>
-          </div>
-        ))}
+      {/* Selected Point Details */}
+      {selectedPoint && (
+        <Card className="bg-[#0A0A0C] border-primary/30 animate-in fade-in slide-in-from-bottom-2">
+          <CardContent className="p-4">
+            <div className="flex items-start justify-between">
+              <div className="flex items-center gap-3">
+                <div 
+                  className="w-10 h-10 rounded-lg flex items-center justify-center"
+                  style={{ backgroundColor: `${EVENT_CONFIG[selectedPoint.eventType]?.color}20` }}
+                >
+                  {(() => {
+                    const Icon = EVENT_CONFIG[selectedPoint.eventType]?.icon || Activity;
+                    return <Icon className="w-5 h-5" style={{ color: EVENT_CONFIG[selectedPoint.eventType]?.color }} />;
+                  })()}
+                </div>
+                <div>
+                  <p className="text-white font-medium">{selectedPoint.source || EVENT_CONFIG[selectedPoint.eventType]?.label}</p>
+                  <p className="text-white/40 text-sm">{selectedPoint.fullDate}</p>
+                </div>
+              </div>
+              <div className="text-right">
+                <p className={`text-2xl font-bold font-mono ${selectedPoint.net_change >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+                  {selectedPoint.net_change >= 0 ? '+' : ''}{selectedPoint.net_change?.toFixed(2)} G
+                </p>
+                <p className="text-white/40 text-sm">
+                  {language === 'de' ? 'Position' : 'Position'}: {selectedPoint.close >= 0 ? '+' : ''}{selectedPoint.close?.toFixed(2)} G
+                </p>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Full Legend */}
+      <div className="flex flex-wrap gap-4 justify-center text-xs pt-2">
+        {Object.entries(EVENT_CONFIG).map(([key, cfg]) => {
+          const Icon = cfg.icon;
+          return (
+            <div key={key} className="flex items-center gap-1.5 text-white/40">
+              <Icon className="w-3 h-3" style={{ color: cfg.color }} />
+              <span>{cfg.label}</span>
+            </div>
+          );
+        })}
       </div>
     </div>
   );
