@@ -3971,6 +3971,7 @@ async def purchase_shop_item(purchase: ShopPurchaseRequest, request: Request):
     )
     
     # Add item to inventory - store purchase_price for sell calculation
+    # Also store untradeable_until from shop listing
     inventory_item = {
         "inventory_id": f"inv_{uuid.uuid4().hex[:12]}",
         "user_id": user["user_id"],
@@ -3981,7 +3982,8 @@ async def purchase_shop_item(purchase: ShopPurchaseRequest, request: Request):
         "item_flavor_text": listing.get("item_flavor_text", ""),
         "purchase_price": price,  # Store actual purchase price for sell calculation
         "acquired_at": now_naive.isoformat(),
-        "acquired_from": "shop"
+        "acquired_from": "shop",
+        "untradeable_until": listing.get("untradeable_until")  # From shop listing
     }
     await db.user_inventory.insert_one(inventory_item)
     
