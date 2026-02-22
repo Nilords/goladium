@@ -32,10 +32,13 @@ const AccountActivityChart = () => {
   const [limit, setLimit] = useState(100);
 
   useEffect(() => {
-    loadData();
-  }, [limit]);
+    if (token) {
+      loadData();
+    }
+  }, [limit, token]);
 
   const loadData = async () => {
+    if (!token) return;
     setLoading(true);
     try {
       const res = await fetch(`/api/user/account-activity?limit=${limit}`, {
