@@ -4834,6 +4834,15 @@ async def sell_inventory_items_batch(data: SellItemsBatchRequest, request: Reque
         details={"items_count": len(sold_items), "sell_amount": total_sell_amount}
     )
     
+    # Record account activity (batch item sale = profit)
+    await record_account_activity(
+        user_id=user_id,
+        event_type="item_sale",
+        amount=total_sell_amount,
+        source=f"Batch-Verkauf: {len(sold_items)} Items",
+        details={"items_count": len(sold_items), "total_value": total_value, "fee": total_fee}
+    )
+    
     return {
         "success": True,
         "items_sold": len(sold_items),
