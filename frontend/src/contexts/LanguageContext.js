@@ -105,7 +105,8 @@ export const LanguageProvider = ({ children }) => {
     translations,
     loading,
     changeLanguage,
-    t
+    t,
+    showLanguageToggle: SHOW_LANGUAGE_TOGGLE
   };
 
   return (
