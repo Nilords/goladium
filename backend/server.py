@@ -7645,6 +7645,18 @@ async def admin_modify_balance(data: AdminBalanceRequest, request: Request):
         {"$set": {currency_field: round(new_balance, 2)}}
     )
     
+    # Record account activity for admin balance changes (only for G currency)
+    if data.currency.lower() == "g":
+        change_amount = new_balance - current_balance
+        if change_amount != 0:
+            await record_account_activity(
+                user_id=user["user_id"],
+                event_type="admin",
+                amount=change_amount,
+                source=f"Admin: {data.action} {abs(data.amount)} G",
+                details={"action": data.action, "admin_amount": data.amount, "previous": current_balance}
+            )
+    
     return {
         "success": True,
         "username": actual_username,
