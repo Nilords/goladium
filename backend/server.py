@@ -3174,6 +3174,29 @@ async def get_jackpot_status():
                             }
                         })
                 
+                # Record account activity for ALL jackpot participants
+                for p in jackpot_state["participants"]:
+                    is_winner = p["user_id"] == winner["user_id"]
+                    if is_winner:
+                        # Winner: net profit = pot - their bet
+                        net_amount = jackpot_state["total_pot"] - p["bet_amount"]
+                        await record_account_activity(
+                            user_id=p["user_id"],
+                            event_type="jackpot",
+                            amount=net_amount,
+                            source=f"Jackpot Win (Pot: {jackpot_state['total_pot']}G)",
+                            details={"bet": p["bet_amount"], "pot": jackpot_state["total_pot"], "result": "win"}
+                        )
+                    else:
+                        # Loser: lost their bet
+                        await record_account_activity(
+                            user_id=p["user_id"],
+                            event_type="jackpot",
+                            amount=-p["bet_amount"],
+                            source=f"Jackpot Loss (Pot: {jackpot_state['total_pot']}G)",
+                            details={"bet": p["bet_amount"], "pot": jackpot_state["total_pot"], "result": "loss"}
+                        )
+                
                 # Update quest progress for jackpot WIN
                 await update_quest_progress(
                     winner["user_id"], 
