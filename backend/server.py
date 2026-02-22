@@ -2541,7 +2541,7 @@ async def get_session_from_google(request: Request, response: Response):
         value=session_token,
         httponly=True,
         secure=True,
-        samesite="none",
+        samesite="lax",
         max_age=7 * 24 * 3600,
         path="/"
     )
@@ -6749,11 +6749,7 @@ class DynamicCORSMiddleware(BaseHTTPMiddleware):
         # - *.preview.emergentagent.com
         # - *.preview.static.emergentagent.com
         # - *.emergentagent.com
-        allowed = (
-            origin in cors_origins or
-            "emergentagent.com" in origin or
-            "localhost" in origin
-        )
+        allowed = origin in cors_origins
         
         if request.method == "OPTIONS":
             # Handle preflight
