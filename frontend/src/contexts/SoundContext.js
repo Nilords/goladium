@@ -85,6 +85,66 @@ export const SoundProvider = ({ children }) => {
     );
   }, [handleUserInteraction]);
 
+  // Global click sound for ALL buttons
+  useEffect(() => {
+    const handleGlobalClick = (e) => {
+      // Check if clicked element is a button or inside a button
+      const button = e.target.closest('button, [role="button"], a.btn, .btn');
+      if (button && settings.soundEnabled && userInteracted) {
+        // Play click sound
+        const ctx = audioContextRef.current;
+        if (!ctx || !gainNodeRef.current) return;
+        
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        
+        osc.type = 'sine';
+        osc.frequency.setValueAtTime(800, ctx.currentTime);
+        osc.frequency.exponentialRampToValueAtTime(400, ctx.currentTime + 0.08);
+        
+        gain.gain.setValueAtTime(0.12, ctx.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.1);
+        
+        osc.connect(gain);
+        gain.connect(gainNodeRef.current);
+        osc.start();
+        osc.stop(ctx.currentTime + 0.1);
+      }
+    };
+
+    document.addEventListener('click', handleGlobalClick);
+    return () => document.removeEventListener('click', handleGlobalClick);
+  }, [settings.soundEnabled, userInteracted]);
+
+  // Global hover sound for buttons
+  useEffect(() => {
+    const handleGlobalHover = (e) => {
+      const button = e.target.closest('button, [role="button"]');
+      if (button && settings.soundEnabled && settings.hoverSoundsEnabled && userInteracted) {
+        const ctx = audioContextRef.current;
+        if (!ctx || !gainNodeRef.current) return;
+        
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        
+        osc.type = 'sine';
+        osc.frequency.setValueAtTime(1400, ctx.currentTime);
+        osc.frequency.exponentialRampToValueAtTime(1000, ctx.currentTime + 0.04);
+        
+        gain.gain.setValueAtTime(0.06, ctx.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.06);
+        
+        osc.connect(gain);
+        gain.connect(gainNodeRef.current);
+        osc.start();
+        osc.stop(ctx.currentTime + 0.06);
+      }
+    };
+
+    document.addEventListener('mouseenter', handleGlobalHover, true);
+    return () => document.removeEventListener('mouseenter', handleGlobalHover, true);
+  }, [settings.soundEnabled, settings.hoverSoundsEnabled, userInteracted]);
+
   // ============ GENERATED SOUNDS (Web Audio API) ============
 
   // HOVER - subtle high tick
