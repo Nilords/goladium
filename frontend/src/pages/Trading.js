@@ -46,13 +46,12 @@ const t = (key, lang) => {
     noItemsInventory: { de: 'Keine Items im Inventar', en: 'No items in inventory' },
     offerG: { de: 'G anbieten', en: 'Offer G' },
     feeWarning: { de: '30% Gebühr:', en: '30% Fee:' },
-    feeDestroyed: { de: '(wird vernichtet)', en: '(will be burned)' },
+    feeDestroyed: { de: '(wird abgezogen)', en: '(will be gone)' },
     // You want
     youWant: { de: 'Du möchtest', en: 'You want' },
     theirItems: { de: 's Items', en: "'s items" },
     noItemsAvailable: { de: 'Keine Items verfügbar', en: 'No items available' },
     requestG: { de: 'G anfragen', en: 'Request G' },
-    otherPaysFee: { de: 'Der andere Spieler zahlt 30% Gebühr auf diesen Betrag', en: 'The other player pays 30% fee on this amount' },
     // Summary
     summary: { de: 'Zusammenfassung', en: 'Summary' },
     fee: { de: 'Gebühr', en: 'fee' },
@@ -67,7 +66,6 @@ const t = (key, lang) => {
     initiator: { de: 'Initiator', en: 'Initiator' },
     recipient: { de: 'Empfänger', en: 'Recipient' },
     offers: { de: 'bietet:', en: 'offers:' },
-    feeInfo: { de: '30% Gebühr auf G-Transfers (wird vernichtet)', en: '30% fee on G transfers (will be burned)' },
     created: { de: 'Erstellt:', en: 'Created:' },
     completedAt: { de: 'Abgeschlossen:', en: 'Completed:' },
     // Toast messages
@@ -797,9 +795,6 @@ const Trading = () => {
                           className="bg-slate-800 border-slate-600"
                           data-testid="requested-g-input"
                         />
-                        {requestedG > 0 && (
-                          <p className="text-xs text-slate-400">{t('otherPaysFee', language)}</p>
-                        )}
                       </div>
                     </div>
                   </div>
@@ -813,7 +808,7 @@ const Trading = () => {
                           <span className="text-red-400">{t('youGive', language)}</span>
                           <ul className="mt-1 space-y-1 text-slate-300">
                             {selectedMyItems.map(i => <li key={i.inventory_id}>• {i.item_name}</li>)}
-                            {offeredG > 0 && <li className="text-yellow-400">• {offeredG} G (+{calculateFee(offeredG)} G {t('fee', language)})</li>}
+                            {offeredG > 0 && <li className="text-yellow-400">{offeredG} G</li>}
                             {selectedMyItems.length === 0 && offeredG === 0 && <li className="text-slate-500">{t('nothing', language)}</li>}
                           </ul>
                         </div>
@@ -923,7 +918,11 @@ const Trading = () => {
                     <CardContent className="p-3">
                       <div className="flex items-center gap-2 text-amber-400 text-sm">
                         <AlertTriangle className="w-4 h-4" />
-                        <span>{t('feeInfo', language)}</span>
+                        <span>
+                          {language === "de"
+                            ? "Der Spieler, der G sendet, zahlt zusätzlich eine 30% Handelsgebühr."
+                            : "The player sending G pays an additional 30% trading fee."}
+                        </span>
                       </div>
                     </CardContent>
                   </Card>
