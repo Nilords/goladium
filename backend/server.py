@@ -2979,6 +2979,15 @@ async def spin_lucky_wheel(request: Request):
         }
     )
     
+    # Record account activity (wheel is always profit since it's free)
+    await record_account_activity(
+        user_id=user["user_id"],
+        event_type="wheel",
+        amount=reward,
+        source="Lucky Wheel",
+        details={"reward_tier": "jackpot" if reward == 15 else "high" if reward == 5 else "standard"}
+    )
+    
     # Record history (marked as free/wheel type)
     bet_doc = {
         "bet_id": f"bet_{uuid.uuid4().hex[:12]}",
