@@ -1,0 +1,28 @@
+# Goladium Robots.txt
+# https://goladium.de/robots.txt
+
+User-agent: *
+Allow: /
+Disallow: /api/
+Disallow: /admin/
+Disallow: /*.json$
+Disallow: /static/js/*.map
+Disallow: /static/css/*.map
+
+# Crawl-delay for politeness
+Crawl-delay: 1
+
+# Sitemap location
+Sitemap: https://goladium.de/sitemap.xml
+
+# Google specific
+User-agent: Googlebot
+Allow: /
+Disallow: /api/
+Crawl-delay: 0
+
+# Bing specific
+User-agent: Bingbot
+Allow: /
+Disallow: /api/
+Crawl-delay: 1
