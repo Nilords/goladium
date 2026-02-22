@@ -4010,6 +4010,15 @@ async def purchase_shop_item(purchase: ShopPurchaseRequest, request: Request):
         details={"source": "shop", "rarity": listing["item_rarity"]}
     )
     
+    # Record account activity (item purchase = expense)
+    await record_account_activity(
+        user_id=user["user_id"],
+        event_type="item_purchase",
+        amount=-price,
+        source=f"Shop: {listing['item_name']}",
+        details={"item_id": listing["item_id"], "item_name": listing["item_name"]}
+    )
+    
     return {
         "success": True,
         "message": f"Successfully purchased {listing['item_name']}!",
