@@ -2,6 +2,7 @@ import React from 'react';
 import { BrowserRouter, Routes, Route, useLocation, Navigate } from 'react-router-dom';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 import { LanguageProvider } from './contexts/LanguageContext';
+import { SoundProvider } from './contexts/SoundContext';
 import { Toaster } from './components/ui/sonner';
 import Footer from './components/Footer';
 
