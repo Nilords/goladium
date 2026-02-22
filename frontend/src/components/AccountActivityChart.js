@@ -101,20 +101,15 @@ const AccountActivityChart = () => {
   const isPositive = stats.current_profit >= 0;
   const periodPositive = (stats.period_change || 0) >= 0;
 
-  // Custom Tooltip that follows cursor
-  const CustomTooltip = ({ active, payload, coordinate }) => {
+  // Custom Tooltip
+  const CustomTooltip = ({ active, payload }) => {
     if (!active || !payload?.length) return null;
     const point = payload[0].payload;
     const config = EVENT_CONFIG[point.eventType] || EVENT_CONFIG.slot;
     const Icon = config.icon;
     
     return (
-      <div 
-        className="bg-black/95 border border-white/20 rounded-lg p-3 shadow-2xl min-w-[200px] pointer-events-none z-50"
-        style={{ 
-          backdropFilter: 'blur(8px)',
-        }}
-      >
+      <div className="bg-black/95 border border-white/20 rounded-lg p-3 shadow-2xl min-w-[200px]">
         {/* Header */}
         <div className="flex items-center gap-2 mb-2 pb-2 border-b border-white/10">
           <div 
@@ -147,7 +142,6 @@ const AccountActivityChart = () => {
             </span>
           </div>
 
-          {/* Volume for aggregated */}
           {point.volume > 1 && (
             <div className="flex justify-between items-center pt-1 border-t border-white/10">
               <span className="text-white/40 text-xs">Events</span>
@@ -159,33 +153,21 @@ const AccountActivityChart = () => {
     );
   };
 
-  // Custom cursor line
-  const CustomCursor = ({ points, width, height }) => {
-    if (!points || !points.length) return null;
-    const { x, y } = points[0];
+  // Custom dot - small but visible for every point
+  const renderDot = (props) => {
+    const { cx, cy, payload } = props;
+    if (!cx || !cy) return null;
+    
+    const config = EVENT_CONFIG[payload.eventType] || EVENT_CONFIG.slot;
     
     return (
-      <g>
-        {/* Vertical line */}
-        <line
-          x1={x}
-          y1={0}
-          x2={x}
-          y2={height}
-          stroke="rgba(0, 240, 255, 0.3)"
-          strokeWidth={1}
-          strokeDasharray="4 4"
-        />
-        {/* Dot at intersection */}
-        <circle
-          cx={x}
-          cy={y}
-          r={6}
-          fill="#00F0FF"
-          stroke="#000"
-          strokeWidth={2}
-        />
-      </g>
+      <circle
+        cx={cx}
+        cy={cy}
+        r={3}
+        fill={config.color}
+        stroke="transparent"
+      />
     );
   };
 
@@ -311,13 +293,6 @@ const AccountActivityChart = () => {
                 data={chartData} 
                 margin={{ top: 10, right: 10, left: 0, bottom: 0 }}
               >
-                <defs>
-                  <linearGradient id="lineGradient" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%" stopColor={isPositive ? "#22c55e" : "#ef4444"} stopOpacity={0.8}/>
-                    <stop offset="95%" stopColor={isPositive ? "#22c55e" : "#ef4444"} stopOpacity={0.2}/>
-                  </linearGradient>
-                </defs>
-                
                 <CartesianGrid 
                   strokeDasharray="3 3" 
                   stroke="rgba(255,255,255,0.05)" 
@@ -352,8 +327,7 @@ const AccountActivityChart = () => {
                 
                 <Tooltip 
                   content={<CustomTooltip />}
-                  cursor={<CustomCursor />}
-                  isAnimationActive={false}
+                  cursor={{ stroke: 'rgba(0,240,255,0.3)', strokeDasharray: '4 4' }}
                 />
 
                 <Line
@@ -361,9 +335,13 @@ const AccountActivityChart = () => {
                   dataKey="close"
                   stroke={isPositive ? "#22c55e" : "#ef4444"}
                   strokeWidth={2}
-                  dot={false}
-                  activeDot={false}
-                  isAnimationActive={false}
+                  dot={renderDot}
+                  activeDot={{ 
+                    r: 6, 
+                    fill: '#00F0FF', 
+                    stroke: '#000', 
+                    strokeWidth: 2 
+                  }}
                 />
               </LineChart>
             </ResponsiveContainer>
