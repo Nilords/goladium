@@ -387,39 +387,6 @@ const AccountActivityChart = () => {
         </CardContent>
       </Card>
 
-      {/* Selected Point Details */}
-      {selectedPoint && (
-        <Card className="bg-[#0A0A0C] border-primary/30 animate-in fade-in slide-in-from-bottom-2">
-          <CardContent className="p-4">
-            <div className="flex items-start justify-between">
-              <div className="flex items-center gap-3">
-                <div 
-                  className="w-10 h-10 rounded-lg flex items-center justify-center"
-                  style={{ backgroundColor: `${EVENT_CONFIG[selectedPoint.eventType]?.color}20` }}
-                >
-                  {(() => {
-                    const Icon = EVENT_CONFIG[selectedPoint.eventType]?.icon || Activity;
-                    return <Icon className="w-5 h-5" style={{ color: EVENT_CONFIG[selectedPoint.eventType]?.color }} />;
-                  })()}
-                </div>
-                <div>
-                  <p className="text-white font-medium">{selectedPoint.source || EVENT_CONFIG[selectedPoint.eventType]?.label}</p>
-                  <p className="text-white/40 text-sm">{selectedPoint.fullDate}</p>
-                </div>
-              </div>
-              <div className="text-right">
-                <p className={`text-2xl font-bold font-mono ${selectedPoint.net_change >= 0 ? 'text-green-400' : 'text-red-400'}`}>
-                  {selectedPoint.net_change >= 0 ? '+' : ''}{selectedPoint.net_change?.toFixed(2)} G
-                </p>
-                <p className="text-white/40 text-sm">
-                  {language === 'de' ? 'Position' : 'Position'}: {selectedPoint.close >= 0 ? '+' : ''}{selectedPoint.close?.toFixed(2)} G
-                </p>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-      )}
-
       {/* Full Legend */}
       <div className="flex flex-wrap gap-4 justify-center text-xs pt-2">
         {Object.entries(EVENT_CONFIG).map(([key, cfg]) => {
