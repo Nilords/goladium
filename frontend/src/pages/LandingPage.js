@@ -15,7 +15,7 @@ import { useCallback } from 'react';
 const LandingPage = () => {
   const navigate = useNavigate();
   const { user, login, register, loading: authLoading } = useAuth();
-  const { t, language, changeLanguage } = useLanguage();
+  const { t, language, changeLanguage, showLanguageToggle } = useLanguage();
   
   const [authTab, setAuthTab] = useState('login');
   const [showPassword, setShowPassword] = useState(false);
