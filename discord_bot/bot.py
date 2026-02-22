@@ -642,7 +642,7 @@ async def shop_list(interaction: discord.Interaction):
                         
                         embed.add_field(
                             name=f"{status} {item['item_name']}",
-                            value=f"Rarity: {item['item_rarity']}\nPrice: {item['price']} G\nTime: {time_str}\nID: `{item['shop_listing_id'][:12]}...`",
+                            value=f"Rarity: {item['item_rarity']}\nPrice: {item['price']} G\nTime: {time_str}\nID: `{item['shop_listing_id']}`",
                             inline=True
                         )
                     
