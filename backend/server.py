@@ -4695,6 +4695,15 @@ async def sell_inventory_item(sell_request: SellItemRequest, request: Request):
         details={"sell_amount": sell_amount, "fee_amount": fee_amount, "rarity": item.get("item_rarity", "common")}
     )
     
+    # Record account activity (item sale = profit)
+    await record_account_activity(
+        user_id=user["user_id"],
+        event_type="item_sale",
+        amount=sell_amount,
+        source=f"Item verkauft: {item['item_name']}",
+        details={"item_id": item["item_id"], "item_name": item["item_name"], "purchase_price": purchase_price, "fee": fee_amount}
+    )
+    
     return {
         "success": True,
         "message": f"Sold {item['item_name']} for {sell_amount} G",
