@@ -2,7 +2,6 @@ import React, { useState, useEffect } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { useLanguage } from '../contexts/LanguageContext';
 import Navbar from '../components/Navbar';
-import Footer from '../components/Footer';
 import Chat from '../components/Chat';
 import LiveWinFeed from '../components/LiveWinFeed';
 import ChestOpening from '../components/ChestOpening';
@@ -609,7 +608,6 @@ const Inventory = () => {
         </DialogContent>
       </Dialog>
 
-      <Footer />
       <LiveWinFeed />
       <Chat />
       

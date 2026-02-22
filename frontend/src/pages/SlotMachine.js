@@ -3,7 +3,6 @@ import { useParams, Link } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { formatCurrency } from '../lib/formatCurrency';
 import Navbar from '../components/Navbar';
-import Footer from '../components/Footer';
 import LiveWinFeed from '../components/LiveWinFeed';
 import Chat from '../components/Chat';
 import { Button } from '../components/ui/button';
@@ -733,7 +732,6 @@ const SlotMachine = () => {
           </div>
         </div>
       </main>
-      <Footer />
       <LiveWinFeed />
       <Chat />
     </div>

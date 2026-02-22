@@ -3,7 +3,6 @@ import { Link } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { useLanguage } from '../contexts/LanguageContext';
 import Navbar from '../components/Navbar';
-import Footer from '../components/Footer';
 import Chat from '../components/Chat';
 import LiveWinFeed from '../components/LiveWinFeed';
 import { Card, CardContent } from '../components/ui/card';
@@ -129,7 +128,6 @@ const SlotsHub = () => {
         </Card>
       </main>
 
-      <Footer />
       <LiveWinFeed />
       <Chat />
     </div>

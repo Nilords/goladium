@@ -2,7 +2,6 @@ import React, { useState, useEffect } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { useLanguage } from '../contexts/LanguageContext';
 import Navbar from '../components/Navbar';
-import Footer from '../components/Footer';
 import Chat from '../components/Chat';
 import ChestOpening from '../components/ChestOpening';
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card';
@@ -163,7 +162,6 @@ const GamePass = () => {
             {language === 'de' ? 'Lädt...' : 'Loading...'}
           </div>
         </main>
-        <Footer />
       </div>
     );
   }
@@ -499,7 +497,6 @@ const GamePass = () => {
         </Tabs>
       </main>
 
-      <Footer />
       <Chat />
 
       {/* Chest Opening Dialog */}

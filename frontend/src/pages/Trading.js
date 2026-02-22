@@ -11,7 +11,6 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '
 import { toast } from 'sonner';
 import { ArrowLeftRight, Search, Package, Coins, X, Check, RotateCcw, Clock, CheckCircle, AlertTriangle, User, Inbox, Send, TrendingUp } from 'lucide-react';
 import Navbar from '../components/Navbar';
-import Footer from '../components/Footer';
 
 
 
@@ -934,7 +933,6 @@ const Trading = () => {
           </DialogContent>
         </Dialog>
       </main>
-      <Footer />
     </div>
   );
 };

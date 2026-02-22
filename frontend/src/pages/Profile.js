@@ -4,7 +4,6 @@ import { useAuth } from '../contexts/AuthContext';
 import { useLanguage } from '../contexts/LanguageContext';
 import { formatCurrency, formatCurrencyFull } from '../lib/formatCurrency';
 import Navbar from '../components/Navbar';
-import Footer from '../components/Footer';
 import Chat from '../components/Chat';
 import AnalyticsCharts from '../components/AnalyticsCharts';
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card';
@@ -432,7 +431,6 @@ const Profile = () => {
         </Tabs>
       </main>
 
-      <Footer />
       <Chat />
     </div>
   );

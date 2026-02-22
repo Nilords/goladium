@@ -2,7 +2,6 @@ import React, { useState, useEffect } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { useLanguage } from '../contexts/LanguageContext';
 import Navbar from '../components/Navbar';
-import Footer from '../components/Footer';
 import Chat from '../components/Chat';
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card';
 import { Button } from '../components/ui/button';
@@ -323,7 +322,6 @@ const Customization = () => {
         )}
       </main>
 
-      <Footer />
       <Chat />
     </div>
   );

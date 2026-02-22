@@ -4,7 +4,6 @@ import { useAuth } from '../contexts/AuthContext';
 import { useLanguage } from '../contexts/LanguageContext';
 import { formatCurrency, formatCurrencyFull } from '../lib/formatCurrency';
 import Navbar from '../components/Navbar';
-import Footer from '../components/Footer';
 import Chat from '../components/Chat';
 import LiveWinFeed from '../components/LiveWinFeed';
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card';
@@ -898,7 +897,6 @@ const Dashboard = () => {
         </div>
       </main>
 
-      <Footer />
       <LiveWinFeed />
       <Chat />
     </div>

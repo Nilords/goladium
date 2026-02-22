@@ -2,7 +2,6 @@ import React, { useState, useCallback } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { useLanguage } from '../contexts/LanguageContext';
 import Navbar from '../components/Navbar';
-import Footer from '../components/Footer';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '../components/ui/card';
 import { Button } from '../components/ui/button';
 import { Switch } from '../components/ui/switch';
@@ -420,7 +419,6 @@ const Settings = () => {
           </Card>
         </div>
       </main>
-      <Footer />
     </div>
   );
 };
