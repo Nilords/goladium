@@ -119,9 +119,8 @@ async def on_ready():
 
 @bot.tree.command(name="mute", description="Mute a user in chat (use 'perm' for permanent)")
 @app_commands.describe(username="Goladium username", duration="Duration (e.g. 1h, 30m, 7d, perm)")
-@app_commands.guilds(discord.Object(id=GUILD_ID)) if GUILD_ID else app_commands.guilds()
 async def mute(interaction: discord.Interaction, username: str, duration: str):
-    if not is_admin(interaction):
+    if not is_admin(interaction.user.id):
         await interaction.response.send_message("No permission.", ephemeral=True)
         return
     
