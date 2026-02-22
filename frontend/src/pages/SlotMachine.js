@@ -74,6 +74,7 @@ const SlotMachine = () => {
   const { slotId } = useParams();
   const currentSlotId = slotId || 'classic';
   const { user, updateUserBalance } = useAuth();
+  const { playSpin, playWin, playJackpot, playClick, playHover, playError } = useSound();
   
   const [betPerLine, setBetPerLine] = useState(0.05);
   const [activeLines, setActiveLines] = useState(8);
