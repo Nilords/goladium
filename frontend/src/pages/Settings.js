@@ -138,6 +138,7 @@ const Settings = () => {
 
   return (
     <div className="min-h-screen bg-[#050505] flex flex-col">
+      <SettingsSEO />
       <Navbar />
       
       <main className="flex-1 max-w-2xl mx-auto px-4 w-full sm:px-6 lg:px-8 py-8">
