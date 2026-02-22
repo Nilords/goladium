@@ -409,6 +409,56 @@ async def givechest(interaction: discord.Interaction, username: str, amount: int
     else:
         await interaction.followup.send(f"❌ Error: {result['data'].get('detail', 'Unknown error')}")
 
+# ============== GALADIUM PASS COMMANDS ==============
+
+@bot.tree.command(name="setpass", description="Activate or deactivate Galadium Pass for a user")
+@app_commands.describe(
+    username="Goladium username",
+    active="True = activate, False = deactivate"
+)
+@app_commands.guilds(discord.Object(id=GUILD_ID)) if GUILD_ID else app_commands.guilds()
+async def setpass(interaction: discord.Interaction, username: str, active: bool):
+    """Toggle Galadium Pass for a user (Admin only)"""
+    if not is_admin(interaction.user.id):
+        await interaction.response.send_message("❌ You don't have permission to use this command.", ephemeral=True)
+        return
+    
+    await interaction.response.defer(ephemeral=True)
+    
+    try:
+        async with aiohttp.ClientSession() as session:
+            async with session.post(
+                f"{API_BASE_URL}/api/admin/galadium-pass",
+                json={"username": username, "activate": active},
+                headers={"X-Admin-Key": ADMIN_API_KEY}
+            ) as resp:
+                if resp.status == 200:
+                    data = await resp.json()
+                    
+                    if data["galadium_pass_active"]:
+                        embed = discord.Embed(
+                            title="✅ Galadium Pass Activated",
+                            description=f"**{data['username']}** now has Galadium Pass!",
+                            color=0x00ff00
+                        )
+                        embed.add_field(name="Status", value="🎫 Active", inline=True)
+                    else:
+                        embed = discord.Embed(
+                            title="🔴 Galadium Pass Deactivated",
+                            description=f"**{data['username']}** no longer has Galadium Pass.",
+                            color=0xff0000
+                        )
+                        embed.add_field(name="Status", value="❌ Inactive", inline=True)
+                    
+                    await interaction.followup.send(embed=embed, ephemeral=True)
+                elif resp.status == 404:
+                    await interaction.followup.send(f"❌ User '{username}' not found", ephemeral=True)
+                else:
+                    error_data = await resp.json()
+                    await interaction.followup.send(f"❌ Error: {error_data.get('detail', 'Unknown error')}", ephemeral=True)
+    except Exception as e:
+        await interaction.followup.send(f"❌ Error: {str(e)}", ephemeral=True)
+
 # ============== INFO COMMANDS ==============
 
 @bot.tree.command(name="userinfo", description="Get detailed user information")
