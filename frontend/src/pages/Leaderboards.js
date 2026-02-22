@@ -79,6 +79,7 @@ const Leaderboards = () => {
 
   return (
     <div className="min-h-screen bg-[#050505] flex flex-col">
+      <LeaderboardSEO />
       <Navbar />
       
       <main className="flex-1 max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-8 w-full">
