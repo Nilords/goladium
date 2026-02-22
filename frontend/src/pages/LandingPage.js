@@ -1,7 +1,8 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { useLanguage } from '../contexts/LanguageContext';
+import { HomeSEO } from '../components/SEO';
 import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
 import { Label } from '../components/ui/label';
@@ -10,7 +11,6 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../co
 import { toast } from 'sonner';
 import { Gamepad2, Sparkles, Trophy, Gift, Eye, EyeOff, MessageCircle } from 'lucide-react';
 import Turnstile from '../components/Turnstile';
-import { useCallback } from 'react';
 
 const LandingPage = () => {
   const navigate = useNavigate();
