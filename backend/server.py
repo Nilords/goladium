@@ -7954,6 +7954,10 @@ async def initialize_item_system():
     await db.inventory_value_history.create_index("event_id", unique=True)
     await db.inventory_value_history.create_index([("user_id", 1), ("event_number", -1)])
     
+    # Create indexes for account activity history
+    await db.account_activity_history.create_index("event_id", unique=True)
+    await db.account_activity_history.create_index([("user_id", 1), ("event_number", -1)])
+    
     # Seed items if they don't exist
     for item_data in SEED_ITEMS:
         existing = await db.items.find_one({"item_id": item_data["item_id"]})
