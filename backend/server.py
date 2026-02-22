@@ -8239,6 +8239,13 @@ async def initialize_item_system():
     # Create indexes for account activity history
     await db.account_activity_history.create_index("event_id", unique=True)
     await db.account_activity_history.create_index([("user_id", 1), ("event_number", -1)])
+    await db.account_activity_history.create_index([("user_id", 1), ("timestamp", 1)])
+    
+    # Create indexes for OHLC candle collections (TradingView-style charts)
+    for resolution in ["1h", "1d"]:
+        collection = db[f"account_candles_{resolution}"]
+        await collection.create_index([("user_id", 1), ("bucket", 1)], unique=True)
+        await collection.create_index([("user_id", 1), ("timestamp", 1)])
     
     # Seed items if they don't exist
     for item_data in SEED_ITEMS:
