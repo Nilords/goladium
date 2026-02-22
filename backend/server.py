@@ -3870,44 +3870,51 @@ async def get_item(item_id: str):
 async def get_shop_items():
     """Get all active shop items"""
     now = datetime.now(timezone.utc)
-    # Also create naive version for comparison with naive datetimes in DB
-    now_naive = datetime.utcnow()
+    now_iso = now.isoformat()
     
     # Find active listings that are within their availability window
-    # Use datetime comparison since dates are stored as datetime objects
+    # Dates are stored as ISO strings
     listings = await db.shop_listings.find({
-        "is_active": True,
-        "available_from": {"$lte": now_naive},
-        "$or": [
-            {"available_until": None},
-            {"available_until": {"$gte": now_naive}}
-        ]
+        "is_active": True
     }, {"_id": 0}).to_list(100)
     
-    # Enrich with rarity info
+    # Filter by availability window (comparing ISO strings works for chronological order)
+    active_listings = []
     for listing in listings:
+        available_from = listing.get("available_from", "")
+        available_until = listing.get("available_until")
+        
+        # Check if currently available
+        if available_from and available_from > now_iso:
+            continue  # Not yet available
+        
+        if available_until and available_until < now_iso:
+            continue  # Expired
+        
+        active_listings.append(listing)
+    
+    # Enrich with rarity info
+    for listing in active_listings:
         rarity_info = ITEM_RARITIES.get(listing.get("item_rarity", "common"), ITEM_RARITIES["common"])
         listing["rarity_display"] = rarity_info["name"]
         listing["rarity_color"] = rarity_info["color"]
         
-        # Convert datetime to ISO string for JSON serialization
-        if listing.get("available_from"):
-            listing["available_from"] = listing["available_from"].isoformat() if isinstance(listing["available_from"], datetime) else listing["available_from"]
+        # Calculate time remaining
         if listing.get("available_until"):
-            until = listing["available_until"]
-            if isinstance(until, datetime):
-                remaining = until - now_naive
+            try:
+                until = datetime.fromisoformat(listing["available_until"].replace("Z", "+00:00"))
+                remaining = until - now
                 listing["days_remaining"] = max(0, remaining.days)
-                listing["hours_remaining"] = max(0, int(remaining.seconds / 3600))
-                listing["available_until"] = until.isoformat()
-            else:
+                listing["hours_remaining"] = max(0, int(remaining.total_seconds() / 3600) % 24)
+                listing["total_hours_remaining"] = max(0, int(remaining.total_seconds() / 3600))
+            except:
                 listing["days_remaining"] = None
                 listing["hours_remaining"] = None
         else:
             listing["days_remaining"] = None
             listing["hours_remaining"] = None
     
-    return listings
+    return active_listings
 
 @api_router.get("/shop/history")
 async def get_shop_history():
