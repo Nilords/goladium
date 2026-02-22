@@ -397,14 +397,20 @@ const AccountActivityChart = () => {
                   fill={isPositive ? "url(#profitGradientPos)" : "url(#profitGradientNeg)"}
                 />
 
-                {/* Main line */}
+                {/* Main line - no dots, only activeDot on hover */}
                 <Line
                   type="monotone"
                   dataKey="close"
                   stroke={isPositive ? "#22c55e" : "#ef4444"}
                   strokeWidth={2}
-                  dot={<CustomDot />}
-                  activeDot={{ r: 8, fill: '#00F0FF', stroke: '#000', strokeWidth: 2 }}
+                  dot={false}
+                  activeDot={{ 
+                    r: 6, 
+                    fill: '#00F0FF', 
+                    stroke: '#000', 
+                    strokeWidth: 2,
+                    style: { cursor: 'pointer' }
+                  }}
                 />
               </ComposedChart>
             </ResponsiveContainer>
