@@ -8250,6 +8250,205 @@ async def admin_get_moderation_stats(username: str, request: Request):
         "mute_remaining_seconds": mute_remaining
     }
 
+
+# ============== SHOP ADMIN ENDPOINTS ==============
+
+@api_router.get("/admin/shop/list")
+async def admin_list_shop_items(request: Request):
+    """List all shop items (active and inactive)"""
+    if not verify_admin_key(request):
+        raise HTTPException(status_code=401, detail="Invalid admin key")
+    
+    listings = await db.shop_listings.find({}, {"_id": 0}).sort("created_at", -1).to_list(100)
+    
+    now = datetime.now(timezone.utc)
+    for listing in listings:
+        # Calculate time remaining
+        if listing.get("available_until"):
+            until = listing["available_until"]
+            if isinstance(until, str):
+                until = datetime.fromisoformat(until.replace("Z", "+00:00"))
+            remaining = until - now
+            listing["hours_remaining"] = max(0, int(remaining.total_seconds() / 3600))
+            listing["is_expired"] = remaining.total_seconds() <= 0
+        else:
+            listing["hours_remaining"] = None
+            listing["is_expired"] = False
+    
+    return {"items": listings, "total": len(listings)}
+
+
+@api_router.post("/admin/shop/add")
+async def admin_add_shop_item(data: AdminShopAddRequest, request: Request):
+    """Add a new item to the shop"""
+    if not verify_admin_key(request):
+        raise HTTPException(status_code=401, detail="Invalid admin key")
+    
+    # Validate rarity
+    valid_rarities = ["common", "uncommon", "rare", "epic", "legendary"]
+    if data.item_rarity.lower() not in valid_rarities:
+        raise HTTPException(status_code=400, detail=f"Invalid rarity. Must be one of: {', '.join(valid_rarities)}")
+    
+    now = datetime.now(timezone.utc)
+    shop_listing_id = f"shop_{uuid.uuid4().hex[:12]}"
+    item_id = f"item_{uuid.uuid4().hex[:12]}"
+    
+    # Calculate availability window
+    available_until = now + timedelta(hours=data.available_hours)
+    untradeable_until = now + timedelta(hours=data.untradeable_hours)
+    
+    # Create the item definition
+    item_def = {
+        "item_id": item_id,
+        "item_name": data.item_name,
+        "item_rarity": data.item_rarity.lower(),
+        "item_flavor_text": data.item_description,
+        "item_image": data.item_image,
+        "base_value": data.base_value,
+        "is_tradeable": True,  # Will be checked against untradeable_until
+        "is_shop_item": True,
+        "created_at": now.isoformat()
+    }
+    await db.items.insert_one(item_def)
+    
+    # Create the shop listing
+    shop_listing = {
+        "shop_listing_id": shop_listing_id,
+        "item_id": item_id,
+        "item_name": data.item_name,
+        "item_rarity": data.item_rarity.lower(),
+        "item_flavor_text": data.item_description,
+        "item_image": data.item_image,
+        "base_value": data.base_value,
+        "price": data.price,
+        "available_from": now.isoformat(),
+        "available_until": available_until.isoformat(),
+        "untradeable_until": untradeable_until.isoformat(),
+        "stock_limit": data.stock_limit,
+        "stock_sold": 0,
+        "is_active": True,
+        "created_at": now.isoformat()
+    }
+    await db.shop_listings.insert_one(shop_listing)
+    
+    return {
+        "success": True,
+        "shop_listing_id": shop_listing_id,
+        "item_id": item_id,
+        "item_name": data.item_name,
+        "item_rarity": data.item_rarity.lower(),
+        "price": data.price,
+        "available_until": available_until.isoformat(),
+        "untradeable_until": untradeable_until.isoformat(),
+        "hours_available": data.available_hours,
+        "hours_untradeable": data.untradeable_hours
+    }
+
+
+@api_router.post("/admin/shop/edit")
+async def admin_edit_shop_item(data: AdminShopEditRequest, request: Request):
+    """Edit an existing shop item"""
+    if not verify_admin_key(request):
+        raise HTTPException(status_code=401, detail="Invalid admin key")
+    
+    # Find the listing
+    listing = await db.shop_listings.find_one({"shop_listing_id": data.shop_listing_id})
+    if not listing:
+        raise HTTPException(status_code=404, detail=f"Shop listing '{data.shop_listing_id}' not found")
+    
+    now = datetime.now(timezone.utc)
+    updates = {}
+    item_updates = {}
+    
+    # Build update dict with only provided fields
+    if data.item_name is not None:
+        updates["item_name"] = data.item_name
+        item_updates["item_name"] = data.item_name
+    
+    if data.item_description is not None:
+        updates["item_flavor_text"] = data.item_description
+        item_updates["item_flavor_text"] = data.item_description
+    
+    if data.item_image is not None:
+        updates["item_image"] = data.item_image
+        item_updates["item_image"] = data.item_image
+    
+    if data.price is not None:
+        updates["price"] = data.price
+    
+    if data.base_value is not None:
+        updates["base_value"] = data.base_value
+        item_updates["base_value"] = data.base_value
+    
+    if data.available_hours is not None:
+        # Extend/set availability from now
+        updates["available_until"] = (now + timedelta(hours=data.available_hours)).isoformat()
+    
+    if data.untradeable_hours is not None:
+        updates["untradeable_until"] = (now + timedelta(hours=data.untradeable_hours)).isoformat()
+    
+    if data.stock_limit is not None:
+        updates["stock_limit"] = data.stock_limit if data.stock_limit > 0 else None
+    
+    if data.is_active is not None:
+        updates["is_active"] = data.is_active
+    
+    if not updates:
+        raise HTTPException(status_code=400, detail="No fields to update")
+    
+    updates["updated_at"] = now.isoformat()
+    
+    # Update shop listing
+    await db.shop_listings.update_one(
+        {"shop_listing_id": data.shop_listing_id},
+        {"$set": updates}
+    )
+    
+    # Also update the item definition if relevant fields changed
+    if item_updates:
+        await db.items.update_one(
+            {"item_id": listing["item_id"]},
+            {"$set": item_updates}
+        )
+    
+    return {
+        "success": True,
+        "shop_listing_id": data.shop_listing_id,
+        "updated_fields": list(updates.keys())
+    }
+
+
+@api_router.delete("/admin/shop/remove")
+async def admin_remove_shop_item(data: AdminShopRemoveRequest, request: Request):
+    """Remove an item from the shop (deactivates it, doesn't delete)"""
+    if not verify_admin_key(request):
+        raise HTTPException(status_code=401, detail="Invalid admin key")
+    
+    # Find the listing
+    listing = await db.shop_listings.find_one({"shop_listing_id": data.shop_listing_id})
+    if not listing:
+        raise HTTPException(status_code=404, detail=f"Shop listing '{data.shop_listing_id}' not found")
+    
+    now = datetime.now(timezone.utc)
+    
+    # Deactivate the listing (set available_until to now)
+    await db.shop_listings.update_one(
+        {"shop_listing_id": data.shop_listing_id},
+        {"$set": {
+            "is_active": False,
+            "available_until": now.isoformat(),
+            "removed_at": now.isoformat()
+        }}
+    )
+    
+    return {
+        "success": True,
+        "shop_listing_id": data.shop_listing_id,
+        "item_name": listing.get("item_name"),
+        "action": "removed"
+    }
+
+
 # Include router AFTER all endpoints are defined
 app.include_router(api_router)
 
