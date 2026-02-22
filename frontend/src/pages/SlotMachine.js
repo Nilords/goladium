@@ -151,21 +151,25 @@ const SlotMachine = () => {
     
     if (!slotInfo) {
       toast.error('Slot not loaded. Please refresh.');
+      playError();
       return;
     }
     
     const authToken = localStorage.getItem('goladium_token');
     if (!authToken && !user) {
       toast.error('Please log in to play.');
+      playError();
       return;
     }
     
     const betTotal = parseFloat(totalBet);
     if (betTotal > (user?.balance || 0)) {
       toast.error('Insufficient balance');
+      playError();
       return;
     }
 
+    playSpin(); // Play spin sound
     setSpinning(true);
     setLastResult(null);
     setXpGained(null);
@@ -206,10 +210,13 @@ const SlotMachine = () => {
 
         if (result.is_win) {
           if (result.is_jackpot) {
+            playJackpot(); // JACKPOT sound
             toast.success(`🎉 JACKPOT! +${result.win_amount.toFixed(2)} G`);
           } else if (result.win_amount >= betTotal * 5) {
+            playJackpot(); // Big win also gets jackpot sound
             toast.success(`🔥 BIG WIN! +${result.win_amount.toFixed(2)} G`);
           } else {
+            playWin(); // Normal win sound
             toast.success(`WIN! +${result.win_amount.toFixed(2)} G`);
           }
           setShowLines(true);
@@ -217,9 +224,11 @@ const SlotMachine = () => {
       } else {
         const error = await response.json();
         toast.error(error.detail || 'Spin failed');
+        playError();
       }
     } catch (error) {
       toast.error('Connection error');
+      playError();
     } finally {
       setSpinning(false);
     }
