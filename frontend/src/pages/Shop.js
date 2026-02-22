@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { useLanguage } from '../contexts/LanguageContext';
 import { useSound } from '../contexts/SoundContext';
+import { ShopSEO } from '../components/SEO';
 import { formatCurrency } from '../lib/formatCurrency';
 import Navbar from '../components/Navbar';
 import Chat from '../components/Chat';
