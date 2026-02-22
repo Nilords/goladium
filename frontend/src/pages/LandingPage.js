@@ -112,6 +112,8 @@ const LandingPage = () => {
 
   return (
     <div className="min-h-screen bg-[#050505] relative overflow-hidden">
+      <HomeSEO />
+      
       {/* Background Effects */}
       <div className="absolute inset-0 grid-bg opacity-30" />
       <div className="absolute top-0 left-1/4 w-96 h-96 bg-primary/10 rounded-full blur-[128px]" />
