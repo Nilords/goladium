@@ -7104,6 +7104,15 @@ async def claim_quest_reward(quest_id: str, request: Request):
             {"$inc": {"balance": rewards["g"]}}
         )
         rewards_given["g"] = rewards["g"]
+        
+        # Track quest G reward in account activity
+        await record_account_activity(
+            user_id=user["user_id"],
+            event_type="quest",
+            amount=rewards["g"],
+            source=f"Quest: {quest.get('title', quest_id)}",
+            details={"quest_id": quest_id, "xp": rewards.get("xp", 0)}
+        )
     
     # Handle A currency (rare, with limits)
     if "a" in rewards and rewards["a"] > 0:
