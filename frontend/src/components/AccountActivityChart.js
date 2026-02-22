@@ -153,24 +153,6 @@ const AccountActivityChart = () => {
     );
   };
 
-  // Custom dot - small but visible for every point
-  const renderDot = (props) => {
-    const { cx, cy, payload } = props;
-    if (!cx || !cy) return null;
-    
-    const config = EVENT_CONFIG[payload.eventType] || EVENT_CONFIG.slot;
-    
-    return (
-      <circle
-        cx={cx}
-        cy={cy}
-        r={3}
-        fill={config.color}
-        stroke="transparent"
-      />
-    );
-  };
-
   if (loading) {
     return (
       <div className="flex justify-center p-8">
