@@ -130,15 +130,17 @@ const LandingPage = () => {
           <span className="hidden sm:inline">{language === 'de' ? 'Community beitreten' : 'Join Community'}</span>
           <span className="sm:hidden">Discord</span>
         </a>
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={() => changeLanguage(language === 'en' ? 'de' : 'en')}
-          className="border-white/20 text-white/80 hover:text-white hover:border-white/40 bg-slate-900/80 backdrop-blur-sm"
-          data-testid="landing-lang-toggle"
-        >
-          {language === 'en' ? 'DE' : 'EN'}
-        </Button>
+        {showLanguageToggle && (
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => changeLanguage(language === 'en' ? 'de' : 'en')}
+            className="border-white/20 text-white/80 hover:text-white hover:border-white/40 bg-slate-900/80 backdrop-blur-sm"
+            data-testid="landing-lang-toggle"
+          >
+            {language === 'en' ? 'DE' : 'EN'}
+          </Button>
+        )}
       </div>
 
       {/* Prominent 18+ Age Restriction Banner - Visible without scrolling w*/}
