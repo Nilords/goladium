@@ -10,7 +10,6 @@ import { Label } from '../components/ui/label';
 import { Separator } from '../components/ui/separator';
 import { Slider } from '../components/ui/slider';
 import { Avatar, AvatarFallback, AvatarImage } from '../components/ui/avatar';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../components/ui/select';
 import { toast } from 'sonner';
 import { 
   Settings as SettingsIcon, 
@@ -20,30 +19,22 @@ import {
   Bell,
   Volume2,
   VolumeX,
-  Music,
   Shield,
   Upload,
   X,
   Camera,
-  Headphones,
   MousePointer
 } from 'lucide-react';
-
-
 
 const Settings = () => {
   const { user, token, updateUser, logout } = useAuth();
   const { t, language, changeLanguage, showLanguageToggle } = useLanguage();
   const { 
     settings: audioSettings, 
-    musicTracks,
-    setMasterEnabled,
-    setMasterVolume,
-    setMusicVolume,
-    setEffectsVolume,
+    setSoundEnabled,
+    setVolume,
     setHoverSoundsEnabled,
-    selectTrack,
-    playEffect
+    playClick
   } = useSound();
   
   const [notifications, setNotifications] = useState(true);
@@ -68,58 +59,35 @@ const Settings = () => {
 
   const processFile = async (file) => {
     if (!file) return;
-
-    // Validate file type
     if (!file.type.startsWith('image/')) {
       toast.error(language === 'de' ? 'Bitte nur Bilder hochladen' : 'Please upload images only');
       return;
     }
-
-    // Validate file size (max 5MB)
     if (file.size > 5 * 1024 * 1024) {
       toast.error(language === 'de' ? 'Bild darf max. 5MB sein' : 'Image must be less than 5MB');
       return;
     }
 
     setUploading(true);
-
     try {
-      // Convert to base64
       const reader = new FileReader();
       reader.onload = async (e) => {
         const base64 = e.target.result;
         setPreviewUrl(base64);
-
-        // Upload to server
         const response = await fetch(`/api/user/avatar`, {
           method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${token}`
-          },
+          headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
           body: JSON.stringify({ avatar: base64 })
         });
-
-        if (!response.ok) {
-          throw new Error('Upload failed');
-        }
-
-        const data = await response.json();
-        
-        // Update user context
-        if (updateUser) {
-          updateUser({ ...user, avatar: base64 });
-        }
-
+        if (!response.ok) throw new Error('Upload failed');
+        if (updateUser) updateUser({ ...user, avatar: base64 });
         toast.success(language === 'de' ? 'Profilbild aktualisiert!' : 'Profile picture updated!');
         setUploading(false);
       };
-
       reader.onerror = () => {
         toast.error(language === 'de' ? 'Fehler beim Lesen der Datei' : 'Error reading file');
         setUploading(false);
       };
-
       reader.readAsDataURL(file);
     } catch (error) {
       toast.error(error.message);
@@ -131,11 +99,10 @@ const Settings = () => {
     e.preventDefault();
     e.stopPropagation();
     setDragActive(false);
-
     if (e.dataTransfer.files && e.dataTransfer.files[0]) {
       processFile(e.dataTransfer.files[0]);
     }
-  }, [language, token, user, updateUser]);
+  }, []);
 
   const handleFileInput = (e) => {
     if (e.target.files && e.target.files[0]) {
@@ -148,19 +115,11 @@ const Settings = () => {
     try {
       const response = await fetch(`/api/user/avatar`, {
         method: 'DELETE',
-        headers: {
-          'Authorization': `Bearer ${token}`
-        }
+        headers: { 'Authorization': `Bearer ${token}` }
       });
-
-      if (!response.ok) {
-        throw new Error('Delete failed');
-      }
-
+      if (!response.ok) throw new Error('Delete failed');
       setPreviewUrl(null);
-      if (updateUser) {
-        updateUser({ ...user, avatar: null });
-      }
+      if (updateUser) updateUser({ ...user, avatar: null });
       toast.success(language === 'de' ? 'Profilbild entfernt' : 'Profile picture removed');
     } catch (error) {
       toast.error(error.message);
@@ -171,9 +130,8 @@ const Settings = () => {
 
   const currentAvatar = previewUrl || user?.avatar;
 
-  // Test sound button
   const handleTestSound = () => {
-    playEffect('click');
+    playClick();
     toast.success(language === 'de' ? 'Sound getestet!' : 'Sound tested!');
   };
 
@@ -188,29 +146,21 @@ const Settings = () => {
             {t('settings')}
           </h1>
           <p className="text-white/50 mt-2">
-            {language === 'de' 
-              ? 'Verwalte deine Kontoeinstellungen und Präferenzen'
-              : 'Manage your account settings and preferences'}
+            {language === 'de' ? 'Verwalte deine Kontoeinstellungen' : 'Manage your account settings'}
           </p>
         </div>
 
         <div className="space-y-6">
-          {/* Profile Picture Section */}
+          {/* Profile Picture */}
           <Card className="bg-[#0A0A0C] border-white/5">
             <CardHeader>
               <CardTitle className="text-lg text-white flex items-center gap-2">
                 <Camera className="w-5 h-5 text-primary" />
                 {language === 'de' ? 'Profilbild' : 'Profile Picture'}
               </CardTitle>
-              <CardDescription className="text-white/50">
-                {language === 'de' 
-                  ? 'Lade ein Bild hoch oder ziehe es hierher'
-                  : 'Upload an image or drag and drop it here'}
-              </CardDescription>
             </CardHeader>
             <CardContent>
               <div className="flex items-start gap-6">
-                {/* Current Avatar */}
                 <div className="relative">
                   <Avatar className="w-24 h-24 border-2 border-primary/30">
                     <AvatarImage src={currentAvatar} />
@@ -219,66 +169,24 @@ const Settings = () => {
                     </AvatarFallback>
                   </Avatar>
                   {currentAvatar && (
-                    <button
-                      onClick={removeAvatar}
-                      className="absolute -top-2 -right-2 w-6 h-6 bg-red-500 rounded-full flex items-center justify-center hover:bg-red-600 transition-colors"
-                      disabled={uploading}
-                    >
+                    <button onClick={removeAvatar} className="absolute -top-2 -right-2 w-6 h-6 bg-red-500 rounded-full flex items-center justify-center hover:bg-red-600" disabled={uploading}>
                       <X className="w-4 h-4 text-white" />
                     </button>
                   )}
                 </div>
-
-                {/* Upload Area */}
                 <div className="flex-1">
-                  <div
-                    onDragEnter={handleDrag}
-                    onDragLeave={handleDrag}
-                    onDragOver={handleDrag}
-                    onDrop={handleDrop}
-                    className={`
-                      relative border-2 border-dashed rounded-xl p-6 text-center transition-all cursor-pointer
-                      ${dragActive 
-                        ? 'border-primary bg-primary/10' 
-                        : 'border-white/20 hover:border-primary/50 hover:bg-white/5'
-                      }
-                      ${uploading ? 'opacity-50 pointer-events-none' : ''}
-                    `}
-                  >
-                    <input
-                      type="file"
-                      accept="image/*"
-                      onChange={handleFileInput}
-                      className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
-                      disabled={uploading}
-                    />
-                    
+                  <div onDragEnter={handleDrag} onDragLeave={handleDrag} onDragOver={handleDrag} onDrop={handleDrop}
+                    className={`relative border-2 border-dashed rounded-xl p-6 text-center transition-all cursor-pointer
+                      ${dragActive ? 'border-primary bg-primary/10' : 'border-white/20 hover:border-primary/50'}
+                      ${uploading ? 'opacity-50 pointer-events-none' : ''}`}>
+                    <input type="file" accept="image/*" onChange={handleFileInput} className="absolute inset-0 w-full h-full opacity-0 cursor-pointer" disabled={uploading} />
                     <div className="flex flex-col items-center gap-2">
                       {uploading ? (
                         <div className="w-10 h-10 border-2 border-primary border-t-transparent rounded-full animate-spin" />
                       ) : (
-                        <div className={`w-12 h-12 rounded-full flex items-center justify-center ${
-                          dragActive ? 'bg-primary/20' : 'bg-white/10'
-                        }`}>
-                          <Upload className={`w-6 h-6 ${dragActive ? 'text-primary' : 'text-white/60'}`} />
-                        </div>
+                        <Upload className={`w-6 h-6 ${dragActive ? 'text-primary' : 'text-white/60'}`} />
                       )}
-                      
-                      <div>
-                        <p className={`font-medium ${dragActive ? 'text-primary' : 'text-white'}`}>
-                          {uploading 
-                            ? (language === 'de' ? 'Wird hochgeladen...' : 'Uploading...')
-                            : dragActive
-                              ? (language === 'de' ? 'Bild hier ablegen' : 'Drop image here')
-                              : (language === 'de' ? 'Bild hierher ziehen' : 'Drag image here')
-                          }
-                        </p>
-                        <p className="text-white/40 text-sm mt-1">
-                          {language === 'de' 
-                            ? 'oder klicken zum Auswählen (max. 5MB)'
-                            : 'or click to select (max 5MB)'}
-                        </p>
-                      </div>
+                      <p className="text-white/60 text-sm">{language === 'de' ? 'Bild hochladen (max 5MB)' : 'Upload image (max 5MB)'}</p>
                     </div>
                   </div>
                 </div>
@@ -286,199 +194,78 @@ const Settings = () => {
             </CardContent>
           </Card>
 
-          {/* Account Section */}
+          {/* Account */}
           <Card className="bg-[#0A0A0C] border-white/5">
             <CardHeader>
               <CardTitle className="text-lg text-white flex items-center gap-2">
                 <User className="w-5 h-5 text-primary" />
                 {language === 'de' ? 'Konto' : 'Account'}
               </CardTitle>
-              <CardDescription className="text-white/50">
-                {language === 'de' 
-                  ? 'Deine Kontoinformationen'
-                  : 'Your account information'}
-              </CardDescription>
             </CardHeader>
-            <CardContent className="space-y-4">
+            <CardContent>
               <div className="flex items-center justify-between p-3 rounded-lg bg-white/5">
                 <div>
                   <p className="text-white font-medium">{user?.username}</p>
                   <p className="text-white/50 text-sm">{user?.email}</p>
                 </div>
-                <div className="text-right">
-                  <p className="text-primary font-mono">{t('level')} {user?.level || 1}</p>
-                </div>
+                <p className="text-primary font-mono">{t('level')} {user?.level || 1}</p>
               </div>
             </CardContent>
           </Card>
 
-          {/* Audio Section - NEW */}
+          {/* Audio */}
           <Card className="bg-[#0A0A0C] border-white/5">
             <CardHeader>
               <CardTitle className="text-lg text-white flex items-center gap-2">
-                <Headphones className="w-5 h-5 text-primary" />
-                {language === 'de' ? 'Audio' : 'Audio'}
+                <Volume2 className="w-5 h-5 text-primary" />
+                {language === 'de' ? 'Sound' : 'Sound'}
               </CardTitle>
               <CardDescription className="text-white/50">
-                {language === 'de' 
-                  ? 'Musik und Soundeffekte anpassen'
-                  : 'Customize music and sound effects'}
+                {language === 'de' ? 'Soundeffekte anpassen' : 'Customize sound effects'}
               </CardDescription>
             </CardHeader>
-            <CardContent className="space-y-6">
-              {/* Master Sound Toggle */}
+            <CardContent className="space-y-5">
+              {/* Sound Toggle */}
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-3">
-                  {audioSettings.masterEnabled ? (
-                    <Volume2 className="w-5 h-5 text-primary" />
-                  ) : (
-                    <VolumeX className="w-5 h-5 text-white/40" />
-                  )}
+                  {audioSettings.soundEnabled ? <Volume2 className="w-5 h-5 text-primary" /> : <VolumeX className="w-5 h-5 text-white/40" />}
                   <div>
-                    <Label className="text-white">
-                      {language === 'de' ? 'Sound aktiviert' : 'Sound Enabled'}
-                    </Label>
-                    <p className="text-white/50 text-sm">
-                      {language === 'de' 
-                        ? 'Alle Sounds ein/ausschalten'
-                        : 'Turn all sounds on/off'}
-                    </p>
+                    <Label className="text-white">{language === 'de' ? 'Sound aktiviert' : 'Sound Enabled'}</Label>
+                    <p className="text-white/50 text-sm">{language === 'de' ? 'Alle Sounds ein/aus' : 'Toggle all sounds'}</p>
                   </div>
                 </div>
-                <Switch
-                  checked={audioSettings.masterEnabled}
-                  onCheckedChange={setMasterEnabled}
-                  data-testid="master-sound-toggle"
-                />
+                <Switch checked={audioSettings.soundEnabled} onCheckedChange={setSoundEnabled} />
               </div>
 
-              {audioSettings.masterEnabled && (
+              {audioSettings.soundEnabled && (
                 <>
                   <Separator className="bg-white/10" />
-
-                  {/* Master Volume */}
+                  
+                  {/* Volume */}
                   <div className="space-y-3">
                     <div className="flex items-center justify-between">
-                      <Label className="text-white flex items-center gap-2">
-                        <Volume2 className="w-4 h-4 text-white/60" />
-                        {language === 'de' ? 'Master-Lautstärke' : 'Master Volume'}
-                      </Label>
-                      <span className="text-white/60 text-sm font-mono">{audioSettings.masterVolume}%</span>
+                      <Label className="text-white">{language === 'de' ? 'Lautstärke' : 'Volume'}</Label>
+                      <span className="text-white/60 text-sm font-mono">{audioSettings.volume}%</span>
                     </div>
-                    <Slider
-                      value={[audioSettings.masterVolume]}
-                      onValueChange={([value]) => setMasterVolume(value)}
-                      max={100}
-                      step={1}
-                      className="w-full"
-                      data-testid="master-volume-slider"
-                    />
-                  </div>
-
-                  {/* Music Volume */}
-                  <div className="space-y-3">
-                    <div className="flex items-center justify-between">
-                      <Label className="text-white flex items-center gap-2">
-                        <Music className="w-4 h-4 text-white/60" />
-                        {language === 'de' ? 'Musik-Lautstärke' : 'Music Volume'}
-                      </Label>
-                      <span className="text-white/60 text-sm font-mono">{audioSettings.musicVolume}%</span>
-                    </div>
-                    <Slider
-                      value={[audioSettings.musicVolume]}
-                      onValueChange={([value]) => setMusicVolume(value)}
-                      max={100}
-                      step={1}
-                      className="w-full"
-                      data-testid="music-volume-slider"
-                    />
-                  </div>
-
-                  {/* Effects Volume */}
-                  <div className="space-y-3">
-                    <div className="flex items-center justify-between">
-                      <Label className="text-white flex items-center gap-2">
-                        <Headphones className="w-4 h-4 text-white/60" />
-                        {language === 'de' ? 'Effekt-Lautstärke' : 'Effects Volume'}
-                      </Label>
-                      <span className="text-white/60 text-sm font-mono">{audioSettings.effectsVolume}%</span>
-                    </div>
-                    <Slider
-                      value={[audioSettings.effectsVolume]}
-                      onValueChange={([value]) => setEffectsVolume(value)}
-                      max={100}
-                      step={1}
-                      className="w-full"
-                      data-testid="effects-volume-slider"
-                    />
+                    <Slider value={[audioSettings.volume]} onValueChange={([v]) => setVolume(v)} max={100} step={1} className="w-full" />
                   </div>
 
                   <Separator className="bg-white/10" />
 
-                  {/* Music Selection */}
-                  <div className="space-y-3">
-                    <Label className="text-white flex items-center gap-2">
-                      <Music className="w-4 h-4 text-white/60" />
-                      {language === 'de' ? 'Hintergrundmusik' : 'Background Music'}
-                    </Label>
-                    <Select 
-                      value={audioSettings.currentTrack} 
-                      onValueChange={selectTrack}
-                    >
-                      <SelectTrigger 
-                        className="w-full bg-white/5 border-white/10 text-white"
-                        data-testid="music-select"
-                      >
-                        <SelectValue placeholder={language === 'de' ? 'Musik auswählen' : 'Select music'} />
-                      </SelectTrigger>
-                      <SelectContent className="bg-[#0A0A0C] border-white/10">
-                        {Object.entries(musicTracks).map(([id, track]) => (
-                          <SelectItem 
-                            key={id} 
-                            value={id}
-                            className="text-white hover:bg-white/10 focus:bg-white/10"
-                          >
-                            <div className="flex flex-col">
-                              <span>{track.name}</span>
-                              <span className="text-white/50 text-xs">{track.description}</span>
-                            </div>
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-
-                  <Separator className="bg-white/10" />
-
-                  {/* Hover Sounds Toggle */}
+                  {/* Hover Sounds */}
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-3">
                       <MousePointer className="w-5 h-5 text-white/60" />
                       <div>
-                        <Label className="text-white">
-                          {language === 'de' ? 'Hover-Sounds' : 'Hover Sounds'}
-                        </Label>
-                        <p className="text-white/50 text-sm">
-                          {language === 'de' 
-                            ? 'Kurze Sounds bei Button-Hover'
-                            : 'Short sounds on button hover'}
-                        </p>
+                        <Label className="text-white">{language === 'de' ? 'Hover-Sounds' : 'Hover Sounds'}</Label>
+                        <p className="text-white/50 text-sm">{language === 'de' ? 'Sound bei Button-Hover' : 'Sound on button hover'}</p>
                       </div>
                     </div>
-                    <Switch
-                      checked={audioSettings.hoverSoundsEnabled}
-                      onCheckedChange={setHoverSoundsEnabled}
-                      data-testid="hover-sounds-toggle"
-                    />
+                    <Switch checked={audioSettings.hoverSoundsEnabled} onCheckedChange={setHoverSoundsEnabled} />
                   </div>
 
-                  {/* Test Sound Button */}
-                  <Button
-                    onClick={handleTestSound}
-                    variant="outline"
-                    className="w-full border-white/20 text-white hover:bg-white/10"
-                    data-testid="test-sound-btn"
-                  >
+                  {/* Test Button */}
+                  <Button onClick={handleTestSound} variant="outline" className="w-full border-white/20 text-white hover:bg-white/10">
                     <Volume2 className="w-4 h-4 mr-2" />
                     {language === 'de' ? 'Sound testen' : 'Test Sound'}
                   </Button>
@@ -487,7 +274,7 @@ const Settings = () => {
             </CardContent>
           </Card>
 
-          {/* Language Section - Only show if toggle is enabled */}
+          {/* Language - only if enabled */}
           {showLanguageToggle && (
             <Card className="bg-[#0A0A0C] border-white/5">
               <CardHeader>
@@ -495,34 +282,15 @@ const Settings = () => {
                   <Globe className="w-5 h-5 text-primary" />
                   {language === 'de' ? 'Sprache' : 'Language'}
                 </CardTitle>
-                <CardDescription className="text-white/50">
-                  {language === 'de' 
-                    ? 'Wähle deine bevorzugte Sprache'
-                    : 'Choose your preferred language'}
-                </CardDescription>
               </CardHeader>
               <CardContent>
                 <div className="flex gap-3">
-                  <Button
-                    variant={language === 'en' ? 'default' : 'outline'}
-                    onClick={() => changeLanguage('en')}
-                    className={language === 'en' 
-                      ? 'bg-primary text-black' 
-                      : 'border-white/20 text-white hover:bg-white/10'
-                    }
-                    data-testid="lang-en-btn"
-                  >
+                  <Button variant={language === 'en' ? 'default' : 'outline'} onClick={() => changeLanguage('en')}
+                    className={language === 'en' ? 'bg-primary text-black' : 'border-white/20 text-white hover:bg-white/10'}>
                     English
                   </Button>
-                  <Button
-                    variant={language === 'de' ? 'default' : 'outline'}
-                    onClick={() => changeLanguage('de')}
-                    className={language === 'de' 
-                      ? 'bg-primary text-black' 
-                      : 'border-white/20 text-white hover:bg-white/10'
-                    }
-                    data-testid="lang-de-btn"
-                  >
+                  <Button variant={language === 'de' ? 'default' : 'outline'} onClick={() => changeLanguage('de')}
+                    className={language === 'de' ? 'bg-primary text-black' : 'border-white/20 text-white hover:bg-white/10'}>
                     Deutsch
                   </Button>
                 </div>
@@ -530,7 +298,7 @@ const Settings = () => {
             </Card>
           )}
 
-          {/* Preferences Section */}
+          {/* Notifications */}
           <Card className="bg-[#0A0A0C] border-white/5">
             <CardHeader>
               <CardTitle className="text-lg text-white flex items-center gap-2">
@@ -538,31 +306,18 @@ const Settings = () => {
                 {language === 'de' ? 'Benachrichtigungen' : 'Notifications'}
               </CardTitle>
             </CardHeader>
-            <CardContent className="space-y-4">
+            <CardContent>
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-3">
                   <Bell className="w-5 h-5 text-white/60" />
-                  <div>
-                    <Label className="text-white">
-                      {language === 'de' ? 'Push-Benachrichtigungen' : 'Push Notifications'}
-                    </Label>
-                    <p className="text-white/50 text-sm">
-                      {language === 'de' 
-                        ? 'Erhalte Benachrichtigungen über große Gewinne'
-                        : 'Get notified about big wins'}
-                    </p>
-                  </div>
+                  <Label className="text-white">{language === 'de' ? 'Push-Benachrichtigungen' : 'Push Notifications'}</Label>
                 </div>
-                <Switch
-                  checked={notifications}
-                  onCheckedChange={setNotifications}
-                  data-testid="notifications-toggle"
-                />
+                <Switch checked={notifications} onCheckedChange={setNotifications} />
               </div>
             </CardContent>
           </Card>
 
-          {/* Disclaimer Section */}
+          {/* Legal */}
           <Card className="bg-[#0A0A0C] border-white/5">
             <CardHeader>
               <CardTitle className="text-lg text-white flex items-center gap-2">
@@ -572,25 +327,15 @@ const Settings = () => {
             </CardHeader>
             <CardContent>
               <div className="p-4 rounded-lg bg-red-500/10 border border-red-500/20">
-                <p className="text-red-400 text-sm">
-                  {t('disclaimer')}
-                </p>
-                <p className="text-white/40 text-xs mt-2">
-                  Not affiliated with Roblox or any other platform.
-                </p>
+                <p className="text-red-400 text-sm">{t('disclaimer')}</p>
               </div>
             </CardContent>
           </Card>
 
-          {/* Logout Section */}
+          {/* Logout */}
           <Card className="bg-[#0A0A0C] border-white/5">
             <CardContent className="pt-6">
-              <Button
-                onClick={handleLogout}
-                variant="destructive"
-                className="w-full bg-red-500/20 hover:bg-red-500/30 text-red-400 border border-red-500/30"
-                data-testid="settings-logout-btn"
-              >
+              <Button onClick={handleLogout} variant="destructive" className="w-full bg-red-500/20 hover:bg-red-500/30 text-red-400 border border-red-500/30">
                 <LogOut className="w-4 h-4 mr-2" />
                 {t('logout')}
               </Button>
