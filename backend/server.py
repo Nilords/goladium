@@ -289,7 +289,7 @@ async def get_moderation_counters(user_id: str) -> dict:
     }
 
 
-async def send_discord_auto_mute_log(username: str, violation_type: str, duration_seconds: int, is_permanent: bool):
+async def send_discord_auto_mute_log(username: str, violation_type: str, duration_seconds: int, is_permanent: bool, message_content: str = None):
     webhook = os.getenv("DISCORD_LOG_WEBHOOK")
     if not webhook:
         return
@@ -297,15 +297,24 @@ async def send_discord_auto_mute_log(username: str, violation_type: str, duratio
     color = 0xff0000 if is_permanent else 0xffaa00
     duration_text = "PERMANENT" if is_permanent else f"{duration_seconds} seconds"
 
+    fields = [
+        {"name": "User", "value": username, "inline": False},
+        {"name": "Reason", "value": violation_type, "inline": True},
+        {"name": "Duration", "value": duration_text, "inline": True},
+    ]
+    
+    # Add message content for profanity/advertising violations
+    if message_content and violation_type in ["profanity", "advertising"]:
+        # Truncate if too long and censor partially
+        truncated = message_content[:500] + "..." if len(message_content) > 500 else message_content
+        fields.append({"name": "Message", "value": f"```{truncated}```", "inline": False})
+    
+    fields.append({"name": "Time (UTC)", "value": datetime.now(timezone.utc).isoformat(), "inline": False})
+
     embed = {
         "title": "🤖 AUTO MUTE",
         "color": color,
-        "fields": [
-            {"name": "User", "value": username, "inline": False},
-            {"name": "Reason", "value": violation_type, "inline": True},
-            {"name": "Duration", "value": duration_text, "inline": True},
-            {"name": "Time (UTC)", "value": datetime.now(timezone.utc).isoformat(), "inline": False}
-        ]
+        "fields": fields
     }
 
     async with aiohttp.ClientSession() as session:
