@@ -4,8 +4,8 @@ import { useLanguage } from '../contexts/LanguageContext';
 import { Card, CardContent, CardHeader } from './ui/card';
 import { Button } from './ui/button';
 import { 
-  ComposedChart, Area, Line, XAxis, YAxis, CartesianGrid, Tooltip, 
-  ResponsiveContainer, ReferenceLine, Scatter
+  LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, 
+  ResponsiveContainer, ReferenceLine
 } from 'recharts';
 import { 
   TrendingUp, TrendingDown, Activity,
@@ -101,92 +101,91 @@ const AccountActivityChart = () => {
   const isPositive = stats.current_profit >= 0;
   const periodPositive = (stats.period_change || 0) >= 0;
 
-  const CustomTooltip = ({ active, payload }) => {
+  // Custom Tooltip that follows cursor
+  const CustomTooltip = ({ active, payload, coordinate }) => {
     if (!active || !payload?.length) return null;
     const point = payload[0].payload;
     const config = EVENT_CONFIG[point.eventType] || EVENT_CONFIG.slot;
     const Icon = config.icon;
     
     return (
-      <div className="bg-black/95 border border-white/20 rounded-lg p-3 shadow-xl min-w-[220px] backdrop-blur-sm">
+      <div 
+        className="bg-black/95 border border-white/20 rounded-lg p-3 shadow-2xl min-w-[200px] pointer-events-none z-50"
+        style={{ 
+          backdropFilter: 'blur(8px)',
+        }}
+      >
         {/* Header */}
         <div className="flex items-center gap-2 mb-2 pb-2 border-b border-white/10">
-          <div className="w-8 h-8 rounded-lg flex items-center justify-center" style={{ backgroundColor: `${config.color}20` }}>
+          <div 
+            className="w-8 h-8 rounded-lg flex items-center justify-center" 
+            style={{ backgroundColor: `${config.color}30` }}
+          >
             <Icon className="w-4 h-4" style={{ color: config.color }} />
           </div>
-          <div>
-            <p className="text-white font-medium text-sm">{point.source || config.label}</p>
+          <div className="flex-1 min-w-0">
+            <p className="text-white font-medium text-sm truncate">
+              {point.source || config.label}
+            </p>
             <p className="text-white/40 text-xs">{point.fullDate}</p>
           </div>
         </div>
         
-        {/* OHLC for aggregated data */}
-        {point.volume > 1 && (
-          <div className="grid grid-cols-2 gap-2 text-xs mb-2">
-            <div className="flex justify-between">
-              <span className="text-white/50">Open:</span>
-              <span className={`font-mono ${point.open >= 0 ? 'text-green-400' : 'text-red-400'}`}>
-                {point.open?.toFixed(1)}G
-              </span>
-            </div>
-            <div className="flex justify-between">
-              <span className="text-white/50">High:</span>
-              <span className="text-green-400 font-mono">{point.high?.toFixed(1)}G</span>
-            </div>
-            <div className="flex justify-between">
-              <span className="text-white/50">Low:</span>
-              <span className="text-red-400 font-mono">{point.low?.toFixed(1)}G</span>
-            </div>
-            <div className="flex justify-between">
-              <span className="text-white/50">Close:</span>
-              <span className={`font-mono ${point.close >= 0 ? 'text-green-400' : 'text-red-400'}`}>
-                {point.close?.toFixed(1)}G
-              </span>
-            </div>
+        {/* Stats */}
+        <div className="space-y-2">
+          <div className="flex justify-between items-center">
+            <span className="text-white/50 text-sm">{language === 'de' ? 'Änderung' : 'Change'}</span>
+            <span className={`font-mono font-bold text-lg ${point.net_change >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+              {point.net_change >= 0 ? '+' : ''}{point.net_change?.toFixed(2)} G
+            </span>
           </div>
-        )}
 
-        {/* Change */}
-        <div className="flex justify-between items-center py-2 border-t border-white/10">
-          <span className="text-white/60 text-sm">{language === 'de' ? 'Änderung' : 'Change'}</span>
-          <span className={`font-mono font-bold text-lg ${point.net_change >= 0 ? 'text-green-400' : 'text-red-400'}`}>
-            {point.net_change >= 0 ? '+' : ''}{point.net_change?.toFixed(2)} G
-          </span>
+          <div className="flex justify-between items-center">
+            <span className="text-white/50 text-sm">{language === 'de' ? 'Position' : 'Position'}</span>
+            <span className={`font-mono font-bold ${point.close >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+              {point.close >= 0 ? '+' : ''}{point.close?.toFixed(2)} G
+            </span>
+          </div>
+
+          {/* Volume for aggregated */}
+          {point.volume > 1 && (
+            <div className="flex justify-between items-center pt-1 border-t border-white/10">
+              <span className="text-white/40 text-xs">Events</span>
+              <span className="text-white/60 text-xs">{point.volume}x</span>
+            </div>
+          )}
         </div>
-
-        {/* Current Position */}
-        <div className="flex justify-between items-center">
-          <span className="text-white/60 text-sm">{language === 'de' ? 'Position' : 'Position'}</span>
-          <span className={`font-mono font-bold ${point.close >= 0 ? 'text-green-400' : 'text-red-400'}`}>
-            {point.close >= 0 ? '+' : ''}{point.close?.toFixed(2)} G
-          </span>
-        </div>
-
-        {/* Volume */}
-        {point.volume > 1 && (
-          <div className="flex justify-between items-center mt-1 text-xs text-white/40">
-            <span>Events</span>
-            <span>{point.volume}</span>
-          </div>
-        )}
-
-        {/* Breakdown */}
-        {point.breakdown && Object.keys(point.breakdown).length > 1 && (
-          <div className="mt-2 pt-2 border-t border-white/10 text-xs">
-            <p className="text-white/40 mb-1">Breakdown:</p>
-            <div className="flex flex-wrap gap-2">
-              {Object.entries(point.breakdown).map(([type, count]) => {
-                const cfg = EVENT_CONFIG[type];
-                return (
-                  <span key={type} className="px-1.5 py-0.5 rounded text-white/70" style={{ backgroundColor: `${cfg?.color}20` }}>
-                    {type}: {count}
-                  </span>
-                );
-              })}
-            </div>
-          </div>
-        )}
       </div>
+    );
+  };
+
+  // Custom cursor line
+  const CustomCursor = ({ points, width, height }) => {
+    if (!points || !points.length) return null;
+    const { x, y } = points[0];
+    
+    return (
+      <g>
+        {/* Vertical line */}
+        <line
+          x1={x}
+          y1={0}
+          x2={x}
+          y2={height}
+          stroke="rgba(0, 240, 255, 0.3)"
+          strokeWidth={1}
+          strokeDasharray="4 4"
+        />
+        {/* Dot at intersection */}
+        <circle
+          cx={x}
+          cy={y}
+          r={6}
+          fill="#00F0FF"
+          stroke="#000"
+          strokeWidth={2}
+        />
+      </g>
     );
   };
 
@@ -308,18 +307,14 @@ const AccountActivityChart = () => {
         <CardContent className="p-4 pt-0">
           <div className="h-[320px]">
             <ResponsiveContainer width="100%" height="100%">
-              <ComposedChart 
+              <LineChart 
                 data={chartData} 
                 margin={{ top: 10, right: 10, left: 0, bottom: 0 }}
               >
                 <defs>
-                  <linearGradient id="profitGradientPos" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%" stopColor="#22c55e" stopOpacity={0.3}/>
-                    <stop offset="95%" stopColor="#22c55e" stopOpacity={0}/>
-                  </linearGradient>
-                  <linearGradient id="profitGradientNeg" x1="0" y1="1" x2="0" y2="0">
-                    <stop offset="5%" stopColor="#ef4444" stopOpacity={0.3}/>
-                    <stop offset="95%" stopColor="#ef4444" stopOpacity={0}/>
+                  <linearGradient id="lineGradient" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="5%" stopColor={isPositive ? "#22c55e" : "#ef4444"} stopOpacity={0.8}/>
+                    <stop offset="95%" stopColor={isPositive ? "#22c55e" : "#ef4444"} stopOpacity={0.2}/>
                   </linearGradient>
                 </defs>
                 
@@ -353,35 +348,24 @@ const AccountActivityChart = () => {
                   stroke="rgba(255,255,255,0.3)" 
                   strokeWidth={1} 
                   strokeDasharray="5 5"
-                  label={{ value: '0', position: 'left', fill: 'rgba(255,255,255,0.3)', fontSize: 10 }}
                 />
                 
-                <Tooltip content={<CustomTooltip />} />
-
-                {/* Area fill */}
-                <Area
-                  type="monotone"
-                  dataKey="close"
-                  stroke="transparent"
-                  fill={isPositive ? "url(#profitGradientPos)" : "url(#profitGradientNeg)"}
+                <Tooltip 
+                  content={<CustomTooltip />}
+                  cursor={<CustomCursor />}
+                  isAnimationActive={false}
                 />
 
-                {/* Main line - no dots, only activeDot on hover */}
                 <Line
                   type="monotone"
                   dataKey="close"
                   stroke={isPositive ? "#22c55e" : "#ef4444"}
                   strokeWidth={2}
                   dot={false}
-                  activeDot={{ 
-                    r: 6, 
-                    fill: '#00F0FF', 
-                    stroke: '#000', 
-                    strokeWidth: 2,
-                    style: { cursor: 'pointer' }
-                  }}
+                  activeDot={false}
+                  isAnimationActive={false}
                 />
-              </ComposedChart>
+              </LineChart>
             </ResponsiveContainer>
           </div>
         </CardContent>
