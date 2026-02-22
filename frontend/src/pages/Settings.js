@@ -1,13 +1,16 @@
 import React, { useState, useCallback } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { useLanguage } from '../contexts/LanguageContext';
+import { useSound } from '../contexts/SoundContext';
 import Navbar from '../components/Navbar';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '../components/ui/card';
 import { Button } from '../components/ui/button';
 import { Switch } from '../components/ui/switch';
 import { Label } from '../components/ui/label';
 import { Separator } from '../components/ui/separator';
+import { Slider } from '../components/ui/slider';
 import { Avatar, AvatarFallback, AvatarImage } from '../components/ui/avatar';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../components/ui/select';
 import { toast } from 'sonner';
 import { 
   Settings as SettingsIcon, 
@@ -16,20 +19,34 @@ import {
   User,
   Bell,
   Volume2,
+  VolumeX,
+  Music,
   Shield,
   Upload,
-  ImageIcon,
   X,
-  Camera
+  Camera,
+  Headphones,
+  MousePointer
 } from 'lucide-react';
 
 
 
 const Settings = () => {
   const { user, token, updateUser, logout } = useAuth();
-  const { t, language, changeLanguage } = useLanguage();
+  const { t, language, changeLanguage, showLanguageToggle } = useLanguage();
+  const { 
+    settings: audioSettings, 
+    musicTracks,
+    setMasterEnabled,
+    setMasterVolume,
+    setMusicVolume,
+    setEffectsVolume,
+    setHoverSoundsEnabled,
+    selectTrack,
+    playEffect
+  } = useSound();
+  
   const [notifications, setNotifications] = useState(true);
-  const [sounds, setSounds] = useState(true);
   const [uploading, setUploading] = useState(false);
   const [dragActive, setDragActive] = useState(false);
   const [previewUrl, setPreviewUrl] = useState(null);
@@ -153,6 +170,12 @@ const Settings = () => {
   };
 
   const currentAvatar = previewUrl || user?.avatar;
+
+  // Test sound button
+  const handleTestSound = () => {
+    playEffect('click');
+    toast.success(language === 'de' ? 'Sound getestet!' : 'Sound tested!');
+  };
 
   return (
     <div className="min-h-screen bg-[#050505] flex flex-col">
@@ -289,53 +312,230 @@ const Settings = () => {
             </CardContent>
           </Card>
 
-          {/* Language Section */}
+          {/* Audio Section - NEW */}
           <Card className="bg-[#0A0A0C] border-white/5">
             <CardHeader>
               <CardTitle className="text-lg text-white flex items-center gap-2">
-                <Globe className="w-5 h-5 text-primary" />
-                {language === 'de' ? 'Sprache' : 'Language'}
+                <Headphones className="w-5 h-5 text-primary" />
+                {language === 'de' ? 'Audio' : 'Audio'}
               </CardTitle>
               <CardDescription className="text-white/50">
                 {language === 'de' 
-                  ? 'Wähle deine bevorzugte Sprache'
-                  : 'Choose your preferred language'}
+                  ? 'Musik und Soundeffekte anpassen'
+                  : 'Customize music and sound effects'}
               </CardDescription>
             </CardHeader>
-            <CardContent>
-              <div className="flex gap-3">
-                <Button
-                  variant={language === 'en' ? 'default' : 'outline'}
-                  onClick={() => changeLanguage('en')}
-                  className={language === 'en' 
-                    ? 'bg-primary text-black' 
-                    : 'border-white/20 text-white hover:bg-white/10'
-                  }
-                  data-testid="lang-en-btn"
-                >
-                  🇬🇧 English
-                </Button>
-                <Button
-                  variant={language === 'de' ? 'default' : 'outline'}
-                  onClick={() => changeLanguage('de')}
-                  className={language === 'de' 
-                    ? 'bg-primary text-black' 
-                    : 'border-white/20 text-white hover:bg-white/10'
-                  }
-                  data-testid="lang-de-btn"
-                >
-                  🇩🇪 Deutsch
-                </Button>
+            <CardContent className="space-y-6">
+              {/* Master Sound Toggle */}
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  {audioSettings.masterEnabled ? (
+                    <Volume2 className="w-5 h-5 text-primary" />
+                  ) : (
+                    <VolumeX className="w-5 h-5 text-white/40" />
+                  )}
+                  <div>
+                    <Label className="text-white">
+                      {language === 'de' ? 'Sound aktiviert' : 'Sound Enabled'}
+                    </Label>
+                    <p className="text-white/50 text-sm">
+                      {language === 'de' 
+                        ? 'Alle Sounds ein/ausschalten'
+                        : 'Turn all sounds on/off'}
+                    </p>
+                  </div>
+                </div>
+                <Switch
+                  checked={audioSettings.masterEnabled}
+                  onCheckedChange={setMasterEnabled}
+                  data-testid="master-sound-toggle"
+                />
               </div>
+
+              {audioSettings.masterEnabled && (
+                <>
+                  <Separator className="bg-white/10" />
+
+                  {/* Master Volume */}
+                  <div className="space-y-3">
+                    <div className="flex items-center justify-between">
+                      <Label className="text-white flex items-center gap-2">
+                        <Volume2 className="w-4 h-4 text-white/60" />
+                        {language === 'de' ? 'Master-Lautstärke' : 'Master Volume'}
+                      </Label>
+                      <span className="text-white/60 text-sm font-mono">{audioSettings.masterVolume}%</span>
+                    </div>
+                    <Slider
+                      value={[audioSettings.masterVolume]}
+                      onValueChange={([value]) => setMasterVolume(value)}
+                      max={100}
+                      step={1}
+                      className="w-full"
+                      data-testid="master-volume-slider"
+                    />
+                  </div>
+
+                  {/* Music Volume */}
+                  <div className="space-y-3">
+                    <div className="flex items-center justify-between">
+                      <Label className="text-white flex items-center gap-2">
+                        <Music className="w-4 h-4 text-white/60" />
+                        {language === 'de' ? 'Musik-Lautstärke' : 'Music Volume'}
+                      </Label>
+                      <span className="text-white/60 text-sm font-mono">{audioSettings.musicVolume}%</span>
+                    </div>
+                    <Slider
+                      value={[audioSettings.musicVolume]}
+                      onValueChange={([value]) => setMusicVolume(value)}
+                      max={100}
+                      step={1}
+                      className="w-full"
+                      data-testid="music-volume-slider"
+                    />
+                  </div>
+
+                  {/* Effects Volume */}
+                  <div className="space-y-3">
+                    <div className="flex items-center justify-between">
+                      <Label className="text-white flex items-center gap-2">
+                        <Headphones className="w-4 h-4 text-white/60" />
+                        {language === 'de' ? 'Effekt-Lautstärke' : 'Effects Volume'}
+                      </Label>
+                      <span className="text-white/60 text-sm font-mono">{audioSettings.effectsVolume}%</span>
+                    </div>
+                    <Slider
+                      value={[audioSettings.effectsVolume]}
+                      onValueChange={([value]) => setEffectsVolume(value)}
+                      max={100}
+                      step={1}
+                      className="w-full"
+                      data-testid="effects-volume-slider"
+                    />
+                  </div>
+
+                  <Separator className="bg-white/10" />
+
+                  {/* Music Selection */}
+                  <div className="space-y-3">
+                    <Label className="text-white flex items-center gap-2">
+                      <Music className="w-4 h-4 text-white/60" />
+                      {language === 'de' ? 'Hintergrundmusik' : 'Background Music'}
+                    </Label>
+                    <Select 
+                      value={audioSettings.currentTrack} 
+                      onValueChange={selectTrack}
+                    >
+                      <SelectTrigger 
+                        className="w-full bg-white/5 border-white/10 text-white"
+                        data-testid="music-select"
+                      >
+                        <SelectValue placeholder={language === 'de' ? 'Musik auswählen' : 'Select music'} />
+                      </SelectTrigger>
+                      <SelectContent className="bg-[#0A0A0C] border-white/10">
+                        {Object.entries(musicTracks).map(([id, track]) => (
+                          <SelectItem 
+                            key={id} 
+                            value={id}
+                            className="text-white hover:bg-white/10 focus:bg-white/10"
+                          >
+                            <div className="flex flex-col">
+                              <span>{track.name}</span>
+                              <span className="text-white/50 text-xs">{track.description}</span>
+                            </div>
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  <Separator className="bg-white/10" />
+
+                  {/* Hover Sounds Toggle */}
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-3">
+                      <MousePointer className="w-5 h-5 text-white/60" />
+                      <div>
+                        <Label className="text-white">
+                          {language === 'de' ? 'Hover-Sounds' : 'Hover Sounds'}
+                        </Label>
+                        <p className="text-white/50 text-sm">
+                          {language === 'de' 
+                            ? 'Kurze Sounds bei Button-Hover'
+                            : 'Short sounds on button hover'}
+                        </p>
+                      </div>
+                    </div>
+                    <Switch
+                      checked={audioSettings.hoverSoundsEnabled}
+                      onCheckedChange={setHoverSoundsEnabled}
+                      data-testid="hover-sounds-toggle"
+                    />
+                  </div>
+
+                  {/* Test Sound Button */}
+                  <Button
+                    onClick={handleTestSound}
+                    variant="outline"
+                    className="w-full border-white/20 text-white hover:bg-white/10"
+                    data-testid="test-sound-btn"
+                  >
+                    <Volume2 className="w-4 h-4 mr-2" />
+                    {language === 'de' ? 'Sound testen' : 'Test Sound'}
+                  </Button>
+                </>
+              )}
             </CardContent>
           </Card>
+
+          {/* Language Section - Only show if toggle is enabled */}
+          {showLanguageToggle && (
+            <Card className="bg-[#0A0A0C] border-white/5">
+              <CardHeader>
+                <CardTitle className="text-lg text-white flex items-center gap-2">
+                  <Globe className="w-5 h-5 text-primary" />
+                  {language === 'de' ? 'Sprache' : 'Language'}
+                </CardTitle>
+                <CardDescription className="text-white/50">
+                  {language === 'de' 
+                    ? 'Wähle deine bevorzugte Sprache'
+                    : 'Choose your preferred language'}
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div className="flex gap-3">
+                  <Button
+                    variant={language === 'en' ? 'default' : 'outline'}
+                    onClick={() => changeLanguage('en')}
+                    className={language === 'en' 
+                      ? 'bg-primary text-black' 
+                      : 'border-white/20 text-white hover:bg-white/10'
+                    }
+                    data-testid="lang-en-btn"
+                  >
+                    English
+                  </Button>
+                  <Button
+                    variant={language === 'de' ? 'default' : 'outline'}
+                    onClick={() => changeLanguage('de')}
+                    className={language === 'de' 
+                      ? 'bg-primary text-black' 
+                      : 'border-white/20 text-white hover:bg-white/10'
+                    }
+                    data-testid="lang-de-btn"
+                  >
+                    Deutsch
+                  </Button>
+                </div>
+              </CardContent>
+            </Card>
+          )}
 
           {/* Preferences Section */}
           <Card className="bg-[#0A0A0C] border-white/5">
             <CardHeader>
               <CardTitle className="text-lg text-white flex items-center gap-2">
                 <Bell className="w-5 h-5 text-primary" />
-                {language === 'de' ? 'Einstellungen' : 'Preferences'}
+                {language === 'de' ? 'Benachrichtigungen' : 'Notifications'}
               </CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
@@ -344,7 +544,7 @@ const Settings = () => {
                   <Bell className="w-5 h-5 text-white/60" />
                   <div>
                     <Label className="text-white">
-                      {language === 'de' ? 'Benachrichtigungen' : 'Notifications'}
+                      {language === 'de' ? 'Push-Benachrichtigungen' : 'Push Notifications'}
                     </Label>
                     <p className="text-white/50 text-sm">
                       {language === 'de' 
@@ -356,28 +556,7 @@ const Settings = () => {
                 <Switch
                   checked={notifications}
                   onCheckedChange={setNotifications}
-                />
-              </div>
-
-              <Separator className="bg-white/10" />
-
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-3">
-                  <Volume2 className="w-5 h-5 text-white/60" />
-                  <div>
-                    <Label className="text-white">
-                      {language === 'de' ? 'Soundeffekte' : 'Sound Effects'}
-                    </Label>
-                    <p className="text-white/50 text-sm">
-                      {language === 'de' 
-                        ? 'Aktiviere Spielsounds'
-                        : 'Enable game sounds'}
-                    </p>
-                  </div>
-                </div>
-                <Switch
-                  checked={sounds}
-                  onCheckedChange={setSounds}
+                  data-testid="notifications-toggle"
                 />
               </div>
             </CardContent>
