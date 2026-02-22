@@ -32,7 +32,7 @@ import { BarChart3 } from 'lucide-react';
 
 const Navbar = () => {
   const { user, logout } = useAuth();
-  const { t, language, changeLanguage } = useLanguage();
+  const { t, language, changeLanguage, showLanguageToggle } = useLanguage();
   const location = useLocation();
   const [mobileMenuOpen, setMobileMenuOpen] = React.useState(false);
 
