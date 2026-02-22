@@ -108,16 +108,18 @@ const Navbar = () => {
                 <span className="text-primary/60 text-sm">A</span>
               </div>
 
-              {/* Language Toggle */}
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => changeLanguage(language === 'en' ? 'de' : 'en')}
-                className="bg-white/10 text-white/80 hover:text-white hover:bg-white/15 border border-white/20 hover:border-white/30"
-                data-testid="language-toggle"
-              >
-                {language.toUpperCase()}
-              </Button>
+              {/* Language Toggle - can be hidden via env var */}
+              {showLanguageToggle && (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => changeLanguage(language === 'en' ? 'de' : 'en')}
+                  className="bg-white/10 text-white/80 hover:text-white hover:bg-white/15 border border-white/20 hover:border-white/30"
+                  data-testid="language-toggle"
+                >
+                  {language.toUpperCase()}
+                </Button>
+              )}
 
               {/* User Menu */}
               <DropdownMenu>
