@@ -6134,8 +6134,9 @@ async def search_user_by_username(username: str, request: Request):
 
 @api_router.get("/trades/user-inventory/{user_id}")
 async def get_user_inventory_for_trade(user_id: str, request: Request):
-    """Get a user's inventory for trade selection (shows tradeable items)"""
+    """Get a user's inventory for trade selection (shows tradeable items only)"""
     current_user = await get_current_user(request)
+    now = datetime.now(timezone.utc)
     
     # Verify target user exists
     target_user = await db.users.find_one({"user_id": user_id}, {"_id": 0})
@@ -6148,18 +6149,34 @@ async def get_user_inventory_for_trade(user_id: str, request: Request):
         {"_id": 0}
     ).to_list(500)
     
-    # Enrich with item definitions
+    # Enrich with item definitions and filter out untradeable items
     enriched_items = []
     for inv_item in items:
+        # Check if item is currently untradeable (from shop purchase)
+        untradeable_until = inv_item.get("untradeable_until")
+        if untradeable_until:
+            if isinstance(untradeable_until, str):
+                try:
+                    untradeable_until = datetime.fromisoformat(untradeable_until.replace("Z", "+00:00"))
+                except:
+                    untradeable_until = None
+            if untradeable_until and now < untradeable_until:
+                # Item is still untradeable, skip it
+                continue
+        
         item_def = await db.items.find_one({"item_id": inv_item["item_id"]}, {"_id": 0})
         if item_def:
+            # Also check if item definition marks it as non-tradeable
+            if not item_def.get("is_tradeable", True):
+                continue
+            
             enriched_items.append({
                 "inventory_id": inv_item["inventory_id"],
                 "item_id": inv_item["item_id"],
-                "item_name": item_def.get("name", "Unknown Item"),
-                "item_rarity": item_def.get("rarity", "common"),
-                "item_image": item_def.get("image_url"),
-                "item_flavor_text": item_def.get("flavor_text", ""),
+                "item_name": item_def.get("name", inv_item.get("item_name", "Unknown Item")),
+                "item_rarity": item_def.get("rarity", inv_item.get("item_rarity", "common")),
+                "item_image": item_def.get("image_url", inv_item.get("item_image")),
+                "item_flavor_text": item_def.get("flavor_text", inv_item.get("item_flavor_text", "")),
                 "acquired_at": inv_item.get("acquired_at"),
                 "purchase_price": inv_item.get("purchase_price", 0)
             })
