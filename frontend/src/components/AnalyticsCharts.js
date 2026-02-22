@@ -3,12 +3,12 @@ import { useSearchParams } from 'react-router-dom';
 import { useLanguage } from '../contexts/LanguageContext';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from './ui/tabs';
 import { Activity, Package } from 'lucide-react';
-import AccountValueChart from './AccountValueChart';
+import AccountActivityChart from './AccountActivityChart';
 import InventoryValueChart from './InventoryValueChart';
 
 /**
  * Combined Analytics Charts Component
- * Shows Account Value and Inventory Value charts with a toggle
+ * Shows Account Activity and Inventory Value charts with a toggle
  * Supports URL parameter ?view=account|inventory for direct navigation
  */
 const AnalyticsCharts = ({ defaultView = 'account' }) => {
@@ -39,7 +39,7 @@ const AnalyticsCharts = ({ defaultView = 'account' }) => {
             data-testid="account-chart-tab"
           >
             <Activity className="w-4 h-4 mr-2" />
-            {language === 'de' ? 'Kontowert' : 'Account Value'}
+            {language === 'de' ? 'Account-Verlauf' : 'Account Activity'}
           </TabsTrigger>
           <TabsTrigger 
             value="inventory"
@@ -52,7 +52,7 @@ const AnalyticsCharts = ({ defaultView = 'account' }) => {
         </TabsList>
 
         <TabsContent value="account" className="mt-4">
-          <AccountValueChart />
+          <AccountActivityChart />
         </TabsContent>
 
         <TabsContent value="inventory" className="mt-4">
