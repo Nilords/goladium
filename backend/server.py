@@ -6238,6 +6238,29 @@ async def accept_trade(trade_id: str, request: Request):
             details={"trade_id": trade_id, "from_user": initiator["username"]}
         )
     
+    # Record account activity for G transfers
+    # Initiator: paid initiator_g + fee, received recipient_g
+    initiator_net = recipient_g - (initiator_g + initiator_fee) if (initiator_g > 0 or recipient_g > 0) else 0
+    if initiator_net != 0:
+        await record_account_activity(
+            user_id=initiator["user_id"],
+            event_type="trade",
+            amount=initiator_net,
+            source=f"Trade mit {recipient['username']}",
+            details={"trade_id": trade_id, "sent": initiator_g, "received": recipient_g, "fee": initiator_fee}
+        )
+    
+    # Recipient: paid recipient_g + fee, received initiator_g
+    recipient_net = initiator_g - (recipient_g + recipient_fee) if (recipient_g > 0 or initiator_g > 0) else 0
+    if recipient_net != 0:
+        await record_account_activity(
+            user_id=recipient["user_id"],
+            event_type="trade",
+            amount=recipient_net,
+            source=f"Trade mit {initiator['username']}",
+            details={"trade_id": trade_id, "sent": recipient_g, "received": initiator_g, "fee": recipient_fee}
+        )
+    
     # Calculate total fee burned
     total_fee_burned = initiator_fee + recipient_fee
     
