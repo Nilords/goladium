@@ -7737,6 +7737,37 @@ class AdminGaladiumPassRequest(BaseModel):
     username: str
     activate: bool  # True = activate, False = deactivate
 
+# ============== SHOP ADMIN MODELS ==============
+
+class AdminShopAddRequest(BaseModel):
+    """Request to add a new item to the shop"""
+    item_name: str
+    item_rarity: str  # common, uncommon, rare, epic, legendary
+    item_description: str
+    item_image: Optional[str] = None  # URL to image
+    price: float  # G cost
+    base_value: float  # Base value for selling
+    available_hours: int  # How many hours until item disappears from shop
+    untradeable_hours: int  # How many hours the item is untradeable after purchase
+    stock_limit: Optional[int] = None  # None = unlimited
+
+class AdminShopEditRequest(BaseModel):
+    """Request to edit an existing shop item"""
+    shop_listing_id: str
+    item_name: Optional[str] = None
+    item_description: Optional[str] = None
+    item_image: Optional[str] = None
+    price: Optional[float] = None
+    base_value: Optional[float] = None
+    available_hours: Optional[int] = None  # Extend/shorten availability
+    untradeable_hours: Optional[int] = None
+    stock_limit: Optional[int] = None
+    is_active: Optional[bool] = None
+
+class AdminShopRemoveRequest(BaseModel):
+    """Request to remove an item from the shop"""
+    shop_listing_id: str
+
 @api_router.post("/admin/galadium-pass")
 async def admin_toggle_galadium_pass(data: AdminGaladiumPassRequest, request: Request):
     """Activate or deactivate Galadium Pass for a user (Discord bot endpoint)"""
