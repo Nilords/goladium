@@ -490,6 +490,270 @@ async def on_app_command_error(interaction: discord.Interaction, error):
 
         await log_channel.send(embed=embed)
 
+
+# ============== SHOP MANAGEMENT COMMANDS ==============
+
+@bot.tree.command(name="shop-add", description="Add a new item to the shop")
+@app_commands.describe(
+    name="Item name",
+    rarity="Item rarity (common/uncommon/rare/epic/legendary)",
+    description="Item description/flavor text",
+    price="Price in G",
+    value="Base sell value in G",
+    available_hours="Hours until item disappears from shop",
+    untradeable_hours="Hours the item is untradeable after purchase",
+    image_url="URL to item image (optional)",
+    stock="Stock limit (0 = unlimited)"
+)
+@app_commands.choices(rarity=[
+    app_commands.Choice(name="Common", value="common"),
+    app_commands.Choice(name="Uncommon", value="uncommon"),
+    app_commands.Choice(name="Rare", value="rare"),
+    app_commands.Choice(name="Epic", value="epic"),
+    app_commands.Choice(name="Legendary", value="legendary")
+])
+async def shop_add(
+    interaction: discord.Interaction,
+    name: str,
+    rarity: str,
+    description: str,
+    price: float,
+    value: float,
+    available_hours: int,
+    untradeable_hours: int,
+    image_url: str = None,
+    stock: int = 0
+):
+    """Add a new item to the shop (Admin only)"""
+    if not is_admin(interaction.user.id):
+        await interaction.response.send_message("❌ You don't have permission to use this command.", ephemeral=True)
+        return
+    
+    await interaction.response.defer(ephemeral=True)
+    
+    try:
+        async with aiohttp.ClientSession() as session:
+            async with session.post(
+                f"{API_BASE_URL}/api/admin/shop/add",
+                json={
+                    "item_name": name,
+                    "item_rarity": rarity,
+                    "item_description": description,
+                    "item_image": image_url,
+                    "price": price,
+                    "base_value": value,
+                    "available_hours": available_hours,
+                    "untradeable_hours": untradeable_hours,
+                    "stock_limit": stock if stock > 0 else None
+                },
+                headers={"X-Admin-Key": ADMIN_API_KEY}
+            ) as resp:
+                if resp.status == 200:
+                    data = await resp.json()
+                    
+                    embed = discord.Embed(
+                        title="✅ Shop Item Added",
+                        color=get_rarity_color(rarity)
+                    )
+                    embed.add_field(name="Name", value=data["item_name"], inline=True)
+                    embed.add_field(name="Rarity", value=data["item_rarity"].capitalize(), inline=True)
+                    embed.add_field(name="Price", value=f"{data['price']} G", inline=True)
+                    embed.add_field(name="Shop Duration", value=f"{data['hours_available']}h", inline=True)
+                    embed.add_field(name="Untradeable", value=f"{data['hours_untradeable']}h", inline=True)
+                    embed.add_field(name="Stock", value=str(stock) if stock > 0 else "Unlimited", inline=True)
+                    embed.add_field(name="Listing ID", value=f"`{data['shop_listing_id']}`", inline=False)
+                    
+                    if image_url:
+                        embed.set_thumbnail(url=image_url)
+                    
+                    await interaction.followup.send(embed=embed, ephemeral=True)
+                else:
+                    error_data = await resp.json()
+                    await interaction.followup.send(f"❌ Failed: {error_data.get('detail', 'Unknown error')}", ephemeral=True)
+    except Exception as e:
+        await interaction.followup.send(f"❌ Error: {str(e)}", ephemeral=True)
+
+
+@bot.tree.command(name="shop-list", description="List all shop items")
+async def shop_list(interaction: discord.Interaction):
+    """List all shop items (Admin only)"""
+    if not is_admin(interaction.user.id):
+        await interaction.response.send_message("❌ You don't have permission to use this command.", ephemeral=True)
+        return
+    
+    await interaction.response.defer(ephemeral=True)
+    
+    try:
+        async with aiohttp.ClientSession() as session:
+            async with session.get(
+                f"{API_BASE_URL}/api/admin/shop/list",
+                headers={"X-Admin-Key": ADMIN_API_KEY}
+            ) as resp:
+                if resp.status == 200:
+                    data = await resp.json()
+                    items = data.get("items", [])
+                    
+                    if not items:
+                        await interaction.followup.send("📦 No items in shop.", ephemeral=True)
+                        return
+                    
+                    embed = discord.Embed(
+                        title="🏪 Shop Items",
+                        description=f"Total: {len(items)} items",
+                        color=0x00ff00
+                    )
+                    
+                    for item in items[:25]:  # Discord limit
+                        status = "🔴 Expired" if item.get("is_expired") else ("🟢 Active" if item.get("is_active") else "⚫ Inactive")
+                        hours_left = item.get("hours_remaining")
+                        time_str = f"{hours_left}h left" if hours_left is not None else "∞"
+                        
+                        embed.add_field(
+                            name=f"{status} {item['item_name']}",
+                            value=f"Rarity: {item['item_rarity']}\nPrice: {item['price']} G\nTime: {time_str}\nID: `{item['shop_listing_id'][:12]}...`",
+                            inline=True
+                        )
+                    
+                    await interaction.followup.send(embed=embed, ephemeral=True)
+                else:
+                    error_data = await resp.json()
+                    await interaction.followup.send(f"❌ Failed: {error_data.get('detail', 'Unknown error')}", ephemeral=True)
+    except Exception as e:
+        await interaction.followup.send(f"❌ Error: {str(e)}", ephemeral=True)
+
+
+@bot.tree.command(name="shop-edit", description="Edit a shop item")
+@app_commands.describe(
+    listing_id="Shop listing ID (from /shop-list)",
+    name="New item name (optional)",
+    description="New description (optional)",
+    price="New price in G (optional)",
+    value="New base sell value (optional)",
+    extend_hours="Extend availability by X hours (optional)",
+    untradeable_hours="Set new untradeable duration (optional)",
+    image_url="New image URL (optional)",
+    stock="New stock limit, 0=unlimited (optional)",
+    active="Set active status (optional)"
+)
+async def shop_edit(
+    interaction: discord.Interaction,
+    listing_id: str,
+    name: str = None,
+    description: str = None,
+    price: float = None,
+    value: float = None,
+    extend_hours: int = None,
+    untradeable_hours: int = None,
+    image_url: str = None,
+    stock: int = None,
+    active: bool = None
+):
+    """Edit an existing shop item (Admin only)"""
+    if not is_admin(interaction.user.id):
+        await interaction.response.send_message("❌ You don't have permission to use this command.", ephemeral=True)
+        return
+    
+    await interaction.response.defer(ephemeral=True)
+    
+    # Build request with only provided fields
+    request_data = {"shop_listing_id": listing_id}
+    if name is not None:
+        request_data["item_name"] = name
+    if description is not None:
+        request_data["item_description"] = description
+    if price is not None:
+        request_data["price"] = price
+    if value is not None:
+        request_data["base_value"] = value
+    if extend_hours is not None:
+        request_data["available_hours"] = extend_hours
+    if untradeable_hours is not None:
+        request_data["untradeable_hours"] = untradeable_hours
+    if image_url is not None:
+        request_data["item_image"] = image_url
+    if stock is not None:
+        request_data["stock_limit"] = stock
+    if active is not None:
+        request_data["is_active"] = active
+    
+    if len(request_data) == 1:
+        await interaction.followup.send("❌ No changes specified.", ephemeral=True)
+        return
+    
+    try:
+        async with aiohttp.ClientSession() as session:
+            async with session.post(
+                f"{API_BASE_URL}/api/admin/shop/edit",
+                json=request_data,
+                headers={"X-Admin-Key": ADMIN_API_KEY}
+            ) as resp:
+                if resp.status == 200:
+                    data = await resp.json()
+                    
+                    embed = discord.Embed(
+                        title="✅ Shop Item Updated",
+                        color=0x00ff00
+                    )
+                    embed.add_field(name="Listing ID", value=f"`{data['shop_listing_id']}`", inline=False)
+                    embed.add_field(name="Updated Fields", value=", ".join(data["updated_fields"]), inline=False)
+                    
+                    await interaction.followup.send(embed=embed, ephemeral=True)
+                else:
+                    error_data = await resp.json()
+                    await interaction.followup.send(f"❌ Failed: {error_data.get('detail', 'Unknown error')}", ephemeral=True)
+    except Exception as e:
+        await interaction.followup.send(f"❌ Error: {str(e)}", ephemeral=True)
+
+
+@bot.tree.command(name="shop-remove", description="Remove an item from the shop")
+@app_commands.describe(
+    listing_id="Shop listing ID (from /shop-list)"
+)
+async def shop_remove(interaction: discord.Interaction, listing_id: str):
+    """Remove an item from the shop (Admin only)"""
+    if not is_admin(interaction.user.id):
+        await interaction.response.send_message("❌ You don't have permission to use this command.", ephemeral=True)
+        return
+    
+    await interaction.response.defer(ephemeral=True)
+    
+    try:
+        async with aiohttp.ClientSession() as session:
+            async with session.delete(
+                f"{API_BASE_URL}/api/admin/shop/remove",
+                json={"shop_listing_id": listing_id},
+                headers={"X-Admin-Key": ADMIN_API_KEY}
+            ) as resp:
+                if resp.status == 200:
+                    data = await resp.json()
+                    
+                    embed = discord.Embed(
+                        title="🗑️ Shop Item Removed",
+                        color=0xff6600
+                    )
+                    embed.add_field(name="Item", value=data.get("item_name", "Unknown"), inline=True)
+                    embed.add_field(name="Listing ID", value=f"`{data['shop_listing_id']}`", inline=True)
+                    
+                    await interaction.followup.send(embed=embed, ephemeral=True)
+                else:
+                    error_data = await resp.json()
+                    await interaction.followup.send(f"❌ Failed: {error_data.get('detail', 'Unknown error')}", ephemeral=True)
+    except Exception as e:
+        await interaction.followup.send(f"❌ Error: {str(e)}", ephemeral=True)
+
+
+def get_rarity_color(rarity: str) -> int:
+    """Get Discord color for item rarity"""
+    colors = {
+        "common": 0x808080,
+        "uncommon": 0x1eff00,
+        "rare": 0x0070dd,
+        "epic": 0xa335ee,
+        "legendary": 0xff8000
+    }
+    return colors.get(rarity.lower(), 0x808080)
+
+
 # Run bot
 if __name__ == "__main__":
     if not TOKEN:
