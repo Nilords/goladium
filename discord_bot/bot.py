@@ -108,8 +108,20 @@ async def on_ready():
     print(f"ADMIN_USER_IDS: {ADMIN_USER_IDS}")
     print(f"API_BASE_URL: {API_BASE_URL}")
     
-    # Don't auto-sync - use /sync command instead
-    print("Use /sync command to sync slash commands")
+    # Auto-sync commands on startup
+    try:
+        if GUILD_ID:
+            guild = discord.Object(id=GUILD_ID)
+            bot.tree.copy_global_to(guild=guild)
+            synced = await bot.tree.sync(guild=guild)
+            print(f"✅ Synced {len(synced)} commands to guild {GUILD_ID}")
+        else:
+            synced = await bot.tree.sync()
+            print(f"✅ Synced {len(synced)} commands globally")
+    except Exception as e:
+        print(f"❌ Failed to sync commands: {e}")
+        import traceback
+        traceback.print_exc()
 
 
 # ============== SYNC COMMAND ==============
