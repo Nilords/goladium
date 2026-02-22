@@ -4369,6 +4369,15 @@ async def open_chest(data: OpenChestRequest, request: Request):
             updated_user.get("balance_a", 0),
             "chest_opening"
         )
+        
+        # Record account activity (G from chest = profit)
+        await record_account_activity(
+            user_id=user_id,
+            event_type="chest",
+            amount=total_g_gained,
+            source=f"Chest: {chest_name}",
+            details={"chest_id": chest_id, "chest_rarity": chest_rarity, "reward_tier": reward.get("tier", "common")}
+        )
     
     # Remove the chest from inventory
     await db.user_inventory.delete_one({"inventory_id": data.inventory_id})
