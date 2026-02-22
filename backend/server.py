@@ -5233,6 +5233,7 @@ async def record_account_activity(
 ):
     """
     Record an account activity event for the profit/loss graph.
+    Also updates OHLC candles for TradingView-style charts.
     
     This tracks NET CHANGES (profit/loss), not absolute balance.
     - Positive amount = profit/gain
@@ -5273,31 +5274,361 @@ async def record_account_activity(
     }
     
     await db.account_activity_history.insert_one(event_doc)
+    
+    # Update OHLC candles (1h and 1d resolutions)
+    await update_account_candles(user_id, now, previous_cumulative, new_cumulative, amount, event_type)
+    
     return event_doc
 
 
+async def update_account_candles(
+    user_id: str,
+    timestamp: datetime,
+    previous_value: float,
+    current_value: float,
+    delta: float,
+    event_type: str
+):
+    """
+    Update OHLC candles for multiple resolutions.
+    Uses upsert to create or update candles atomically.
+    """
+    resolutions = [
+        ("1h", 3600),   # 1 hour in seconds
+        ("1d", 86400),  # 1 day in seconds
+    ]
+    
+    for resolution, seconds in resolutions:
+        # Calculate bucket start time
+        bucket_ts = timestamp.replace(
+            minute=0 if resolution == "1h" else 0,
+            second=0,
+            microsecond=0
+        )
+        if resolution == "1d":
+            bucket_ts = bucket_ts.replace(hour=0)
+        
+        bucket_key = bucket_ts.isoformat()
+        collection_name = f"account_candles_{resolution}"
+        collection = db[collection_name]
+        
+        # Try to update existing candle
+        result = await collection.update_one(
+            {
+                "user_id": user_id,
+                "bucket": bucket_key
+            },
+            {
+                "$min": {"low": current_value},
+                "$max": {"high": current_value},
+                "$set": {"close": current_value},
+                "$inc": {
+                    "volume": 1,
+                    "net_change": delta,
+                    f"breakdown.{event_type}": 1
+                },
+                "$setOnInsert": {
+                    "user_id": user_id,
+                    "bucket": bucket_key,
+                    "resolution": resolution,
+                    "open": previous_value,
+                    "timestamp": bucket_ts.isoformat()
+                }
+            },
+            upsert=True
+        )
+
+
+# ============== TRADINGVIEW-STYLE CHART API ==============
+
+CHART_RANGES = {
+    "1D": {"hours": 24, "resolution": "raw", "max_points": 500},
+    "1W": {"days": 7, "resolution": "1h", "max_points": 168},
+    "1M": {"days": 30, "resolution": "1h", "max_points": 720},
+    "3M": {"days": 90, "resolution": "1d", "max_points": 90},
+    "6M": {"days": 180, "resolution": "1d", "max_points": 180},
+    "1Y": {"days": 365, "resolution": "1d", "max_points": 365},
+    "ALL": {"days": 9999, "resolution": "1d", "max_points": 1000}
+}
+
+
+@api_router.get("/user/account-chart")
+async def get_account_chart(request: Request, range: str = "1M"):
+    """
+    TradingView-style account profit/loss chart.
+    
+    Ranges: 1D, 1W, 1M, 3M, 6M, 1Y, ALL
+    
+    Returns OHLC candles or raw events depending on range.
+    Automatically selects appropriate resolution for performance.
+    """
+    user = await get_current_user(request)
+    user_id = user["user_id"]
+    now = datetime.now(timezone.utc)
+    
+    # Validate range
+    if range not in CHART_RANGES:
+        range = "1M"
+    
+    config = CHART_RANGES[range]
+    resolution = config["resolution"]
+    max_points = config["max_points"]
+    
+    # Calculate start time
+    if "hours" in config:
+        start_time = now - timedelta(hours=config["hours"])
+    else:
+        start_time = now - timedelta(days=config["days"])
+    
+    # Get current cumulative profit for stats
+    last_event = await db.account_activity_history.find_one(
+        {"user_id": user_id},
+        sort=[("event_number", -1)]
+    )
+    current_profit = last_event["cumulative_profit"] if last_event else 0
+    
+    if resolution == "raw":
+        # Return raw events for short ranges (1D)
+        return await get_raw_chart_data(user_id, start_time, max_points, current_profit)
+    else:
+        # Return OHLC candles for longer ranges
+        return await get_candle_chart_data(user_id, resolution, start_time, max_points, current_profit, range)
+
+
+async def get_raw_chart_data(user_id: str, start_time: datetime, max_points: int, current_profit: float):
+    """Get raw event data for short-range charts (1D)"""
+    
+    events = await db.account_activity_history.find(
+        {
+            "user_id": user_id,
+            "timestamp": {"$gte": start_time.isoformat()}
+        },
+        {"_id": 0}
+    ).sort("timestamp", 1).limit(max_points).to_list(max_points)
+    
+    if not events:
+        return {
+            "range": "1D",
+            "resolution": "raw",
+            "mode": "empty",
+            "candles": [],
+            "stats": get_empty_stats(current_profit)
+        }
+    
+    # Convert events to chart points
+    candles = []
+    for e in events:
+        candles.append({
+            "timestamp": e["timestamp"],
+            "open": e["cumulative_profit"] - e["amount"],
+            "high": e["cumulative_profit"] if e["amount"] >= 0 else e["cumulative_profit"] - e["amount"],
+            "low": e["cumulative_profit"] if e["amount"] < 0 else e["cumulative_profit"] - e["amount"],
+            "close": e["cumulative_profit"],
+            "volume": 1,
+            "net_change": e["amount"],
+            "event_type": e["event_type"],
+            "source": e["source"]
+        })
+    
+    stats = calculate_chart_stats(candles, current_profit)
+    
+    return {
+        "range": "1D",
+        "resolution": "raw",
+        "mode": "raw",
+        "candles": candles,
+        "stats": stats
+    }
+
+
+async def get_candle_chart_data(user_id: str, resolution: str, start_time: datetime, max_points: int, current_profit: float, range_name: str):
+    """Get OHLC candle data for longer-range charts"""
+    
+    collection = db[f"account_candles_{resolution}"]
+    
+    candles = await collection.find(
+        {
+            "user_id": user_id,
+            "timestamp": {"$gte": start_time.isoformat()}
+        },
+        {"_id": 0}
+    ).sort("timestamp", 1).limit(max_points).to_list(max_points)
+    
+    if not candles:
+        # Try to build from raw events if no candles exist yet
+        return await build_candles_from_raw(user_id, resolution, start_time, max_points, current_profit, range_name)
+    
+    # Format candles for frontend
+    formatted = []
+    for c in candles:
+        formatted.append({
+            "timestamp": c["timestamp"],
+            "open": c.get("open", 0),
+            "high": c.get("high", 0),
+            "low": c.get("low", 0),
+            "close": c.get("close", 0),
+            "volume": c.get("volume", 0),
+            "net_change": c.get("net_change", 0),
+            "breakdown": c.get("breakdown", {})
+        })
+    
+    stats = calculate_chart_stats(formatted, current_profit)
+    
+    return {
+        "range": range_name,
+        "resolution": resolution,
+        "mode": "candles",
+        "candles": formatted,
+        "stats": stats
+    }
+
+
+async def build_candles_from_raw(user_id: str, resolution: str, start_time: datetime, max_points: int, current_profit: float, range_name: str):
+    """Build OHLC candles from raw events using MongoDB aggregation"""
+    
+    # Determine bucket size
+    if resolution == "1h":
+        date_format = "%Y-%m-%dT%H:00:00"
+        bucket_ms = 3600000
+    else:  # 1d
+        date_format = "%Y-%m-%dT00:00:00"
+        bucket_ms = 86400000
+    
+    pipeline = [
+        {"$match": {
+            "user_id": user_id,
+            "timestamp": {"$gte": start_time.isoformat()}
+        }},
+        {"$addFields": {
+            "ts_date": {"$dateFromString": {"dateString": "$timestamp"}}
+        }},
+        {"$group": {
+            "_id": {
+                "$dateToString": {
+                    "format": date_format,
+                    "date": "$ts_date"
+                }
+            },
+            "open": {"$first": "$cumulative_profit"},
+            "close": {"$last": "$cumulative_profit"},
+            "high": {"$max": "$cumulative_profit"},
+            "low": {"$min": "$cumulative_profit"},
+            "volume": {"$sum": 1},
+            "net_change": {"$sum": "$amount"},
+            "events": {"$push": "$event_type"}
+        }},
+        {"$sort": {"_id": 1}},
+        {"$limit": max_points}
+    ]
+    
+    results = await db.account_activity_history.aggregate(pipeline).to_list(max_points)
+    
+    if not results:
+        return {
+            "range": range_name,
+            "resolution": resolution,
+            "mode": "empty",
+            "candles": [],
+            "stats": get_empty_stats(current_profit)
+        }
+    
+    # Format results
+    candles = []
+    for r in results:
+        # Count event types
+        breakdown = {}
+        for et in r.get("events", []):
+            breakdown[et] = breakdown.get(et, 0) + 1
+        
+        # Adjust open to be previous close for correct OHLC
+        prev_close = candles[-1]["close"] if candles else r["open"] - r["net_change"]
+        
+        candles.append({
+            "timestamp": r["_id"],
+            "open": prev_close,
+            "high": r["high"],
+            "low": r["low"],
+            "close": r["close"],
+            "volume": r["volume"],
+            "net_change": r["net_change"],
+            "breakdown": breakdown
+        })
+    
+    stats = calculate_chart_stats(candles, current_profit)
+    
+    return {
+        "range": range_name,
+        "resolution": resolution,
+        "mode": "aggregated",
+        "candles": candles,
+        "stats": stats
+    }
+
+
+def calculate_chart_stats(candles: list, current_profit: float) -> dict:
+    """Calculate statistics from candle data"""
+    if not candles:
+        return get_empty_stats(current_profit)
+    
+    all_highs = [c["high"] for c in candles]
+    all_lows = [c["low"] for c in candles]
+    all_changes = [c["net_change"] for c in candles]
+    
+    highest = max(all_highs) if all_highs else 0
+    lowest = min(all_lows) if all_lows else 0
+    total_won = sum(c for c in all_changes if c > 0)
+    total_lost = abs(sum(c for c in all_changes if c < 0))
+    
+    # Calculate percent change from first to last
+    first_open = candles[0]["open"] if candles else 0
+    last_close = candles[-1]["close"] if candles else 0
+    
+    if first_open != 0:
+        percent_change = round(((last_close - first_open) / abs(first_open)) * 100, 2)
+    else:
+        percent_change = 0 if last_close == 0 else 100
+    
+    return {
+        "current_profit": round(current_profit, 2),
+        "period_high": round(highest, 2),
+        "period_low": round(lowest, 2),
+        "period_change": round(last_close - first_open, 2),
+        "percent_change": percent_change,
+        "total_won": round(total_won, 2),
+        "total_lost": round(total_lost, 2),
+        "total_volume": sum(c.get("volume", 0) for c in candles)
+    }
+
+
+def get_empty_stats(current_profit: float) -> dict:
+    """Return empty stats structure"""
+    return {
+        "current_profit": round(current_profit, 2),
+        "period_high": round(current_profit, 2),
+        "period_low": round(current_profit, 2),
+        "period_change": 0,
+        "percent_change": 0,
+        "total_won": 0,
+        "total_lost": 0,
+        "total_volume": 0
+    }
+
+
+# Legacy endpoint - keep for backwards compatibility
 @api_router.get("/user/account-activity")
 async def get_account_activity(request: Request, limit: int = 100, aggregate: bool = True):
     """
-    Get user's account activity history (profit/loss graph data).
-    
-    Query params:
-    - limit: Max events to consider (default 100, max 500)
-    - aggregate: If true, aggregate when > 50 events (default true)
-    
-    Returns individual events when few, aggregated buckets when many.
+    Legacy endpoint - returns raw account activity events.
+    Use /user/account-chart for TradingView-style charts.
     """
     user = await get_current_user(request)
     user_id = user["user_id"]
     
-    # Clamp limit
     limit = min(max(limit, 10), 500)
     
-    # Count total events
     total_events = await db.account_activity_history.count_documents({"user_id": user_id})
     
     if total_events == 0:
-        # No history yet
         return {
             "mode": "empty",
             "events": [],
@@ -5312,7 +5643,6 @@ async def get_account_activity(request: Request, limit: int = 100, aggregate: bo
             }
         }
     
-    # Get events sorted by event_number descending, then reverse
     events = await db.account_activity_history.find(
         {"user_id": user_id},
         {"_id": 0}
@@ -5320,72 +5650,24 @@ async def get_account_activity(request: Request, limit: int = 100, aggregate: bo
     
     events = list(reversed(events))
     
-    # Calculate stats
     cumulative_values = [e["cumulative_profit"] for e in events]
     amounts = [e["amount"] for e in events]
     
     current_profit = events[-1]["cumulative_profit"] if events else 0
-    highest_profit = max(cumulative_values) if cumulative_values else 0
-    lowest_profit = min(cumulative_values) if cumulative_values else 0
-    total_won = sum(a for a in amounts if a > 0)
-    total_lost = abs(sum(a for a in amounts if a < 0))
     
     stats = {
         "current_profit": round(current_profit, 2),
-        "highest_profit": round(highest_profit, 2),
-        "lowest_profit": round(lowest_profit, 2),
-        "total_won": round(total_won, 2),
-        "total_lost": round(total_lost, 2),
+        "highest_profit": round(max(cumulative_values), 2) if cumulative_values else 0,
+        "lowest_profit": round(min(cumulative_values), 2) if cumulative_values else 0,
+        "total_won": round(sum(a for a in amounts if a > 0), 2),
+        "total_lost": round(abs(sum(a for a in amounts if a < 0)), 2),
         "net_profit": round(current_profit, 2),
         "total_events": total_events
     }
     
-    # Decide whether to aggregate
-    AGGREGATE_THRESHOLD = 50
-    
-    if not aggregate or len(events) <= AGGREGATE_THRESHOLD:
-        # Return individual events
-        return {
-            "mode": "individual",
-            "events": events,
-            "stats": stats
-        }
-    
-    # Aggregate events into buckets
-    # Target ~30-40 data points for smooth graph
-    TARGET_POINTS = 35
-    bucket_size = max(1, len(events) // TARGET_POINTS)
-    
-    aggregated = []
-    for i in range(0, len(events), bucket_size):
-        bucket = events[i:i + bucket_size]
-        if not bucket:
-            continue
-        
-        bucket_amounts = [e["amount"] for e in bucket]
-        bucket_types = {}
-        for e in bucket:
-            t = e["event_type"]
-            bucket_types[t] = bucket_types.get(t, 0) + 1
-        
-        # Determine dominant event type
-        dominant_type = max(bucket_types.keys(), key=lambda k: bucket_types[k])
-        
-        aggregated.append({
-            "event_number": bucket[-1]["event_number"],
-            "timestamp": bucket[-1]["timestamp"],
-            "cumulative_profit": bucket[-1]["cumulative_profit"],
-            "bucket_sum": round(sum(bucket_amounts), 2),
-            "bucket_count": len(bucket),
-            "dominant_type": dominant_type,
-            "types_breakdown": bucket_types,
-            "is_aggregated": True
-        })
-    
     return {
-        "mode": "aggregated",
-        "bucket_size": bucket_size,
-        "events": aggregated,
+        "mode": "individual",
+        "events": events,
         "stats": stats
     }
 
