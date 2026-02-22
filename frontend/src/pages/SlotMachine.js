@@ -385,6 +385,7 @@ const SlotMachine = () => {
 
   return (
     <div className="min-h-screen bg-[#050505] flex flex-col">
+      <SlotsSEO slotName={slotInfo?.name || 'Classic'} />
       <Navbar />
       
       {/* XP Popup */}
