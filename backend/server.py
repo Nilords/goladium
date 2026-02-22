@@ -5112,6 +5112,151 @@ async def record_value_snapshot(user_id: str, balance_g: float, balance_a: float
     await db.value_snapshots.insert_one(snapshot)
     return snapshot
 
+
+async def record_account_value_event(
+    user_id: str,
+    event_type: str,
+    delta_g: float = 0,
+    delta_a: float = 0,
+    new_balance_g: float = None,
+    new_balance_a: float = None,
+    details: dict = None
+):
+    """
+    Record an event-based account value change.
+    
+    event_type examples: slot_win, slot_loss, wheel_spin, jackpot_win, jackpot_loss, 
+                         trade_sent, trade_received, chest_open, item_sold, shop_purchase, etc.
+    """
+    now = datetime.now(timezone.utc)
+    
+    # Get previous event for this user
+    last_event = await db.account_value_history.find_one(
+        {"user_id": user_id},
+        sort=[("event_number", -1)]
+    )
+    
+    if last_event:
+        previous_g = last_event["balance_g_after"]
+        previous_a = last_event["balance_a_after"]
+        event_number = last_event["event_number"] + 1
+    else:
+        previous_g = 0.0
+        previous_a = 0.0
+        event_number = 1
+    
+    # Calculate new balances
+    if new_balance_g is not None:
+        balance_g_after = round(new_balance_g, 2)
+        actual_delta_g = round(balance_g_after - previous_g, 2)
+    else:
+        actual_delta_g = round(delta_g, 2)
+        balance_g_after = round(max(0, previous_g + actual_delta_g), 2)
+    
+    if new_balance_a is not None:
+        balance_a_after = round(new_balance_a, 2)
+        actual_delta_a = round(balance_a_after - previous_a, 2)
+    else:
+        actual_delta_a = round(delta_a, 2)
+        balance_a_after = round(max(0, previous_a + actual_delta_a), 2)
+    
+    total_after = round(balance_g_after + balance_a_after, 2)
+    total_delta = round(actual_delta_g + actual_delta_a, 2)
+    
+    event_doc = {
+        "event_id": f"acc_evt_{uuid.uuid4().hex[:12]}",
+        "user_id": user_id,
+        "event_number": event_number,
+        "event_type": event_type,
+        "delta_g": actual_delta_g,
+        "delta_a": actual_delta_a,
+        "delta_total": total_delta,
+        "balance_g_after": balance_g_after,
+        "balance_a_after": balance_a_after,
+        "total_value_after": total_after,
+        "details": details or {},
+        "timestamp": now.isoformat()
+    }
+    
+    await db.account_value_history.insert_one(event_doc)
+    return event_doc
+
+
+@api_router.get("/user/account-history")
+async def get_account_history(request: Request, limit: int = 50):
+    """
+    Get user's account value history (event-based).
+    Returns the last N events in chronological order.
+    
+    Query params:
+    - limit: Number of events to return (default 50, max 200)
+    """
+    user = await get_current_user(request)
+    user_id = user["user_id"]
+    
+    # Clamp limit
+    limit = min(max(limit, 10), 200)
+    
+    # Get events sorted by event_number descending, then reverse for chronological order
+    events = await db.account_value_history.find(
+        {"user_id": user_id},
+        {"_id": 0}
+    ).sort("event_number", -1).limit(limit).to_list(limit)
+    
+    # Reverse to get chronological order (oldest to newest)
+    events = list(reversed(events))
+    
+    # Calculate stats from loaded events
+    if events:
+        values = [e["total_value_after"] for e in events]
+        highest = max(values)
+        lowest = min(values)
+        current = events[-1]["total_value_after"]
+        range_val = round(highest - lowest, 2)
+        
+        # Calculate change from first to last event
+        start_value = events[0]["total_value_after"]
+        if start_value > 0:
+            percent_change = round(((current - start_value) / start_value) * 100, 2)
+        else:
+            percent_change = 0 if current == 0 else 100
+        
+        # All-time stats
+        all_time_high_doc = await db.account_value_history.find_one(
+            {"user_id": user_id},
+            sort=[("total_value_after", -1)]
+        )
+        all_time_low_doc = await db.account_value_history.find_one(
+            {"user_id": user_id},
+            sort=[("total_value_after", 1)]
+        )
+        all_time_high = all_time_high_doc["total_value_after"] if all_time_high_doc else current
+        all_time_low = all_time_low_doc["total_value_after"] if all_time_low_doc else current
+    else:
+        # No events - use current balance
+        current = user.get("balance", 0) + user.get("balance_a", 0)
+        highest = current
+        lowest = current
+        range_val = 0
+        percent_change = 0
+        all_time_high = current
+        all_time_low = current
+    
+    return {
+        "events": events,
+        "stats": {
+            "highest": round(highest, 2),
+            "lowest": round(lowest, 2),
+            "current": round(current, 2),
+            "range": range_val,
+            "percent_change": percent_change,
+            "all_time_high": round(all_time_high, 2),
+            "all_time_low": round(all_time_low, 2),
+            "total_events": len(events)
+        }
+    }
+
+
 @api_router.get("/user/value-history")
 async def get_value_history(request: Request, timeframe: str = "1h"):
     """
