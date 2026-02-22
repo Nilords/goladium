@@ -2854,6 +2854,23 @@ async def spin_slot(bet_request: SlotBetRequest, request: Request):
     # Record value snapshot after balance change
     await record_value_snapshot(user["user_id"], new_balance, user.get("balance_a", 0), "slot_spin")
     
+    # Record event-based account value change
+    net_change = win_amount - total_bet
+    event_type = "slot_win" if net_change > 0 else "slot_loss" if net_change < 0 else "slot_push"
+    await record_account_value_event(
+        user_id=user["user_id"],
+        event_type=event_type,
+        new_balance_g=new_balance,
+        new_balance_a=user.get("balance_a", 0),
+        details={
+            "slot_id": slot_id,
+            "slot_name": SLOT_CONFIGS[slot_id]["name"],
+            "bet": total_bet,
+            "win": win_amount,
+            "net": net_change
+        }
+    )
+    
     # Update quest progress
     await update_quest_progress(user["user_id"], "spins", 1, bet_amount=total_bet)
     await update_quest_progress(user["user_id"], "total_wagered", int(total_bet))
