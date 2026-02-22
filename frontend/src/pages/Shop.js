@@ -55,9 +55,11 @@ const Shop = () => {
     
     if (user.balance < item.price) {
       toast.error(language === 'de' ? 'Spar ein wenig mehr :)' : 'To Poor!');
+      playError();
       return;
     }
     
+    playClick();
     setPurchasing(item.shop_listing_id);
     
     try {
@@ -74,6 +76,7 @@ const Shop = () => {
       const data = await response.json();
       
       if (response.ok) {
+        playPurchase(); // Coin sound on successful purchase
         toast.success(
           <div className="flex items-center gap-2">
             <Check className="w-5 h-5 text-green-400" />
@@ -84,10 +87,12 @@ const Shop = () => {
         if (refreshUser) refreshUser();
         loadShopItems();
       } else {
+        playError();
         toast.error(data.detail || 'Purchase failed');
       }
     } catch (error) {
       console.error('Purchase error:', error);
+      playError();
       toast.error(language === 'de' ? 'Kauf fehlgeschlagen' : 'Purchase failed');
     } finally {
       setPurchasing(null);
