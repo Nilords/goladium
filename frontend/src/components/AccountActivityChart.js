@@ -42,7 +42,6 @@ const AccountActivityChart = () => {
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [selectedRange, setSelectedRange] = useState('1M');
-  const [selectedPoint, setSelectedPoint] = useState(null);
 
   const loadData = useCallback(async () => {
     if (!token) return;
@@ -53,7 +52,6 @@ const AccountActivityChart = () => {
       });
       if (res.ok) {
         setData(await res.json());
-        setSelectedPoint(null);
       }
     } catch (err) {
       console.error('Failed to load chart data:', err);
