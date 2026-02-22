@@ -4552,6 +4552,15 @@ async def open_chests_batch(data: OpenChestsBatchRequest, request: Request):
     # Record single value snapshot for the batch
     if total_g > 0:
         await record_value_snapshot(user_id, new_balance, updated_user.get("balance_a", 0), "chest_batch")
+        
+        # Record account activity (G from chests = profit)
+        await record_account_activity(
+            user_id=user_id,
+            event_type="chest",
+            amount=total_g,
+            source=f"Chests geöffnet: {len(results)}x",
+            details={"chests_count": len(results), "items_won": items_won}
+        )
     
     # Calculate summary
     tier_counts = {"normal": 0, "good": 0, "rare": 0}
