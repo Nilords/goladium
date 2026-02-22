@@ -104,16 +104,37 @@ def format_duration(seconds: int) -> str:
 @bot.event
 async def on_ready():
     print(f"Bot online as {bot.user}")
+    print(f"GUILD_ID: {GUILD_ID}")
+    print(f"ADMIN_USER_IDS: {ADMIN_USER_IDS}")
+    print(f"API_BASE_URL: {API_BASE_URL}")
+    
+    # Don't auto-sync - use /sync command instead
+    print("Use /sync command to sync slash commands")
+
+
+# ============== SYNC COMMAND ==============
+
+@bot.tree.command(name="sync", description="Sync slash commands (Admin only)")
+async def sync_commands(interaction: discord.Interaction):
+    """Manually sync slash commands"""
+    if not is_admin(interaction.user.id):
+        await interaction.response.send_message("❌ No permission.", ephemeral=True)
+        return
+    
+    await interaction.response.defer(ephemeral=True)
+    
     try:
         if GUILD_ID:
             guild = discord.Object(id=GUILD_ID)
+            bot.tree.copy_global_to(guild=guild)
             synced = await bot.tree.sync(guild=guild)
-            print(f"Synced {len(synced)} commands to guild {GUILD_ID}")
+            await interaction.followup.send(f"✅ Synced {len(synced)} commands to this guild!", ephemeral=True)
         else:
             synced = await bot.tree.sync()
-            print(f"Synced {len(synced)} commands globally")
+            await interaction.followup.send(f"✅ Synced {len(synced)} commands globally!", ephemeral=True)
     except Exception as e:
-        print(f"Failed to sync commands: {e}")
+        await interaction.followup.send(f"❌ Failed to sync: {str(e)}", ephemeral=True)
+
 
 # ============== MODERATION COMMANDS ==============
 
