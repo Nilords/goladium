@@ -101,12 +101,6 @@ const AccountActivityChart = () => {
   const isPositive = stats.current_profit >= 0;
   const periodPositive = (stats.period_change || 0) >= 0;
 
-  const handlePointClick = (data) => {
-    if (data && data.activePayload) {
-      setSelectedPoint(data.activePayload[0].payload);
-    }
-  };
-
   const CustomTooltip = ({ active, payload }) => {
     if (!active || !payload?.length) return null;
     const point = payload[0].payload;
