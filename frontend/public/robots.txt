@@ -1,28 +1,148 @@
-# Goladium Robots.txt
-# https://goladium.de/robots.txt
+# =============================================================================
+# GOLADIUM ROBOTS.TXT - Optimized for Maximum Indexing
+# =============================================================================
+# Last Updated: 2025-02-22
+# Website: https://goladium.de
+# =============================================================================
 
+# Default rules for all crawlers
 User-agent: *
 Allow: /
+Allow: /slots
+Allow: /slots/
+Allow: /wheel
+Allow: /leaderboard
+Allow: /shop
+Allow: /trading
+Allow: /gamepass
+
+# Disallow private/dynamic pages
 Disallow: /api/
-Disallow: /admin/
+Disallow: /settings
+Disallow: /inventory
+Disallow: /profile/
+Disallow: /auth/
 Disallow: /*.json$
 Disallow: /static/js/*.map
 Disallow: /static/css/*.map
 
-# Crawl-delay for politeness
+# Crawl-delay for politeness (1 second between requests)
 Crawl-delay: 1
 
-# Sitemap location
-Sitemap: https://goladium.de/sitemap.xml
-
-# Google specific
+# =============================================================================
+# GOOGLE BOT - Priority Crawler
+# =============================================================================
 User-agent: Googlebot
 Allow: /
 Disallow: /api/
+Disallow: /settings
+Disallow: /inventory
+Disallow: /profile/
+# No crawl delay for Google - they handle it well
 Crawl-delay: 0
 
-# Bing specific
+User-agent: Googlebot-Image
+Allow: /
+Allow: /*.png$
+Allow: /*.jpg$
+Allow: /*.webp$
+Allow: /*.svg$
+
+User-agent: Googlebot-Video
+Allow: /
+
+# =============================================================================
+# BING BOT
+# =============================================================================
 User-agent: Bingbot
 Allow: /
 Disallow: /api/
+Disallow: /settings
+Disallow: /inventory
+Disallow: /profile/
 Crawl-delay: 1
+
+User-agent: msnbot
+Allow: /
+Disallow: /api/
+Crawl-delay: 2
+
+# =============================================================================
+# SOCIAL MEDIA BOTS - Allow for Link Previews
+# =============================================================================
+User-agent: facebookexternalhit
+Allow: /
+
+User-agent: Twitterbot
+Allow: /
+
+User-agent: LinkedInBot
+Allow: /
+
+User-agent: Discordbot
+Allow: /
+
+User-agent: WhatsApp
+Allow: /
+
+User-agent: TelegramBot
+Allow: /
+
+# =============================================================================
+# OTHER SEARCH ENGINES
+# =============================================================================
+User-agent: DuckDuckBot
+Allow: /
+Disallow: /api/
+Crawl-delay: 1
+
+User-agent: YandexBot
+Allow: /
+Disallow: /api/
+Crawl-delay: 2
+
+User-agent: Baiduspider
+Allow: /
+Disallow: /api/
+Crawl-delay: 2
+
+# =============================================================================
+# SEO TOOLS - Allow for Analysis
+# =============================================================================
+User-agent: AhrefsBot
+Allow: /
+Crawl-delay: 5
+
+User-agent: SemrushBot
+Allow: /
+Crawl-delay: 5
+
+User-agent: DotBot
+Allow: /
+Crawl-delay: 10
+
+# =============================================================================
+# BLOCK UNWANTED BOTS
+# =============================================================================
+User-agent: MJ12bot
+Disallow: /
+
+User-agent: AhrefsSiteAudit
+Disallow: /
+
+User-agent: SeznamBot
+Disallow: /
+
+User-agent: PetalBot
+Disallow: /
+
+# =============================================================================
+# SITEMAP LOCATIONS
+# =============================================================================
+Sitemap: https://goladium.de/sitemap.xml
+Sitemap: https://goladium.de/api/sitemap.xml
+
+# =============================================================================
+# HOST DIRECTIVE (for Yandex)
+# =============================================================================
+Host: https://goladium.de
