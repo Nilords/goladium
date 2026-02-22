@@ -7,7 +7,7 @@ from datetime import datetime
 import time
 
 class GoladiumAPITester:
-    def __init__(self, base_url="https://gamepass-chest.preview.emergentagent.com"):
+    def __init__(self, base_url="https://chart-security-build.preview.emergentagent.com"):
         self.base_url = base_url
         self.token = None
         self.user_id = None

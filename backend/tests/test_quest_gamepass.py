@@ -7,7 +7,7 @@ import requests
 import os
 import time
 
-BASE_URL = os.environ.get('REACT_APP_BACKEND_URL', 'https://gamepass-chest.preview.emergentagent.com')
+BASE_URL = os.environ.get('REACT_APP_BACKEND_URL', 'https://chart-security-build.preview.emergentagent.com')
 BASE_URL = BASE_URL.rstrip('/')
 
 # Test credentials
