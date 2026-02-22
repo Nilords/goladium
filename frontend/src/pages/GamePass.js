@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { useLanguage } from '../contexts/LanguageContext';
+import { useSound } from '../contexts/SoundContext';
 import Navbar from '../components/Navbar';
 import Chat from '../components/Chat';
 import ChestOpening from '../components/ChestOpening';
@@ -38,6 +39,7 @@ const DIFFICULTY_COLORS = {
 const GamePass = () => {
   const { token, refreshUser, user } = useAuth();
   const { language } = useLanguage();
+  const { playChestOpen, playLevelUp, playWin, playClick } = useSound();
   const [gamePass, setGamePass] = useState(null);
   const [quests, setQuests] = useState([]);
   const [inventory, setInventory] = useState([]);
