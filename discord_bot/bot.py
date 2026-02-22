@@ -161,7 +161,7 @@ async def mute(interaction: discord.Interaction, username: str, duration: str):
 @app_commands.describe(username="Goladium username")
 @app_commands.guilds(discord.Object(id=GUILD_ID)) if GUILD_ID else app_commands.guilds()
 async def unmute(interaction: discord.Interaction, username: str):
-    if not is_admin(interaction):
+    if not is_admin(interaction.user.id):
         await interaction.response.send_message("No permission.", ephemeral=True)
         return
     
@@ -192,7 +192,7 @@ async def unmute(interaction: discord.Interaction, username: str):
 @app_commands.describe(username="Goladium username", duration="Duration (e.g. 1h, 30m, 7d)")
 @app_commands.guilds(discord.Object(id=GUILD_ID)) if GUILD_ID else app_commands.guilds()
 async def ban(interaction: discord.Interaction, username: str, duration: str):
-    if not is_admin(interaction):
+    if not is_admin(interaction.user.id):
         await interaction.response.send_message("No permission.", ephemeral=True)
         return
     
@@ -221,7 +221,7 @@ async def ban(interaction: discord.Interaction, username: str, duration: str):
 @app_commands.describe(username="Goladium username")
 @app_commands.guilds(discord.Object(id=GUILD_ID)) if GUILD_ID else app_commands.guilds()
 async def unban(interaction: discord.Interaction, username: str):
-    if not is_admin(interaction):
+    if not is_admin(interaction.user.id):
         await interaction.response.send_message("No permission.", ephemeral=True)
         return
     
@@ -245,7 +245,7 @@ async def unban(interaction: discord.Interaction, username: str):
 @app_commands.describe(username="Goladium username")
 @app_commands.guilds(discord.Object(id=GUILD_ID)) if GUILD_ID else app_commands.guilds()
 async def balance(interaction: discord.Interaction, username: str):
-    if not is_admin(interaction):
+    if not is_admin(interaction.user.id):
         await interaction.response.send_message("No permission.", ephemeral=True)
         return
     
@@ -269,7 +269,7 @@ async def balance(interaction: discord.Interaction, username: str):
 @app_commands.describe(username="Goladium username", currency="Currency (g or a)", amount="Amount to set")
 @app_commands.guilds(discord.Object(id=GUILD_ID)) if GUILD_ID else app_commands.guilds()
 async def setbalance(interaction: discord.Interaction, username: str, currency: str, amount: float):
-    if not is_admin(interaction):
+    if not is_admin(interaction.user.id):
         await interaction.response.send_message("No permission.", ephemeral=True)
         return
     
@@ -301,7 +301,7 @@ async def setbalance(interaction: discord.Interaction, username: str, currency: 
 @app_commands.describe(username="Goladium username", currency="Currency (g or a)", amount="Amount to add")
 @app_commands.guilds(discord.Object(id=GUILD_ID)) if GUILD_ID else app_commands.guilds()
 async def addbalance(interaction: discord.Interaction, username: str, currency: str, amount: float):
-    if not is_admin(interaction):
+    if not is_admin(interaction.user.id):
         await interaction.response.send_message("No permission.", ephemeral=True)
         return
     
@@ -344,7 +344,7 @@ async def addbalance(interaction: discord.Interaction, username: str, currency: 
 ])
 @app_commands.guilds(discord.Object(id=GUILD_ID)) if GUILD_ID else app_commands.guilds()
 async def givechest(interaction: discord.Interaction, username: str, amount: int, chest_type: str = "gamepass"):
-    if not is_admin(interaction):
+    if not is_admin(interaction.user.id):
         await interaction.response.send_message("❌ No permission.", ephemeral=True)
         return
     
@@ -382,7 +382,7 @@ async def givechest(interaction: discord.Interaction, username: str, amount: int
 @app_commands.describe(username="Goladium username")
 @app_commands.guilds(discord.Object(id=GUILD_ID)) if GUILD_ID else app_commands.guilds()
 async def userinfo(interaction: discord.Interaction, username: str):
-    if not is_admin(interaction):
+    if not is_admin(interaction.user.id):
         await interaction.response.send_message("No permission.", ephemeral=True)
         return
     
