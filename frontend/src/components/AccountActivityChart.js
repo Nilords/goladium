@@ -339,7 +339,7 @@ const AccountActivityChart = () => {
                   dataKey="close"
                   stroke={isPositive ? "#22c55e" : "#ef4444"}
                   strokeWidth={2}
-                  dot={renderDot}
+                  dot={false}
                   activeDot={{ 
                     r: 6, 
                     fill: '#00F0FF', 
