@@ -12,7 +12,85 @@ import { toast } from 'sonner';
 import { ArrowLeftRight, Search, Package, Coins, X, Check, RotateCcw, Clock, CheckCircle, AlertTriangle, User, Inbox, Send, TrendingUp } from 'lucide-react';
 import Navbar from '../components/Navbar';
 
-
+// Translations
+const t = (key, lang) => {
+  const translations = {
+    // Headers & Buttons
+    trading: { de: 'Trading', en: 'Trading' },
+    newTrade: { de: 'Neuer Trade', en: 'New Trade' },
+    inventoryAnalytics: { de: 'Inventar-Analyse', en: 'Inventory Analytics' },
+    // Tabs
+    inbound: { de: 'Eingehend', en: 'Inbound' },
+    outbound: { de: 'Ausgehend', en: 'Outbound' },
+    completed: { de: 'Abgeschlossen', en: 'Completed' },
+    // Trade status
+    counterOffer: { de: 'Gegenangebot', en: 'Counter Offer' },
+    // Trade card labels
+    youGive: { de: 'Du gibst:', en: 'You give:' },
+    youReceive: { de: 'Du bekommst:', en: 'You receive:' },
+    nothing: { de: 'Nichts', en: 'Nothing' },
+    // Empty states
+    noInbound: { de: 'Keine eingehenden Trade-Anfragen', en: 'No inbound trade requests' },
+    noOutbound: { de: 'Keine ausgehenden Trade-Anfragen', en: 'No outbound trade requests' },
+    noCompleted: { de: 'Noch keine abgeschlossenen Trades', en: 'No completed trades yet' },
+    loadingTrades: { de: 'Lade Trades...', en: 'Loading trades...' },
+    // Dialog titles
+    createCounterOffer: { de: 'Gegenangebot erstellen', en: 'Create Counter Offer' },
+    tradeDetails: { de: 'Trade Details', en: 'Trade Details' },
+    // Search
+    searchPartner: { de: 'Handelspartner suchen', en: 'Search trade partner' },
+    enterUsername: { de: 'Benutzername eingeben...', en: 'Enter username...' },
+    // Your offer
+    youOffer: { de: 'Du bietest an', en: 'You offer' },
+    yourItems: { de: 'Deine Items', en: 'Your items' },
+    noItemsInventory: { de: 'Keine Items im Inventar', en: 'No items in inventory' },
+    offerG: { de: 'G anbieten', en: 'Offer G' },
+    feeWarning: { de: '30% Gebühr:', en: '30% Fee:' },
+    feeDestroyed: { de: '(wird vernichtet)', en: '(will be burned)' },
+    // You want
+    youWant: { de: 'Du möchtest', en: 'You want' },
+    theirItems: { de: 's Items', en: "'s items" },
+    noItemsAvailable: { de: 'Keine Items verfügbar', en: 'No items available' },
+    requestG: { de: 'G anfragen', en: 'Request G' },
+    otherPaysFee: { de: 'Der andere Spieler zahlt 30% Gebühr auf diesen Betrag', en: 'The other player pays 30% fee on this amount' },
+    // Summary
+    summary: { de: 'Zusammenfassung', en: 'Summary' },
+    fee: { de: 'Gebühr', en: 'fee' },
+    // Buttons
+    cancel: { de: 'Abbrechen', en: 'Cancel' },
+    sendCounterOffer: { de: 'Gegenangebot senden', en: 'Send Counter Offer' },
+    sendTrade: { de: 'Trade senden', en: 'Send Trade' },
+    reject: { de: 'Ablehnen', en: 'Reject' },
+    accept: { de: 'Akzeptieren', en: 'Accept' },
+    close: { de: 'Schließen', en: 'Close' },
+    // Trade details
+    initiator: { de: 'Initiator', en: 'Initiator' },
+    recipient: { de: 'Empfänger', en: 'Recipient' },
+    offers: { de: 'bietet:', en: 'offers:' },
+    feeInfo: { de: '30% Gebühr auf G-Transfers (wird vernichtet)', en: '30% fee on G transfers (will be burned)' },
+    created: { de: 'Erstellt:', en: 'Created:' },
+    completedAt: { de: 'Abgeschlossen:', en: 'Completed:' },
+    // Toast messages
+    errorLoadTrades: { de: 'Fehler beim Laden der Trades', en: 'Failed to load trades' },
+    userNotFound: { de: 'Benutzer nicht gefunden', en: 'User not found' },
+    searchError: { de: 'Fehler bei der Suche', en: 'Search error' },
+    max10Items: { de: 'Maximal 10 Items pro Seite', en: 'Maximum 10 items per side' },
+    tradeNeedsContent: { de: 'Trade muss mindestens ein Item oder G enthalten', en: 'Trade must contain at least one item or G' },
+    tradeCreated: { de: 'Trade erfolgreich erstellt!', en: 'Trade created successfully!' },
+    createError: { de: 'Fehler beim Erstellen des Trades', en: 'Failed to create trade' },
+    counterSent: { de: 'Gegenangebot gesendet!', en: 'Counter offer sent!' },
+    counterError: { de: 'Fehler beim Gegenangebot', en: 'Counter offer failed' },
+    tradeComplete: { de: 'Trade abgeschlossen!', en: 'Trade completed!' },
+    feeBurned: { de: 'G Gebühr verbrannt.', en: 'G fee burned.' },
+    acceptError: { de: 'Fehler beim Akzeptieren', en: 'Failed to accept' },
+    tradeRejected: { de: 'Trade abgelehnt', en: 'Trade rejected' },
+    rejectError: { de: 'Fehler beim Ablehnen', en: 'Failed to reject' },
+    tradeCancelled: { de: 'Trade abgebrochen', en: 'Trade cancelled' },
+    cancelError: { de: 'Fehler beim Abbrechen', en: 'Failed to cancel' },
+    level: { de: 'Level', en: 'Level' },
+  };
+  return translations[key]?.[lang] || translations[key]?.en || key;
+};
 
 // Rarity colors
 const RARITY_COLORS = {
@@ -53,7 +131,6 @@ const Trading = () => {
   const [counterMode, setCounterMode] = useState(false);
   const [counterTradeId, setCounterTradeId] = useState(null);
 
-  // Navigate to Inventory Analytics
   const goToInventoryAnalytics = () => {
     navigate('/profile?tab=analytics&view=inventory');
   };
@@ -87,7 +164,7 @@ const Trading = () => {
       setCompletedTrades(completed.trades || []);
     } catch (error) {
       console.error('Failed to load trades:', error);
-      toast.error('Fehler beim Laden der Trades');
+      toast.error(t('errorLoadTrades', language));
     } finally {
       setLoading(false);
     }
@@ -105,14 +182,13 @@ const Trading = () => {
       
       if (!response.ok) {
         const error = await response.json();
-        toast.error(error.detail || 'Benutzer nicht gefunden');
+        toast.error(error.detail || t('userNotFound', language));
         return;
       }
       
       const userData = await response.json();
       setTargetUser(userData);
       
-      // Load both inventories
       const [myInv, theirInv] = await Promise.all([
         fetch(`/api/trades/user-inventory/${user.user_id}`, {
           headers: { 'Authorization': `Bearer ${token}` },
@@ -129,7 +205,7 @@ const Trading = () => {
       
     } catch (error) {
       console.error('Search error:', error);
-      toast.error('Fehler bei der Suche');
+      toast.error(t('searchError', language));
     } finally {
       setSearchLoading(false);
     }
@@ -141,7 +217,7 @@ const Trading = () => {
     } else if (selectedMyItems.length < 10) {
       setSelectedMyItems(prev => [...prev, item]);
     } else {
-      toast.error('Maximal 10 Items pro Seite');
+      toast.error(t('max10Items', language));
     }
   };
 
@@ -151,14 +227,14 @@ const Trading = () => {
     } else if (selectedTheirItems.length < 10) {
       setSelectedTheirItems(prev => [...prev, item]);
     } else {
-      toast.error('Maximal 10 Items pro Seite');
+      toast.error(t('max10Items', language));
     }
   };
 
   const createTrade = async () => {
     if (!targetUser) return;
     if (selectedMyItems.length === 0 && selectedTheirItems.length === 0 && offeredG === 0 && requestedG === 0) {
-      toast.error('Trade muss mindestens ein Item oder G enthalten');
+      toast.error(t('tradeNeedsContent', language));
       return;
     }
     
@@ -181,18 +257,18 @@ const Trading = () => {
       
       if (!response.ok) {
         const error = await response.json();
-        toast.error(error.detail || 'Fehler beim Erstellen des Trades');
+        toast.error(error.detail || t('createError', language));
         return;
       }
       
-      toast.success('Trade erfolgreich erstellt!');
+      toast.success(t('tradeCreated', language));
       resetNewTrade();
       loadTrades();
       setActiveTab('outbound');
       
     } catch (error) {
       console.error('Create trade error:', error);
-      toast.error('Fehler beim Erstellen des Trades');
+      toast.error(t('createError', language));
     }
   };
 
@@ -217,18 +293,18 @@ const Trading = () => {
       
       if (!response.ok) {
         const error = await response.json();
-        toast.error(error.detail || 'Fehler beim Gegenangebot');
+        toast.error(error.detail || t('counterError', language));
         return;
       }
       
-      toast.success('Gegenangebot gesendet!');
+      toast.success(t('counterSent', language));
       resetNewTrade();
       loadTrades();
       setActiveTab('outbound');
       
     } catch (error) {
       console.error('Counter error:', error);
-      toast.error('Fehler beim Gegenangebot');
+      toast.error(t('counterError', language));
     }
   };
 
@@ -242,18 +318,18 @@ const Trading = () => {
       
       if (!response.ok) {
         const error = await response.json();
-        toast.error(error.detail || 'Fehler beim Akzeptieren');
+        toast.error(error.detail || t('acceptError', language));
         return;
       }
       
       const result = await response.json();
-      toast.success('Trade abgeschlossen! ' + (result.total_fee_burned > 0 ? `${result.total_fee_burned.toFixed(2)} G Gebühr verbrannt.` : ''));
+      toast.success(t('tradeComplete', language) + ' ' + (result.total_fee_burned > 0 ? `${result.total_fee_burned.toFixed(2)} ${t('feeBurned', language)}` : ''));
       setShowTradeDetail(false);
       loadTrades();
       
     } catch (error) {
       console.error('Accept error:', error);
-      toast.error('Fehler beim Akzeptieren');
+      toast.error(t('acceptError', language));
     }
   };
 
@@ -267,17 +343,17 @@ const Trading = () => {
       
       if (!response.ok) {
         const error = await response.json();
-        toast.error(error.detail || 'Fehler beim Ablehnen');
+        toast.error(error.detail || t('rejectError', language));
         return;
       }
       
-      toast.success('Trade abgelehnt');
+      toast.success(t('tradeRejected', language));
       setShowTradeDetail(false);
       loadTrades();
       
     } catch (error) {
       console.error('Reject error:', error);
-      toast.error('Fehler beim Ablehnen');
+      toast.error(t('rejectError', language));
     }
   };
 
@@ -291,17 +367,17 @@ const Trading = () => {
       
       if (!response.ok) {
         const error = await response.json();
-        toast.error(error.detail || 'Fehler beim Abbrechen');
+        toast.error(error.detail || t('cancelError', language));
         return;
       }
       
-      toast.success('Trade abgebrochen');
+      toast.success(t('tradeCancelled', language));
       setShowTradeDetail(false);
       loadTrades();
       
     } catch (error) {
       console.error('Cancel error:', error);
-      toast.error('Fehler beim Abbrechen');
+      toast.error(t('cancelError', language));
     }
   };
 
@@ -311,13 +387,11 @@ const Trading = () => {
     setShowTradeDetail(false);
     setShowNewTrade(true);
     
-    // Set target user as the initiator of the original trade
     setTargetUser({
       user_id: trade.initiator.user_id,
       username: trade.initiator.username
     });
     
-    // Load inventories
     try {
       const [myInv, theirInv] = await Promise.all([
         fetch(`/api/trades/user-inventory/${user.user_id}`, {
@@ -333,7 +407,6 @@ const Trading = () => {
       setMyInventory(myInv.items || []);
       setTheirInventory(theirInv.items || []);
       
-      // Pre-select items from the original trade (swapped)
       const myItemIds = trade.recipient.items.map(i => i.inventory_id);
       const theirItemIds = trade.initiator.items.map(i => i.inventory_id);
       
@@ -369,7 +442,7 @@ const Trading = () => {
   const formatDate = (dateStr) => {
     if (!dateStr) return '';
     const date = new Date(dateStr);
-    return date.toLocaleDateString('de-DE', {
+    return date.toLocaleDateString(language === 'de' ? 'de-DE' : 'en-US', {
       day: '2-digit',
       month: '2-digit',
       year: 'numeric',
@@ -405,7 +478,7 @@ const Trading = () => {
               <span className="font-medium text-white">{otherParty.username}</span>
               {trade.is_counter && (
                 <Badge variant="outline" className="text-xs border-amber-500 text-amber-400">
-                  Gegenangebot
+                  {t('counterOffer', language)}
                 </Badge>
               )}
             </div>
@@ -413,14 +486,13 @@ const Trading = () => {
               variant={isCompleted ? "default" : "outline"} 
               className={isCompleted ? "bg-green-600" : isInbound ? "border-blue-500 text-blue-400" : "border-amber-500 text-amber-400"}
             >
-              {isCompleted ? 'Abgeschlossen' : isInbound ? 'Eingehend' : 'Ausgehend'}
+              {isCompleted ? t('completed', language) : isInbound ? t('inbound', language) : t('outbound', language)}
             </Badge>
           </div>
           
           <div className="grid grid-cols-2 gap-4 text-sm">
-            {/* What I give */}
             <div className="space-y-1">
-              <span className="text-red-400 text-xs">Du gibst:</span>
+              <span className="text-red-400 text-xs">{t('youGive', language)}</span>
               <div className="flex flex-wrap gap-1">
                 {myOffer.items.slice(0, 3).map((item, idx) => (
                   <Badge key={idx} variant="outline" className={`text-xs ${RARITY_COLORS[item.item_rarity]?.border}`}>
@@ -434,14 +506,13 @@ const Trading = () => {
                   <Badge className="bg-yellow-600 text-xs">{myOffer.g_amount} G</Badge>
                 )}
                 {myOffer.items.length === 0 && myOffer.g_amount === 0 && (
-                  <span className="text-slate-500 text-xs">Nichts</span>
+                  <span className="text-slate-500 text-xs">{t('nothing', language)}</span>
                 )}
               </div>
             </div>
             
-            {/* What I receive */}
             <div className="space-y-1">
-              <span className="text-green-400 text-xs">Du bekommst:</span>
+              <span className="text-green-400 text-xs">{t('youReceive', language)}</span>
               <div className="flex flex-wrap gap-1">
                 {theirOffer.items.slice(0, 3).map((item, idx) => (
                   <Badge key={idx} variant="outline" className={`text-xs ${RARITY_COLORS[item.item_rarity]?.border}`}>
@@ -455,7 +526,7 @@ const Trading = () => {
                   <Badge className="bg-yellow-600 text-xs">{theirOffer.g_amount} G</Badge>
                 )}
                 {theirOffer.items.length === 0 && theirOffer.g_amount === 0 && (
-                  <span className="text-slate-500 text-xs">Nichts</span>
+                  <span className="text-slate-500 text-xs">{t('nothing', language)}</span>
                 )}
               </div>
             </div>
@@ -511,10 +582,9 @@ const Trading = () => {
           <div className="flex items-center justify-between mb-6">
             <div className="flex items-center gap-3">
               <ArrowLeftRight className="w-8 h-8 text-blue-400" />
-              <h1 className="text-2xl font-bold text-white">Trading</h1>
+              <h1 className="text-2xl font-bold text-white">{t('trading', language)}</h1>
             </div>
             <div className="flex items-center gap-2">
-              {/* Inventory Analytics Shortcut */}
               <Button 
                 onClick={goToInventoryAnalytics}
                 variant="outline"
@@ -522,7 +592,7 @@ const Trading = () => {
                 data-testid="inventory-analytics-btn"
               >
                 <TrendingUp className="w-4 h-4 mr-2" />
-                {language === 'de' ? 'Inventar-Analyse' : 'Inventory Analytics'}
+                {t('inventoryAnalytics', language)}
               </Button>
               <Button 
                 onClick={() => setShowNewTrade(true)}
@@ -530,7 +600,7 @@ const Trading = () => {
                 data-testid="new-trade-btn"
               >
                 <ArrowLeftRight className="w-4 h-4 mr-2" />
-                {language === 'de' ? 'Neuer Trade' : 'New Trade'}
+                {t('newTrade', language)}
               </Button>
             </div>
           </div>
@@ -540,26 +610,26 @@ const Trading = () => {
           <TabsList className="bg-slate-800/50 border border-slate-700">
             <TabsTrigger value="inbound" className="data-[state=active]:bg-blue-600" data-testid="tab-inbound">
               <Inbox className="w-4 h-4 mr-2" />
-              Eingehend
+              {t('inbound', language)}
               {inboundTrades.length > 0 && (
                 <Badge className="ml-2 bg-red-500">{inboundTrades.length}</Badge>
               )}
             </TabsTrigger>
             <TabsTrigger value="outbound" className="data-[state=active]:bg-blue-600" data-testid="tab-outbound">
               <Send className="w-4 h-4 mr-2" />
-              Ausgehend
+              {t('outbound', language)}
               {outboundTrades.length > 0 && (
                 <Badge className="ml-2 bg-amber-500">{outboundTrades.length}</Badge>
               )}
             </TabsTrigger>
             <TabsTrigger value="completed" className="data-[state=active]:bg-blue-600" data-testid="tab-completed">
               <CheckCircle className="w-4 h-4 mr-2" />
-              Abgeschlossen
+              {t('completed', language)}
             </TabsTrigger>
           </TabsList>
 
           {loading ? (
-            <div className="text-center py-12 text-slate-400">Lade Trades...</div>
+            <div className="text-center py-12 text-slate-400">{t('loadingTrades', language)}</div>
           ) : (
             <>
               <TabsContent value="inbound" className="space-y-3">
@@ -567,7 +637,7 @@ const Trading = () => {
                   <Card className="bg-slate-800/30 border-slate-700">
                     <CardContent className="p-8 text-center text-slate-400">
                       <Inbox className="w-12 h-12 mx-auto mb-3 opacity-50" />
-                      <p>Keine eingehenden Trade-Anfragen</p>
+                      <p>{t('noInbound', language)}</p>
                     </CardContent>
                   </Card>
                 ) : (
@@ -582,7 +652,7 @@ const Trading = () => {
                   <Card className="bg-slate-800/30 border-slate-700">
                     <CardContent className="p-8 text-center text-slate-400">
                       <Send className="w-12 h-12 mx-auto mb-3 opacity-50" />
-                      <p>Keine ausgehenden Trade-Anfragen</p>
+                      <p>{t('noOutbound', language)}</p>
                     </CardContent>
                   </Card>
                 ) : (
@@ -597,7 +667,7 @@ const Trading = () => {
                   <Card className="bg-slate-800/30 border-slate-700">
                     <CardContent className="p-8 text-center text-slate-400">
                       <CheckCircle className="w-12 h-12 mx-auto mb-3 opacity-50" />
-                      <p>Noch keine abgeschlossenen Trades</p>
+                      <p>{t('noCompleted', language)}</p>
                     </CardContent>
                   </Card>
                 ) : (
@@ -616,20 +686,19 @@ const Trading = () => {
             <DialogHeader>
               <DialogTitle className="text-white flex items-center gap-2">
                 <ArrowLeftRight className="w-5 h-5 text-blue-400" />
-                {counterMode ? 'Gegenangebot erstellen' : 'Neuer Trade'}
+                {counterMode ? t('createCounterOffer', language) : t('newTrade', language)}
               </DialogTitle>
             </DialogHeader>
 
             <div className="space-y-6">
-              {/* User Search */}
               {!targetUser && !counterMode && (
                 <div className="space-y-3">
-                  <label className="text-sm text-slate-300">Handelspartner suchen</label>
+                  <label className="text-sm text-slate-300">{t('searchPartner', language)}</label>
                   <div className="flex gap-2">
                     <Input
                       value={searchUsername}
                       onChange={(e) => setSearchUsername(e.target.value)}
-                      placeholder="Benutzername eingeben..."
+                      placeholder={t('enterUsername', language)}
                       className="bg-slate-800 border-slate-600"
                       onKeyDown={(e) => e.key === 'Enter' && searchUser()}
                       data-testid="search-username-input"
@@ -645,7 +714,6 @@ const Trading = () => {
                 </div>
               )}
 
-              {/* Target User Found */}
               {targetUser && (
                 <>
                   <div className="flex items-center justify-between p-3 bg-slate-800/50 rounded-lg">
@@ -653,7 +721,7 @@ const Trading = () => {
                       <User className="w-8 h-8 text-blue-400" />
                       <div>
                         <div className="font-medium text-white">{targetUser.username}</div>
-                        <div className="text-xs text-slate-400">Level {targetUser.level || 1}</div>
+                        <div className="text-xs text-slate-400">{t('level', language)} {targetUser.level || 1}</div>
                       </div>
                     </div>
                     {!counterMode && (
@@ -663,27 +731,26 @@ const Trading = () => {
                     )}
                   </div>
 
-                  {/* Trade Interface */}
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                     {/* My Offer */}
                     <div className="space-y-4 p-4 bg-slate-800/30 rounded-lg border border-slate-700">
                       <h3 className="font-semibold text-red-400 flex items-center gap-2">
                         <Package className="w-4 h-4" />
-                        Du bietest an ({selectedMyItems.length}/10)
+                        {t('youOffer', language)} ({selectedMyItems.length}/10)
                       </h3>
                       
                       <ItemSelector
                         items={myInventory}
                         selected={selectedMyItems}
                         onToggle={toggleMyItem}
-                        title="Deine Items"
-                        emptyText="Keine Items im Inventar"
+                        title={t('yourItems', language)}
+                        emptyText={t('noItemsInventory', language)}
                       />
                       
                       <div className="space-y-2">
                         <label className="text-sm text-slate-300 flex items-center gap-1">
                           <Coins className="w-3 h-3 text-yellow-500" />
-                          G anbieten
+                          {t('offerG', language)}
                         </label>
                         <Input
                           type="number"
@@ -696,7 +763,7 @@ const Trading = () => {
                         {offeredG > 0 && (
                           <p className="text-xs text-amber-400">
                             <AlertTriangle className="w-3 h-3 inline mr-1" />
-                            30% Gebühr: {calculateFee(offeredG)} G (wird vernichtet)
+                            {t('feeWarning', language)} {calculateFee(offeredG)} G {t('feeDestroyed', language)}
                           </p>
                         )}
                       </div>
@@ -706,21 +773,21 @@ const Trading = () => {
                     <div className="space-y-4 p-4 bg-slate-800/30 rounded-lg border border-slate-700">
                       <h3 className="font-semibold text-green-400 flex items-center gap-2">
                         <Package className="w-4 h-4" />
-                        Du möchtest ({selectedTheirItems.length}/10)
+                        {t('youWant', language)} ({selectedTheirItems.length}/10)
                       </h3>
                       
                       <ItemSelector
                         items={theirInventory}
                         selected={selectedTheirItems}
                         onToggle={toggleTheirItem}
-                        title={`${targetUser.username}s Items`}
-                        emptyText="Keine Items verfügbar"
+                        title={`${targetUser.username}${t('theirItems', language)}`}
+                        emptyText={t('noItemsAvailable', language)}
                       />
                       
                       <div className="space-y-2">
                         <label className="text-sm text-slate-300 flex items-center gap-1">
                           <Coins className="w-3 h-3 text-yellow-500" />
-                          G anfragen
+                          {t('requestG', language)}
                         </label>
                         <Input
                           type="number"
@@ -731,9 +798,7 @@ const Trading = () => {
                           data-testid="requested-g-input"
                         />
                         {requestedG > 0 && (
-                          <p className="text-xs text-slate-400">
-                            Der andere Spieler zahlt 30% Gebühr auf diesen Betrag
-                          </p>
+                          <p className="text-xs text-slate-400">{t('otherPaysFee', language)}</p>
                         )}
                       </div>
                     </div>
@@ -742,22 +807,22 @@ const Trading = () => {
                   {/* Summary */}
                   <Card className="bg-slate-800/50 border-slate-600">
                     <CardContent className="p-4">
-                      <h4 className="font-medium text-white mb-3">Zusammenfassung</h4>
+                      <h4 className="font-medium text-white mb-3">{t('summary', language)}</h4>
                       <div className="grid grid-cols-2 gap-4 text-sm">
                         <div>
-                          <span className="text-red-400">Du gibst:</span>
+                          <span className="text-red-400">{t('youGive', language)}</span>
                           <ul className="mt-1 space-y-1 text-slate-300">
                             {selectedMyItems.map(i => <li key={i.inventory_id}>• {i.item_name}</li>)}
-                            {offeredG > 0 && <li className="text-yellow-400">• {offeredG} G (+{calculateFee(offeredG)} G Gebühr)</li>}
-                            {selectedMyItems.length === 0 && offeredG === 0 && <li className="text-slate-500">Nichts</li>}
+                            {offeredG > 0 && <li className="text-yellow-400">• {offeredG} G (+{calculateFee(offeredG)} G {t('fee', language)})</li>}
+                            {selectedMyItems.length === 0 && offeredG === 0 && <li className="text-slate-500">{t('nothing', language)}</li>}
                           </ul>
                         </div>
                         <div>
-                          <span className="text-green-400">Du bekommst:</span>
+                          <span className="text-green-400">{t('youReceive', language)}</span>
                           <ul className="mt-1 space-y-1 text-slate-300">
                             {selectedTheirItems.map(i => <li key={i.inventory_id}>• {i.item_name}</li>)}
                             {requestedG > 0 && <li className="text-yellow-400">• {requestedG} G</li>}
-                            {selectedTheirItems.length === 0 && requestedG === 0 && <li className="text-slate-500">Nichts</li>}
+                            {selectedTheirItems.length === 0 && requestedG === 0 && <li className="text-slate-500">{t('nothing', language)}</li>}
                           </ul>
                         </div>
                       </div>
@@ -768,7 +833,7 @@ const Trading = () => {
             </div>
 
             <DialogFooter>
-              <Button variant="outline" onClick={resetNewTrade}>Abbrechen</Button>
+              <Button variant="outline" onClick={resetNewTrade}>{t('cancel', language)}</Button>
               {targetUser && (
                 <Button 
                   onClick={counterMode ? sendCounterOffer : createTrade}
@@ -776,7 +841,7 @@ const Trading = () => {
                   disabled={selectedMyItems.length === 0 && selectedTheirItems.length === 0 && offeredG === 0 && requestedG === 0}
                   data-testid="submit-trade-btn"
                 >
-                  {counterMode ? 'Gegenangebot senden' : 'Trade senden'}
+                  {counterMode ? t('sendCounterOffer', language) : t('sendTrade', language)}
                 </Button>
               )}
             </DialogFooter>
@@ -787,28 +852,25 @@ const Trading = () => {
         <Dialog open={showTradeDetail} onOpenChange={setShowTradeDetail}>
           <DialogContent className="bg-slate-900 border-slate-700 max-w-2xl">
             <DialogHeader>
-              <DialogTitle className="text-white">Trade Details</DialogTitle>
+              <DialogTitle className="text-white">{t('tradeDetails', language)}</DialogTitle>
             </DialogHeader>
 
             {selectedTrade && (
               <div className="space-y-6">
-                {/* Trade Parties */}
                 <div className="grid grid-cols-2 gap-4">
                   <div className="p-3 bg-slate-800/50 rounded-lg">
-                    <div className="text-xs text-slate-400 mb-1">Initiator</div>
+                    <div className="text-xs text-slate-400 mb-1">{t('initiator', language)}</div>
                     <div className="font-medium text-white">{selectedTrade.initiator.username}</div>
                   </div>
                   <div className="p-3 bg-slate-800/50 rounded-lg">
-                    <div className="text-xs text-slate-400 mb-1">Empfänger</div>
+                    <div className="text-xs text-slate-400 mb-1">{t('recipient', language)}</div>
                     <div className="font-medium text-white">{selectedTrade.recipient.username}</div>
                   </div>
                 </div>
 
-                {/* Trade Content */}
                 <div className="grid grid-cols-2 gap-4">
-                  {/* Initiator Offer */}
                   <div className="space-y-2">
-                    <h4 className="text-sm font-medium text-slate-300">{selectedTrade.initiator.username} bietet:</h4>
+                    <h4 className="text-sm font-medium text-slate-300">{selectedTrade.initiator.username} {t('offers', language)}</h4>
                     <div className="p-3 bg-slate-800/30 rounded-lg space-y-2">
                       {selectedTrade.initiator.items.map(item => (
                         <div key={item.inventory_id} className="flex items-center gap-2">
@@ -826,14 +888,13 @@ const Trading = () => {
                         </div>
                       )}
                       {selectedTrade.initiator.items.length === 0 && selectedTrade.initiator.g_amount === 0 && (
-                        <span className="text-slate-500 text-sm">Nichts</span>
+                        <span className="text-slate-500 text-sm">{t('nothing', language)}</span>
                       )}
                     </div>
                   </div>
 
-                  {/* Recipient Offer */}
                   <div className="space-y-2">
-                    <h4 className="text-sm font-medium text-slate-300">{selectedTrade.recipient.username} bietet:</h4>
+                    <h4 className="text-sm font-medium text-slate-300">{selectedTrade.recipient.username} {t('offers', language)}</h4>
                     <div className="p-3 bg-slate-800/30 rounded-lg space-y-2">
                       {selectedTrade.recipient.items.map(item => (
                         <div key={item.inventory_id} className="flex items-center gap-2">
@@ -851,29 +912,27 @@ const Trading = () => {
                         </div>
                       )}
                       {selectedTrade.recipient.items.length === 0 && selectedTrade.recipient.g_amount === 0 && (
-                        <span className="text-slate-500 text-sm">Nichts</span>
+                        <span className="text-slate-500 text-sm">{t('nothing', language)}</span>
                       )}
                     </div>
                   </div>
                 </div>
 
-                {/* Fee Info */}
                 {(selectedTrade.initiator.g_amount > 0 || selectedTrade.recipient.g_amount > 0) && (
                   <Card className="bg-amber-900/20 border-amber-700">
                     <CardContent className="p-3">
                       <div className="flex items-center gap-2 text-amber-400 text-sm">
                         <AlertTriangle className="w-4 h-4" />
-                        <span>30% Gebühr auf G-Transfers (wird vernichtet)</span>
+                        <span>{t('feeInfo', language)}</span>
                       </div>
                     </CardContent>
                   </Card>
                 )}
 
-                {/* Timestamp */}
                 <div className="text-xs text-slate-500">
-                  Erstellt: {formatDate(selectedTrade.created_at)}
+                  {t('created', language)} {formatDate(selectedTrade.created_at)}
                   {selectedTrade.completed_at && (
-                    <> | Abgeschlossen: {formatDate(selectedTrade.completed_at)}</>
+                    <> | {t('completedAt', language)} {formatDate(selectedTrade.completed_at)}</>
                   )}
                 </div>
               </div>
@@ -882,7 +941,6 @@ const Trading = () => {
             <DialogFooter className="flex gap-2">
               {selectedTrade?.status === 'pending' && (
                 <>
-                  {/* Recipient Actions */}
                   {selectedTrade.recipient_id === user?.user_id && (
                     <>
                       <Button 
@@ -891,7 +949,7 @@ const Trading = () => {
                         data-testid="reject-trade-btn"
                       >
                         <X className="w-4 h-4 mr-2" />
-                        Ablehnen
+                        {t('reject', language)}
                       </Button>
                       <Button 
                         variant="outline" 
@@ -899,7 +957,7 @@ const Trading = () => {
                         data-testid="counter-trade-btn"
                       >
                         <RotateCcw className="w-4 h-4 mr-2" />
-                        Gegenangebot
+                        {t('counterOffer', language)}
                       </Button>
                       <Button 
                         className="bg-green-600 hover:bg-green-700"
@@ -907,12 +965,11 @@ const Trading = () => {
                         data-testid="accept-trade-btn"
                       >
                         <Check className="w-4 h-4 mr-2" />
-                        Akzeptieren
+                        {t('accept', language)}
                       </Button>
                     </>
                   )}
                   
-                  {/* Initiator Actions */}
                   {selectedTrade.initiator_id === user?.user_id && (
                     <Button 
                       variant="destructive" 
@@ -920,14 +977,14 @@ const Trading = () => {
                       data-testid="cancel-trade-btn"
                     >
                       <X className="w-4 h-4 mr-2" />
-                      Abbrechen
+                      {t('cancel', language)}
                     </Button>
                   )}
                 </>
               )}
               
               <Button variant="outline" onClick={() => setShowTradeDetail(false)}>
-                Schließen
+                {t('close', language)}
               </Button>
             </DialogFooter>
           </DialogContent>
