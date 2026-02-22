@@ -193,22 +193,24 @@ function App() {
     <BrowserRouter>
       <AuthProvider>
         <LanguageProvider>
-          <div className="min-h-screen bg-[#050505] flex flex-col">
-            <div className="flex-1">
-              <AppRouter />
+          <SoundProvider>
+            <div className="min-h-screen bg-[#050505] flex flex-col">
+              <div className="flex-1">
+                <AppRouter />
+              </div>
+              <FooterWrapper />
+              <Toaster 
+                position="top-right" 
+                toastOptions={{
+                  style: {
+                    background: '#0A0A0C',
+                    border: '1px solid rgba(255,255,255,0.1)',
+                    color: '#fff'
+                  }
+                }}
+              />
             </div>
-            <FooterWrapper />
-            <Toaster 
-              position="top-right" 
-              toastOptions={{
-                style: {
-                  background: '#0A0A0C',
-                  border: '1px solid rgba(255,255,255,0.1)',
-                  color: '#fff'
-                }
-              }}
-            />
-          </div>
+          </SoundProvider>
         </LanguageProvider>
       </AuthProvider>
     </BrowserRouter>
