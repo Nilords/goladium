@@ -1,5 +1,8 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 
+// Feature flag to hide/show language toggle - set to false for English-only alpha
+const SHOW_LANGUAGE_TOGGLE = process.env.REACT_APP_SHOW_LANGUAGE_TOGGLE !== 'false';
+
 const LanguageContext = createContext(null);
 
 export const useLanguage = () => {
@@ -12,6 +15,8 @@ export const useLanguage = () => {
 
 export const LanguageProvider = ({ children }) => {
   const [language, setLanguage] = useState(() => {
+    // If toggle is hidden, force English
+    if (!SHOW_LANGUAGE_TOGGLE) return 'en';
     return localStorage.getItem('goladium_lang') || 'en';
   });
   const [translations, setTranslations] = useState({});
