@@ -24,9 +24,9 @@ print("ADMIN_API_KEY:", ADMIN_API_KEY)
 
 bot = commands.Bot(command_prefix="!", intents=intents)
 
-def is_admin(interaction: discord.Interaction) -> bool:
+def is_admin(user_id: int) -> bool:
     """Check if user is an admin"""
-    return interaction.user.id in ADMIN_USER_IDS
+    return user_id in ADMIN_USER_IDS
 
 async def api_request(method: str, endpoint: str, data: dict = None) -> dict:
     """Make authenticated request to backend API"""
