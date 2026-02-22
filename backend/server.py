@@ -49,7 +49,7 @@ DISCORD_WEBHOOK_URL = os.environ.get('DISCORD_WEBHOOK_URL', '')
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
 # ALPHA REGISTRATION LOCK
-ALPHA_REGISTRATION_OPEN = True
+ALPHA_REGISTRATION_OPEN = False
 
 # Cloudflare Turnstile Configuration
 TURNSTILE_SECRET_KEY = os.environ.get('TURNSTILE_SECRET_KEY', '')
