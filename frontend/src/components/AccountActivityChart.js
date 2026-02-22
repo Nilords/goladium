@@ -300,11 +300,15 @@ const AccountActivityChart = () => {
                 />
                 
                 <XAxis 
-                  dataKey="displayTime" 
+                  dataKey="index" 
                   stroke="rgba(255,255,255,0.2)" 
                   tick={{ fill: 'rgba(255,255,255,0.4)', fontSize: 10 }}
                   tickLine={false}
                   axisLine={false}
+                  tickFormatter={(idx) => {
+                    const point = chartData[idx];
+                    return point?.displayTime || '';
+                  }}
                   interval="preserveStartEnd"
                 />
                 
