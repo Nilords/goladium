@@ -5294,30 +5294,6 @@ async def get_account_activity(request: Request, limit: int = 100, aggregate: bo
         "events": aggregated,
         "stats": stats
     }
-        all_time_low = all_time_low_doc["total_value_after"] if all_time_low_doc else current
-    else:
-        # No events - use current balance
-        current = user.get("balance", 0) + user.get("balance_a", 0)
-        highest = current
-        lowest = current
-        range_val = 0
-        percent_change = 0
-        all_time_high = current
-        all_time_low = current
-    
-    return {
-        "events": events,
-        "stats": {
-            "highest": round(highest, 2),
-            "lowest": round(lowest, 2),
-            "current": round(current, 2),
-            "range": range_val,
-            "percent_change": percent_change,
-            "all_time_high": round(all_time_high, 2),
-            "all_time_low": round(all_time_low, 2),
-            "total_events": len(events)
-        }
-    }
 
 
 @api_router.get("/user/value-history")
