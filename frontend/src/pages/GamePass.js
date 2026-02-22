@@ -137,16 +137,21 @@ const GamePass = () => {
   };
 
   const openChest = (chest) => {
+    playClick();
     setChestToOpen(chest);
     setShowChestDialog(true);
   };
 
   const handleChestOpened = async (result) => {
+    playChestOpen(); // Play chest opening sound
     await loadData();
     await refreshUser();
     
     if (result.reward?.type === 'item') {
+      playLevelUp(); // Special sound for item drop
       toast.success('🎉 JACKPOT! Item Drop!');
+    } else {
+      playWin(); // Normal win sound for coins
     }
   };
 
