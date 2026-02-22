@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { useLanguage } from '../contexts/LanguageContext';
+import { useSound } from '../contexts/SoundContext';
 import { formatCurrency } from '../lib/formatCurrency';
 import Navbar from '../components/Navbar';
 import Chat from '../components/Chat';
@@ -28,6 +29,7 @@ const WHEEL_SEGMENTS = [
 const LuckyWheel = () => {
   const { user, token, updateUserBalance, refreshUser } = useAuth();
   const { t, language } = useLanguage();
+  const { playSpin, playWin, playJackpot, playError } = useSound();
   
   const [spinning, setSpinning] = useState(false);
   const [rotation, setRotation] = useState(0);
