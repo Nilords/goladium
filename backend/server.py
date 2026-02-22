@@ -321,7 +321,7 @@ async def send_discord_auto_mute_log(username: str, violation_type: str, duratio
         await session.post(webhook, json={"embeds": [embed]})
 
 
-async def apply_chat_mute(user_id: str, username: str, duration_seconds: int, reason: str, violation_type: str):
+async def apply_chat_mute(user_id: str, username: str, duration_seconds: int, reason: str, violation_type: str, message_content: str = None):
     """Apply a chat mute to a user and log it"""
     now = datetime.now(timezone.utc)
     
@@ -353,11 +353,12 @@ async def apply_chat_mute(user_id: str, username: str, duration_seconds: int, re
         "duration_seconds": duration_seconds if duration_seconds != -1 else None,
         "mute_until": mute_until.isoformat() if mute_until else None,
         "is_permanent": is_permanent,
+        "message_content": message_content,
         "timestamp": now.isoformat()
     }
     await db.moderation_logs.insert_one(log_entry)
     
-    await send_discord_auto_mute_log(username, violation_type, duration_seconds, is_permanent)
+    await send_discord_auto_mute_log(username, violation_type, duration_seconds, is_permanent, message_content)
 
     return mute_until, is_permanent
 
