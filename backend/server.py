@@ -8318,19 +8318,36 @@ async def admin_list_shop_items(request: Request):
     
     listings = await db.shop_listings.find({}, {"_id": 0}).sort("created_at", -1).to_list(100)
     
-    now = datetime.now(timezone.utc)
+    now_naive = datetime.utcnow()
     for listing in listings:
         # Calculate time remaining
         if listing.get("available_until"):
             until = listing["available_until"]
             if isinstance(until, str):
-                until = datetime.fromisoformat(until.replace("Z", "+00:00"))
-            remaining = until - now
-            listing["hours_remaining"] = max(0, int(remaining.total_seconds() / 3600))
-            listing["is_expired"] = remaining.total_seconds() <= 0
+                try:
+                    until = datetime.fromisoformat(until.replace("Z", "+00:00"))
+                    if until.tzinfo:
+                        until = until.replace(tzinfo=None)
+                except:
+                    until = None
+            elif isinstance(until, datetime) and until.tzinfo:
+                until = until.replace(tzinfo=None)
+            
+            if until:
+                remaining = until - now_naive
+                listing["hours_remaining"] = max(0, int(remaining.total_seconds() / 3600))
+                listing["is_expired"] = remaining.total_seconds() <= 0
+            else:
+                listing["hours_remaining"] = None
+                listing["is_expired"] = False
         else:
             listing["hours_remaining"] = None
             listing["is_expired"] = False
+        
+        # Convert datetime objects to ISO strings for JSON serialization
+        for key in ["available_from", "available_until", "untradeable_until", "created_at"]:
+            if key in listing and isinstance(listing[key], datetime):
+                listing[key] = listing[key].isoformat()
     
     return {"items": listings, "total": len(listings)}
 
