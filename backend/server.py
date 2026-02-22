@@ -3870,25 +3870,41 @@ async def get_item(item_id: str):
 async def get_shop_items():
     """Get all active shop items"""
     now = datetime.now(timezone.utc)
-    now_iso = now.isoformat()
+    now_naive = datetime.utcnow()
     
-    # Find active listings that are within their availability window
-    # Dates are stored as ISO strings
+    # Find active listings
     listings = await db.shop_listings.find({
         "is_active": True
     }, {"_id": 0}).to_list(100)
     
-    # Filter by availability window (comparing ISO strings works for chronological order)
+    # Filter by availability window - handle both datetime objects and ISO strings
     active_listings = []
     for listing in listings:
-        available_from = listing.get("available_from", "")
+        available_from = listing.get("available_from")
         available_until = listing.get("available_until")
         
+        # Convert to datetime for comparison if it's a string
+        if isinstance(available_from, str):
+            try:
+                available_from = datetime.fromisoformat(available_from.replace("Z", "+00:00"))
+                if available_from.tzinfo:
+                    available_from = available_from.replace(tzinfo=None)
+            except:
+                available_from = None
+        
+        if isinstance(available_until, str):
+            try:
+                available_until = datetime.fromisoformat(available_until.replace("Z", "+00:00"))
+                if available_until.tzinfo:
+                    available_until = available_until.replace(tzinfo=None)
+            except:
+                available_until = None
+        
         # Check if currently available
-        if available_from and available_from > now_iso:
+        if available_from and available_from > now_naive:
             continue  # Not yet available
         
-        if available_until and available_until < now_iso:
+        if available_until and available_until < now_naive:
             continue  # Expired
         
         active_listings.append(listing)
@@ -3899,17 +3915,32 @@ async def get_shop_items():
         listing["rarity_display"] = rarity_info["name"]
         listing["rarity_color"] = rarity_info["color"]
         
-        # Calculate time remaining
+        # Convert dates to ISO strings for JSON
+        if listing.get("available_from"):
+            af = listing["available_from"]
+            if isinstance(af, datetime):
+                listing["available_from"] = af.isoformat()
+        
         if listing.get("available_until"):
-            try:
-                until = datetime.fromisoformat(listing["available_until"].replace("Z", "+00:00"))
-                remaining = until - now
+            au = listing["available_until"]
+            if isinstance(au, datetime):
+                remaining = au - now_naive
                 listing["days_remaining"] = max(0, remaining.days)
-                listing["hours_remaining"] = max(0, int(remaining.total_seconds() / 3600) % 24)
+                listing["hours_remaining"] = max(0, int(remaining.seconds / 3600))
                 listing["total_hours_remaining"] = max(0, int(remaining.total_seconds() / 3600))
-            except:
-                listing["days_remaining"] = None
-                listing["hours_remaining"] = None
+                listing["available_until"] = au.isoformat()
+            elif isinstance(au, str):
+                try:
+                    au_dt = datetime.fromisoformat(au.replace("Z", "+00:00"))
+                    if au_dt.tzinfo:
+                        au_dt = au_dt.replace(tzinfo=None)
+                    remaining = au_dt - now_naive
+                    listing["days_remaining"] = max(0, remaining.days)
+                    listing["hours_remaining"] = max(0, int(remaining.seconds / 3600))
+                    listing["total_hours_remaining"] = max(0, int(remaining.total_seconds() / 3600))
+                except:
+                    listing["days_remaining"] = None
+                    listing["hours_remaining"] = None
         else:
             listing["days_remaining"] = None
             listing["hours_remaining"] = None
