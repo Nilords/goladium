@@ -77,6 +77,7 @@ const LuckyWheel = () => {
   const spinWheel = async () => {
     if (spinning || !wheelStatus.can_spin) return;
 
+    playSpin(); // Play spin sound
     setSpinning(true);
     setLastReward(null);
 
@@ -135,17 +136,20 @@ const LuckyWheel = () => {
         checkWheelStatus();
 
         if (result.reward === 15) {
+          playJackpot(); // Jackpot sound
           toast.success(
             `🎉 ${language === 'de' ? 'JACKPOT!' : 'JACKPOT!'} +${result.reward} G!`,
             { duration: 5000 }
           );
         } else {
+          playWin(); // Normal win sound
           toast.success(`+${result.reward} G!`);
         }
       }, 5000);
 
     } catch (error) {
       setSpinning(false);
+      playError();
       toast.error(error.message);
     }
   };
