@@ -2,28 +2,28 @@ import React, { createContext, useContext, useState, useEffect, useRef, useCallb
 
 const SoundContext = createContext();
 
-// Audio file URLs - using royalty-free sounds
+// Music tracks - Add your own MP3/OGG files to /public/sounds/
+// Example: /public/sounds/lounge.mp3
 const MUSIC_TRACKS = {
   'lounge': {
     name: 'Casino Lounge',
     description: 'Relaxed ambient vibes',
-    // Using a simple sine wave oscillator for demo - replace with actual URLs in production
-    type: 'generated'
+    file: '/sounds/lounge.mp3'
   },
   'jazz': {
-    name: 'Smooth Jazz',
+    name: 'Smooth Jazz', 
     description: 'Classic casino atmosphere',
-    type: 'generated'
+    file: '/sounds/jazz.mp3'
   },
   'electronic': {
     name: 'Chill Electronic',
     description: 'Modern ambient beats',
-    type: 'generated'
+    file: '/sounds/electronic.mp3'
   },
   'none': {
     name: 'No Music',
     description: 'Silence',
-    type: 'none'
+    file: null
   }
 };
 
@@ -54,34 +54,19 @@ export const SoundProvider = ({ children }) => {
   const [userInteracted, setUserInteracted] = useState(false);
   
   // Audio refs
+  const musicPlayerRef = useRef(null);
   const audioContextRef = useRef(null);
-  const musicGainRef = useRef(null);
   const effectsGainRef = useRef(null);
-  const masterGainRef = useRef(null);
-  const currentMusicRef = useRef(null);
-  const hoverSoundRef = useRef(null);
 
-  // Initialize Web Audio API
+  // Initialize Audio Context for effects
   const initAudioContext = useCallback(() => {
     if (audioContextRef.current) return audioContextRef.current;
 
     try {
       const AudioContext = window.AudioContext || window.webkitAudioContext;
       audioContextRef.current = new AudioContext();
-
-      // Create gain nodes
-      masterGainRef.current = audioContextRef.current.createGain();
-      musicGainRef.current = audioContextRef.current.createGain();
       effectsGainRef.current = audioContextRef.current.createGain();
-
-      // Connect: music/effects -> master -> destination
-      musicGainRef.current.connect(masterGainRef.current);
-      effectsGainRef.current.connect(masterGainRef.current);
-      masterGainRef.current.connect(audioContextRef.current.destination);
-
-      // Set initial volumes
-      updateVolumes();
-
+      effectsGainRef.current.connect(audioContextRef.current.destination);
       return audioContextRef.current;
     } catch (e) {
       console.error('Failed to initialize audio:', e);
@@ -89,18 +74,25 @@ export const SoundProvider = ({ children }) => {
     }
   }, []);
 
-  // Update volume levels
-  const updateVolumes = useCallback(() => {
-    if (!masterGainRef.current) return;
+  // Update music volume
+  useEffect(() => {
+    if (musicPlayerRef.current) {
+      const effectiveVolume = settings.masterEnabled 
+        ? (settings.masterVolume / 100) * (settings.musicVolume / 100)
+        : 0;
+      musicPlayerRef.current.volume = effectiveVolume;
+    }
+  }, [settings.masterEnabled, settings.masterVolume, settings.musicVolume]);
 
-    const masterVol = settings.masterEnabled ? settings.masterVolume / 100 : 0;
-    const musicVol = settings.musicVolume / 100;
-    const effectsVol = settings.effectsVolume / 100;
-
-    masterGainRef.current.gain.setValueAtTime(masterVol, audioContextRef.current?.currentTime || 0);
-    musicGainRef.current.gain.setValueAtTime(musicVol, audioContextRef.current?.currentTime || 0);
-    effectsGainRef.current.gain.setValueAtTime(effectsVol, audioContextRef.current?.currentTime || 0);
-  }, [settings.masterEnabled, settings.masterVolume, settings.musicVolume, settings.effectsVolume]);
+  // Update effects volume
+  useEffect(() => {
+    if (effectsGainRef.current && audioContextRef.current) {
+      const effectiveVolume = settings.masterEnabled
+        ? (settings.masterVolume / 100) * (settings.effectsVolume / 100)
+        : 0;
+      effectsGainRef.current.gain.setValueAtTime(effectiveVolume, audioContextRef.current.currentTime);
+    }
+  }, [settings.masterEnabled, settings.masterVolume, settings.effectsVolume]);
 
   // Save settings to localStorage
   useEffect(() => {
@@ -110,11 +102,6 @@ export const SoundProvider = ({ children }) => {
       console.error('Failed to save audio settings:', e);
     }
   }, [settings]);
-
-  // Update volumes when settings change
-  useEffect(() => {
-    updateVolumes();
-  }, [updateVolumes]);
 
   // Handle user interaction for autoplay
   const handleUserInteraction = useCallback(() => {
@@ -142,120 +129,58 @@ export const SoundProvider = ({ children }) => {
     };
   }, [handleUserInteraction]);
 
-  // Generate ambient music using oscillators
-  const generateAmbientMusic = useCallback((trackId) => {
-    if (!audioContextRef.current || !musicGainRef.current) return null;
-
-    const ctx = audioContextRef.current;
-    
-    // Create oscillators for ambient sound
-    const oscillators = [];
-    const gains = [];
-
-    if (trackId === 'lounge') {
-      // Warm pad sound
-      const frequencies = [130.81, 164.81, 196.00, 261.63]; // C major chord
-      frequencies.forEach((freq, i) => {
-        const osc = ctx.createOscillator();
-        const gain = ctx.createGain();
-        osc.type = 'sine';
-        osc.frequency.setValueAtTime(freq, ctx.currentTime);
-        gain.gain.setValueAtTime(0.08, ctx.currentTime);
-        osc.connect(gain);
-        gain.connect(musicGainRef.current);
-        oscillators.push(osc);
-        gains.push(gain);
-      });
-    } else if (trackId === 'jazz') {
-      // Jazz-like tones
-      const frequencies = [146.83, 185.00, 220.00, 277.18]; // D minor 7
-      frequencies.forEach((freq) => {
-        const osc = ctx.createOscillator();
-        const gain = ctx.createGain();
-        osc.type = 'triangle';
-        osc.frequency.setValueAtTime(freq, ctx.currentTime);
-        gain.gain.setValueAtTime(0.06, ctx.currentTime);
-        osc.connect(gain);
-        gain.connect(musicGainRef.current);
-        oscillators.push(osc);
-        gains.push(gain);
-      });
-    } else if (trackId === 'electronic') {
-      // Electronic ambient
-      const frequencies = [110, 220, 330];
-      frequencies.forEach((freq, i) => {
-        const osc = ctx.createOscillator();
-        const gain = ctx.createGain();
-        osc.type = i === 0 ? 'sawtooth' : 'sine';
-        osc.frequency.setValueAtTime(freq, ctx.currentTime);
-        gain.gain.setValueAtTime(0.04, ctx.currentTime);
-        
-        // Add LFO for movement
-        const lfo = ctx.createOscillator();
-        const lfoGain = ctx.createGain();
-        lfo.frequency.setValueAtTime(0.5 + i * 0.2, ctx.currentTime);
-        lfoGain.gain.setValueAtTime(3, ctx.currentTime);
-        lfo.connect(lfoGain);
-        lfoGain.connect(osc.frequency);
-        lfo.start();
-        
-        osc.connect(gain);
-        gain.connect(musicGainRef.current);
-        oscillators.push(osc, lfo);
-        gains.push(gain, lfoGain);
-      });
-    }
-
-    return { oscillators, gains };
-  }, []);
-
   // Play background music
   const playMusic = useCallback((trackId) => {
-    if (!userInteracted) return;
-    
-    const ctx = initAudioContext();
-    if (!ctx) return;
-
     // Stop current music
-    if (currentMusicRef.current) {
-      currentMusicRef.current.oscillators.forEach(osc => {
-        try { osc.stop(); } catch {}
-      });
-      currentMusicRef.current = null;
+    if (musicPlayerRef.current) {
+      musicPlayerRef.current.pause();
+      musicPlayerRef.current.src = '';
+      musicPlayerRef.current = null;
     }
 
-    if (trackId === 'none' || !MUSIC_TRACKS[trackId]) {
+    if (trackId === 'none' || !MUSIC_TRACKS[trackId] || !MUSIC_TRACKS[trackId].file) {
       setSettings(s => ({ ...s, currentTrack: 'none' }));
       return;
     }
 
-    const music = generateAmbientMusic(trackId);
-    if (music) {
-      music.oscillators.forEach(osc => osc.start());
-      currentMusicRef.current = music;
+    try {
+      const audio = new Audio(MUSIC_TRACKS[trackId].file);
+      audio.loop = true;
+      
+      const effectiveVolume = settings.masterEnabled 
+        ? (settings.masterVolume / 100) * (settings.musicVolume / 100)
+        : 0;
+      audio.volume = effectiveVolume;
+      
+      audio.play().catch(err => {
+        console.log('Music autoplay blocked, will play on interaction:', err);
+      });
+      
+      musicPlayerRef.current = audio;
       setSettings(s => ({ ...s, currentTrack: trackId }));
+    } catch (e) {
+      console.error('Failed to play music:', e);
     }
-  }, [userInteracted, initAudioContext, generateAmbientMusic]);
+  }, [settings.masterEnabled, settings.masterVolume, settings.musicVolume]);
 
   // Stop music
   const stopMusic = useCallback(() => {
-    if (currentMusicRef.current) {
-      currentMusicRef.current.oscillators.forEach(osc => {
-        try { osc.stop(); } catch {}
-      });
-      currentMusicRef.current = null;
+    if (musicPlayerRef.current) {
+      musicPlayerRef.current.pause();
+      musicPlayerRef.current.src = '';
+      musicPlayerRef.current = null;
     }
     setSettings(s => ({ ...s, currentTrack: 'none' }));
   }, []);
 
-  // Play hover sound (short click/tick)
+  // Play hover sound (short tick)
   const playHoverSound = useCallback(() => {
     if (!settings.masterEnabled || !settings.hoverSoundsEnabled || !userInteracted) return;
     
     const ctx = initAudioContext();
     if (!ctx || !effectsGainRef.current) return;
 
-    // Create a short click sound
+    // Short click sound
     const osc = ctx.createOscillator();
     const gain = ctx.createGain();
     
@@ -273,7 +198,7 @@ export const SoundProvider = ({ children }) => {
     osc.stop(ctx.currentTime + 0.1);
   }, [settings.masterEnabled, settings.hoverSoundsEnabled, userInteracted, initAudioContext]);
 
-  // Play effect sound (win, spin, etc.)
+  // Play effect sound
   const playEffect = useCallback((effectType) => {
     if (!settings.masterEnabled || !userInteracted) return;
     
@@ -285,17 +210,21 @@ export const SoundProvider = ({ children }) => {
 
     switch (effectType) {
       case 'win':
-        osc.type = 'sine';
-        osc.frequency.setValueAtTime(523.25, ctx.currentTime); // C5
-        osc.frequency.setValueAtTime(659.25, ctx.currentTime + 0.1); // E5
-        osc.frequency.setValueAtTime(783.99, ctx.currentTime + 0.2); // G5
-        gain.gain.setValueAtTime(0.3, ctx.currentTime);
-        gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.5);
-        osc.connect(gain);
-        gain.connect(effectsGainRef.current);
-        osc.start(ctx.currentTime);
-        osc.stop(ctx.currentTime + 0.5);
-        break;
+        // Ascending arpeggio
+        const winNotes = [523.25, 659.25, 783.99, 1046.50];
+        winNotes.forEach((freq, i) => {
+          const o = ctx.createOscillator();
+          const g = ctx.createGain();
+          o.type = 'sine';
+          o.frequency.setValueAtTime(freq, ctx.currentTime + i * 0.08);
+          g.gain.setValueAtTime(0.25, ctx.currentTime + i * 0.08);
+          g.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + i * 0.08 + 0.25);
+          o.connect(g);
+          g.connect(effectsGainRef.current);
+          o.start(ctx.currentTime + i * 0.08);
+          o.stop(ctx.currentTime + i * 0.08 + 0.25);
+        });
+        return;
 
       case 'spin':
         osc.type = 'square';
@@ -303,10 +232,6 @@ export const SoundProvider = ({ children }) => {
         osc.frequency.linearRampToValueAtTime(400, ctx.currentTime + 0.15);
         gain.gain.setValueAtTime(0.1, ctx.currentTime);
         gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.2);
-        osc.connect(gain);
-        gain.connect(effectsGainRef.current);
-        osc.start(ctx.currentTime);
-        osc.stop(ctx.currentTime + 0.2);
         break;
 
       case 'click':
@@ -314,23 +239,14 @@ export const SoundProvider = ({ children }) => {
         osc.frequency.setValueAtTime(600, ctx.currentTime);
         gain.gain.setValueAtTime(0.2, ctx.currentTime);
         gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.05);
-        osc.connect(gain);
-        gain.connect(effectsGainRef.current);
-        osc.start(ctx.currentTime);
-        osc.stop(ctx.currentTime + 0.05);
         break;
 
       case 'purchase':
-        // Coin sound
         osc.type = 'sine';
         osc.frequency.setValueAtTime(1200, ctx.currentTime);
         osc.frequency.exponentialRampToValueAtTime(800, ctx.currentTime + 0.15);
         gain.gain.setValueAtTime(0.25, ctx.currentTime);
         gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.3);
-        osc.connect(gain);
-        gain.connect(effectsGainRef.current);
-        osc.start(ctx.currentTime);
-        osc.stop(ctx.currentTime + 0.3);
         break;
 
       case 'error':
@@ -339,15 +255,10 @@ export const SoundProvider = ({ children }) => {
         osc.frequency.setValueAtTime(150, ctx.currentTime + 0.1);
         gain.gain.setValueAtTime(0.15, ctx.currentTime);
         gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.2);
-        osc.connect(gain);
-        gain.connect(effectsGainRef.current);
-        osc.start(ctx.currentTime);
-        osc.stop(ctx.currentTime + 0.2);
         break;
 
       case 'levelup':
-        // Fanfare
-        const notes = [523.25, 659.25, 783.99, 1046.50]; // C5, E5, G5, C6
+        const notes = [523.25, 659.25, 783.99, 1046.50];
         notes.forEach((freq, i) => {
           const o = ctx.createOscillator();
           const g = ctx.createGain();
@@ -360,11 +271,16 @@ export const SoundProvider = ({ children }) => {
           o.start(ctx.currentTime + i * 0.1);
           o.stop(ctx.currentTime + i * 0.1 + 0.3);
         });
-        return; // Early return since we handled it differently
+        return;
 
       default:
         return;
     }
+
+    osc.connect(gain);
+    gain.connect(effectsGainRef.current);
+    osc.start(ctx.currentTime);
+    osc.stop(ctx.currentTime + 0.3);
   }, [settings.masterEnabled, userInteracted, initAudioContext]);
 
   // Settings updaters
@@ -398,10 +314,9 @@ export const SoundProvider = ({ children }) => {
   // Cleanup on unmount
   useEffect(() => {
     return () => {
-      if (currentMusicRef.current) {
-        currentMusicRef.current.oscillators.forEach(osc => {
-          try { osc.stop(); } catch {}
-        });
+      if (musicPlayerRef.current) {
+        musicPlayerRef.current.pause();
+        musicPlayerRef.current = null;
       }
       if (audioContextRef.current) {
         audioContextRef.current.close();
@@ -410,18 +325,15 @@ export const SoundProvider = ({ children }) => {
   }, []);
 
   const value = {
-    // State
     settings,
     userInteracted,
     musicTracks: MUSIC_TRACKS,
     
-    // Actions
     playHoverSound,
     playEffect,
     playMusic,
     stopMusic,
     
-    // Settings setters
     setMasterEnabled,
     setMasterVolume,
     setMusicVolume,
@@ -429,7 +341,6 @@ export const SoundProvider = ({ children }) => {
     setHoverSoundsEnabled,
     selectTrack,
     
-    // Trigger user interaction
     handleUserInteraction
   };
 
