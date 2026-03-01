@@ -47,6 +47,20 @@ export const SoundProvider = ({ children }) => {
   const gainNodeRef = useRef(null);
   const musicRef = useRef(null);
 
+  // Preload current track immediately on mount so it's ready when user clicks
+  useEffect(() => {
+    if (settings.musicEnabled) {
+      const track = MUSIC_TRACKS.find(t => t.id === settings.currentTrack);
+      const file = track ? track.file : MUSIC_TRACKS[0].file;
+      const audio = new Audio(file);
+      audio.preload = 'auto';
+      audio.loop = true;
+      audio.volume = settings.musicVolume / 100;
+      musicRef.current = audio;
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   // Initialize Web Audio API
   const getAudioContext = useCallback(() => {
     if (!audioContextRef.current) {
@@ -86,14 +100,19 @@ export const SoundProvider = ({ children }) => {
       setUserInteracted(true);
       getAudioContext();
       // Start music directly inside user gesture (browser requires this)
-      if (settings.musicEnabled && !musicRef.current) {
-        const track = MUSIC_TRACKS.find(t => t.id === settings.currentTrack);
-        const file = track ? track.file : MUSIC_TRACKS[0].file;
-        const audio = new Audio(file);
-        audio.loop = true;
-        audio.volume = settings.musicVolume / 100;
-        audio.play().catch(() => {});
-        musicRef.current = audio;
+      if (settings.musicEnabled) {
+        if (musicRef.current) {
+          // Already preloaded — just play (instant start)
+          musicRef.current.play().catch(() => {});
+        } else {
+          const track = MUSIC_TRACKS.find(t => t.id === settings.currentTrack);
+          const file = track ? track.file : MUSIC_TRACKS[0].file;
+          const audio = new Audio(file);
+          audio.loop = true;
+          audio.volume = settings.musicVolume / 100;
+          audio.play().catch(() => {});
+          musicRef.current = audio;
+        }
       }
     }
   }, [userInteracted, getAudioContext, settings]);
