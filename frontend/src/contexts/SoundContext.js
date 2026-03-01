@@ -14,10 +14,11 @@ const SOUND_FILES = {
 
 // Background music tracks - place MP3s in /public/sounds/music/
 export const MUSIC_TRACKS = [
-  { id: 'track1', name: 'Casino Lounge',  file: '/sounds/music/track1.mp3' },
-  { id: 'track2', name: 'Epic Adventure', file: '/sounds/music/track2.mp3' },
-  { id: 'track3', name: 'Chill Beats',    file: '/sounds/music/track3.mp3' },
-  { id: 'track4', name: 'Neon Nights',    file: '/sounds/music/track4.mp3' },
+  { id: 'track1', name: 'Track 1', file: '/sounds/music/track1.mp3' },
+  { id: 'track2', name: 'Track 2', file: '/sounds/music/track2.mp3' },
+  { id: 'track3', name: 'Track 3', file: '/sounds/music/track3.mp3' },
+  { id: 'track4', name: 'Track 4', file: '/sounds/music/track4.mp3' },
+  { id: 'track5', name: 'Track 5', file: '/sounds/music/track5.mp3' },
 ];
 
 const DEFAULT_SETTINGS = {
