@@ -135,6 +135,9 @@ const LiveWinFeed = () => {
     if (amount >= 1000) {
       return `${(amount / 1000).toFixed(1)}K`;
     }
+    if (amount < 1) {
+      return amount.toFixed(2);
+    }
     return amount.toFixed(0);
   };
 
