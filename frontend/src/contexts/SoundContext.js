@@ -25,7 +25,7 @@ const DEFAULT_SETTINGS = {
   soundEnabled: true,
   volume: 60,
   hoverSoundsEnabled: true,
-  musicEnabled: false,
+  musicEnabled: true,
   musicVolume: 40,
   currentTrack: 'track1',
 };
@@ -124,7 +124,13 @@ export const SoundProvider = ({ children }) => {
     const audio = new Audio(currentTrackFile);
     audio.loop = true;
     audio.volume = settings.musicVolume / 100;
-    audio.play().catch(() => {});
+    audio.play().catch(() => {
+      // Autoplay blocked — retry on next user interaction
+      const retryPlay = () => {
+        audio.play().catch(() => {});
+      };
+      document.addEventListener('click', retryPlay, { once: true });
+    });
     musicRef.current = audio;
 
     return () => {
