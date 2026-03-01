@@ -84,9 +84,19 @@ export const SoundProvider = ({ children }) => {
   const handleUserInteraction = useCallback(() => {
     if (!userInteracted) {
       setUserInteracted(true);
-      getAudioContext(); // Initialize on first interaction
+      getAudioContext();
+      // Start music directly inside user gesture (browser requires this)
+      if (settings.musicEnabled && !musicRef.current) {
+        const track = MUSIC_TRACKS.find(t => t.id === settings.currentTrack);
+        const file = track ? track.file : MUSIC_TRACKS[0].file;
+        const audio = new Audio(file);
+        audio.loop = true;
+        audio.volume = settings.musicVolume / 100;
+        audio.play().catch(() => {});
+        musicRef.current = audio;
+      }
     }
-  }, [userInteracted, getAudioContext]);
+  }, [userInteracted, getAudioContext, settings]);
 
   useEffect(() => {
     const handler = () => handleUserInteraction();
