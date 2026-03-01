@@ -2881,15 +2881,17 @@ async def spin_slot(bet_request: SlotBetRequest, request: Request):
     if result["is_win"]:
         await update_quest_progress(user["user_id"], "wins", 1, bet_amount=total_bet)
     
-    # Record big wins (>= 100 G) to live feed
-    if win_amount >= 100:
+    # Record big wins (>= 100 G or multiplier > 5x) to live feed
+    _multiplier = round(win_amount / total_bet, 2) if total_bet > 0 else 0
+    if win_amount >= 100 or _multiplier > 5:
         await record_big_win(
             user=user,
             game_type="slot",
             bet_amount=total_bet,
             win_amount=win_amount,
             slot_id=slot_id,
-            slot_name=SLOT_CONFIGS[slot_id]["name"]
+            slot_name=SLOT_CONFIGS[slot_id]["name"],
+            multiplier=_multiplier
         )
     
     # Discord webhooks for big wins
@@ -3227,7 +3229,7 @@ async def get_jackpot_status():
                 
                 # Record big win for jackpot (if >= 10 G)
                 win_chance = round(winner["bet_amount"] / total * 100, 2)
-                if jackpot_state["total_pot"] >= 10:
+                if jackpot_state["total_pot"] >= 100:
                     winner_user = await db.users.find_one({"user_id": winner["user_id"]})
                     if winner_user:
                         await record_big_win(
@@ -3522,7 +3524,7 @@ async def spin_jackpot(request: Request):
         
         # Record big win for jackpot (if >= 10 G)
         win_chance = round(winner["bet_amount"] / total * 100, 2)
-        if jackpot_state["total_pot"] >= 10:
+        if jackpot_state["total_pot"] >= 100:
             winner_user = await db.users.find_one({"user_id": winner["user_id"]})
             if winner_user:
                 await record_big_win(
@@ -3828,10 +3830,11 @@ async def get_live_wins(limit: int = 20):
     ]
 
 async def record_big_win(user: dict, game_type: str, bet_amount: float, win_amount: float, 
-                         slot_id: str = None, slot_name: str = None, win_chance: float = None):
-    """Record a big win (> 10 G) to the big_wins collection"""
-    if win_amount < 10:
-        return  # Only track wins >= 10 G
+                         slot_id: str = None, slot_name: str = None, win_chance: float = None,
+                         multiplier: float = 0):
+    """Record a big win (>= 100 G or multiplier > 5x) to the big_wins collection"""
+    if win_amount < 100 and multiplier <= 5:
+        return  # Only track wins >= 100 G or multiplier > 5x
     
     win_doc = {
         "win_id": f"win_{uuid.uuid4().hex[:12]}",
@@ -3842,6 +3845,7 @@ async def record_big_win(user: dict, game_type: str, bet_amount: float, win_amou
         "slot_name": slot_name,
         "bet_amount": round(bet_amount, 2),
         "win_amount": round(win_amount, 2),
+        "multiplier": round(multiplier, 2),
         "win_chance": win_chance,
         "timestamp": datetime.now(timezone.utc).isoformat(),
         "avatar": user.get("avatar"),
