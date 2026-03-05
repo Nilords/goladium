@@ -1352,22 +1352,20 @@ def build_reel_strip(distribution: dict, strip_length: int = 1000) -> list:
 
 CLASSIC_SYMBOL_CONFIG = {
     # Symbol       Multiplier   Reel0%   Reel1%   Reel2%   Reel3%   Tier         Notes
-    # ─────────────────────────────────────────────────────────────────────────────────────
-    # Common symbols - high frequency, calibrated multipliers to hit 94-96% RTP
-    "orange":   {"mult": 11.5, "r0": 35.0, "r1": 38.0, "r2": 41.0, "r3": 44.0, "tier": "common"},      # Most common
-    "lemon":    {"mult": 24,   "r0": 28.0, "r1": 26.0, "r2": 24.0, "r3": 22.0, "tier": "common"},      # Common
-    "cherry":   {"mult": 57,   "r0": 18.0, "r1": 16.0, "r2": 14.0, "r3": 12.0, "tier": "uncommon"},    # Less common
-    "bar":      {"mult": 140,  "r0": 10.0, "r1": 9.0,  "r2": 8.0,  "r3": 7.0,  "tier": "rare"},        # Rare
-    
-    # Wild: SUPPORT symbol - appears often (~3%), creates excitement & substitutions
-    # NOT the jackpot path - moderate multiplier (below Seven/Diamond)
-    # One reel per spin gets "nerfed" to 0.1% to prevent farmable 4-Wild lines
-    "wild":     {"mult": 200,  "r0": 3.0,  "r1": 3.0,  "r2": 3.0,  "r3": 3.0,  "tier": "special", "is_wild": True},
-    
-    # TRUE JACKPOT symbols: Rarer than Wild but carry HIGHEST multipliers
-    # These are the emotional jackpot - rare but life-changing when they hit
-    "seven":    {"mult": 500,  "r0": 1.2,  "r1": 0.9,  "r2": 0.6,  "r3": 0.4,  "tier": "jackpot"},     # High-value jackpot
-    "diamond":  {"mult": 1000, "r0": 0.8,  "r1": 0.6,  "r2": 0.4,  "r3": 0.2,  "tier": "jackpot"},     # Ultimate jackpot
+    # Calibrated 2026-03-01: avg RTP=95.30% (Val1=96.09%, Val2=94.52%)
+    # Seven & Diamond are PRESENTER symbols (12-13% each reel) - visible, lower mult
+    # Double-diamond / double-seven on multiple paylines IS possible (GTA-feel)
+    "orange":   {"mult": 30.55, "r0": 25.0, "r1": 27.0, "r2": 29.0, "r3": 31.0, "tier": "common"},
+    "lemon":    {"mult": 63.42, "r0": 22.0, "r1": 21.0, "r2": 20.0, "r3": 19.0, "tier": "common"},
+    "cherry":   {"mult": 140.98,"r0": 16.0, "r1": 15.0, "r2": 14.0, "r3": 13.0, "tier": "uncommon"},
+    "bar":      {"mult": 281.94,"r0":  9.0, "r1":  8.0, "r2":  7.0, "r3":  6.0, "tier": "rare"},
+
+    # Wild: joker for all symbols, one reel nerfed per spin (anti-farm)
+    "wild":     {"mult": 180.0, "r0":  4.0, "r1":  4.0, "r2":  4.0, "r3":  4.0, "tier": "special", "is_wild": True},
+
+    # Presenter symbols: frequent (12-13%), moderate multiplier, exciting double-wins
+    "seven":    {"mult": 187.96,"r0": 12.0, "r1": 13.0, "r2": 13.0, "r3": 14.0, "tier": "jackpot"},
+    "diamond":  {"mult": 281.94,"r0": 12.0, "r1": 12.0, "r2": 13.0, "r3": 13.0, "tier": "jackpot"},
 }
 # Note: Percentages should sum to ~96-100% per reel (remainder goes to orange)
 
@@ -2188,7 +2186,11 @@ def get_xp_for_next_level(current_level: int, current_xp: int) -> dict:
     }
 
 async def get_user_stats_from_history(user_id: str) -> dict:
-    """Get accurate stats from bet_history aggregation"""
+    """Get accurate stats from bet_history aggregation.
+    net_profit comes from account_activity_history (cumulative) to include all sources
+    (slots, jackpot, wheel, quests, admin grants, items, trades, chests).
+    """
+    # Gambling stats (spins, wins, wagered) from bet_history
     pipeline = [
         {"$match": {"user_id": user_id, "game_type": {"$ne": "wheel"}}},  # Exclude free wheel spins
         {"$group": {
@@ -2205,9 +2207,17 @@ async def get_user_stats_from_history(user_id: str) -> dict:
             ]}}
         }}
     ]
-    
+
     result = await db.bet_history.aggregate(pipeline).to_list(1)
-    
+
+    # Net profit from account_activity_history (includes everything: slots, jackpot,
+    # wheel, admin grants, quests, chest rewards, item sales/purchases, trades)
+    last_activity = await db.account_activity_history.find_one(
+        {"user_id": user_id},
+        sort=[("event_number", -1)]
+    )
+    net_profit = round(last_activity["cumulative_profit"], 2) if last_activity else 0.0
+
     if result:
         stats = result[0]
         total_wagered = round(stats.get("total_wagered", 0), 2)
@@ -2215,16 +2225,16 @@ async def get_user_stats_from_history(user_id: str) -> dict:
         return {
             "total_wagered": total_wagered,
             "total_won": total_won,
-            "net_profit": round(total_won - total_wagered, 2),
+            "net_profit": net_profit,
             "total_spins": stats.get("total_bets", 0),
             "total_wins": stats.get("wins", 0),
             "total_losses": stats.get("total_bets", 0) - stats.get("wins", 0)
         }
-    
+
     return {
         "total_wagered": 0.0,
         "total_won": 0.0,
-        "net_profit": 0.0,
+        "net_profit": net_profit,
         "total_spins": 0,
         "total_wins": 0,
         "total_losses": 0
@@ -8056,10 +8066,425 @@ async def admin_modify_balance(data: AdminBalanceRequest, request: Request):
         "modified": result.modified_count > 0
     }
 
+class AdminEcoResetRequest(BaseModel):
+    confirm: str  # must be "RESET_ECO" to execute
+
+@api_router.post("/admin/eco-reset")
+async def admin_eco_reset(data: AdminEcoResetRequest, request: Request):
+    """Reset economy for ALL users: balance→10G, level→1, xp→0.
+    Keeps: inventory, prestige items, game_pass_level/xp, bet_history, big_wins, account_activity_history.
+    Records a balance-reset event in account_activity_history so the graph shows the drop.
+    """
+    if not verify_admin_key(request):
+        raise HTTPException(status_code=401, detail="Invalid admin key")
+    if data.confirm != "RESET_ECO":
+        raise HTTPException(status_code=400, detail="confirm must be 'RESET_ECO'")
+
+    # Fetch all users (only fields we need)
+    users = await db.users.find({}, {"user_id": 1, "username": 1, "balance": 1}).to_list(10000)
+
+    affected = 0
+    now = datetime.now(timezone.utc)
+
+    for user in users:
+        user_id = user["user_id"]
+        old_balance = user.get("balance", 0)
+        change = round(10.0 - old_balance, 2)
+
+        # Reset user document
+        await db.users.update_one(
+            {"user_id": user_id},
+            {"$set": {
+                "balance": 10.0,
+                "level": 1,
+                "xp": 0,
+                "total_wagered": 0.0,
+            }}
+        )
+
+        # Record in account_activity_history so the graph shows the reset
+        if change != 0:
+            last_event = await db.account_activity_history.find_one(
+                {"user_id": user_id},
+                sort=[("event_number", -1)]
+            )
+            prev_cumulative = last_event["cumulative_profit"] if last_event else 0.0
+            event_number = (last_event["event_number"] + 1) if last_event else 1
+            new_cumulative = round(prev_cumulative + change, 2)
+
+            await db.account_activity_history.insert_one({
+                "event_id": f"act_{uuid.uuid4().hex[:12]}",
+                "user_id": user_id,
+                "event_number": event_number,
+                "event_type": "admin",
+                "amount": change,
+                "cumulative_profit": new_cumulative,
+                "source": "Economy Reset",
+                "details": {"eco_reset": True, "old_balance": old_balance, "new_balance": 10.0},
+                "timestamp": now.isoformat()
+            })
+
+        affected += 1
+
+    logging.info(f"[ADMIN] Eco-Reset executed: {affected} users reset")
+
+    return {
+        "success": True,
+        "users_affected": affected,
+        "message": f"Economy reset complete. {affected} users set to balance=10G, level=1, xp=0."
+    }
+
+
+class AdminResetUserRequest(BaseModel):
+    username: str
+
+@api_router.post("/admin/reset-user")
+async def admin_reset_user(data: AdminResetUserRequest, request: Request):
+    """Wipe a user's stats/history/inventory back to new-user state. Account is kept."""
+    if not verify_admin_key(request):
+        raise HTTPException(status_code=401, detail="Invalid admin key")
+
+    user = await db.users.find_one(
+        {"username": {"$regex": f"^{data.username}$", "$options": "i"}},
+        {"_id": 0}
+    )
+    if not user:
+        raise HTTPException(status_code=404, detail=f"User '{data.username}' not found")
+
+    user_id = user["user_id"]
+    actual_username = user["username"]
+
+    # 1. Reset user document fields — preserve identity/auth fields
+    import random as _random
+    default_patterns = ["default_lightblue", "default_pink", "default_red", "default_orange", "default_yellow"]
+    await db.users.update_one(
+        {"user_id": user_id},
+        {"$set": {
+            "balance": 10.0,
+            "balance_a": 0.0,
+            "level": 1,
+            "xp": 0,
+            "total_wagered": 0.0,
+            "vip_status": None,
+            "name_color": None,
+            "badge": None,
+            "frame": None,
+            "active_tag": None,
+            "active_name_color": None,
+            "active_jackpot_pattern": _random.choice(default_patterns),
+            "last_wheel_spin": None,
+            "galadium_pass_active": False,
+            "game_pass_level": 1,
+            "game_pass_xp": 0,
+        }}
+    )
+
+    # 2. Wipe all per-user collections
+    await db.bet_history.delete_many({"user_id": user_id})
+    await db.account_activity_history.delete_many({"user_id": user_id})
+    await db.big_wins.delete_many({"user_id": user_id})
+    await db.user_inventory.delete_many({"user_id": user_id})
+    await db.user_quests.delete_many({"user_id": user_id})
+    await db.user_game_pass.delete_many({"user_id": user_id})
+    await db.value_snapshots.delete_many({"user_id": user_id})
+    await db.inventory_value_history.delete_many({"user_id": user_id})
+    await db.user_prestige_items.delete_many({"user_id": user_id})
+    await db.user_sessions.delete_many({"user_id": user_id})
+    await db.trades.delete_many({"$or": [{"initiator_id": user_id}, {"recipient_id": user_id}]})
+
+    # 3. Wipe account candles (dynamic collections)
+    for resolution in ["1h", "1d"]:
+        await db[f"account_candles_{resolution}"].delete_many({"user_id": user_id})
+
+    logging.info(f"[ADMIN] User '{actual_username}' ({user_id}) fully reset to new-user state")
+
+    return {
+        "success": True,
+        "username": actual_username,
+        "user_id": user_id,
+        "message": "User wiped to new-user state. Account (login) preserved."
+    }
+
+
+@api_router.get("/admin/server-stats")
+async def admin_server_stats(request: Request):
+    """Economy-wide statistics for admin oversight."""
+    if not verify_admin_key(request):
+        raise HTTPException(status_code=401, detail="Invalid admin key")
+
+    now = datetime.now(timezone.utc)
+    today_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
+
+    # Aggregate all user economy data in one pass
+    pipeline = [
+        {"$group": {
+            "_id": None,
+            "total_users": {"$sum": 1},
+            "total_g": {"$sum": "$balance"},
+            "total_a": {"$sum": "$balance_a"},
+            "avg_balance": {"$avg": "$balance"},
+            "max_balance": {"$max": "$balance"},
+            "total_wagered": {"$sum": "$total_wagered"},
+            "active_users": {"$sum": {"$cond": [{"$gt": ["$balance", 10]}, 1, 0]}},
+            "whales_100": {"$sum": {"$cond": [{"$gte": ["$balance", 100]}, 1, 0]}},
+            "whales_1000": {"$sum": {"$cond": [{"$gte": ["$balance", 1000]}, 1, 0]}},
+            "whales_10000": {"$sum": {"$cond": [{"$gte": ["$balance", 10000]}, 1, 0]}},
+        }}
+    ]
+    eco_result = await db.users.aggregate(pipeline).to_list(1)
+    eco = eco_result[0] if eco_result else {}
+    total_g = round(eco.get("total_g", 0), 2)
+
+    # Top 5 users by balance (for concentration calc)
+    top_users = await db.users.find(
+        {}, {"_id": 0, "username": 1, "balance": 1, "level": 1}
+    ).sort("balance", -1).limit(5).to_list(5)
+    top5_balance = sum(u.get("balance", 0) for u in top_users)
+
+    # Activity stats
+    bets_today = await db.bet_history.count_documents(
+        {"timestamp": {"$gte": today_start.isoformat()}}
+    )
+    total_items = await db.user_inventory.count_documents({})
+
+    return {
+        "users": {
+            "total": eco.get("total_users", 0),
+            "active": eco.get("active_users", 0),
+        },
+        "economy": {
+            "total_g": total_g,
+            "total_a": round(eco.get("total_a", 0), 2),
+            "avg_balance": round(eco.get("avg_balance", 0), 2),
+            "max_balance": round(eco.get("max_balance", 0), 2),
+            "total_wagered_all_time": round(eco.get("total_wagered", 0), 2),
+            "whales": {
+                "over_100": eco.get("whales_100", 0),
+                "over_1000": eco.get("whales_1000", 0),
+                "over_10000": eco.get("whales_10000", 0),
+            },
+            "top5_concentration": round((top5_balance / total_g * 100), 1) if total_g > 0 else 0,
+        },
+        "top_users": [
+            {"username": u["username"], "balance": round(u.get("balance", 0), 2), "level": u.get("level", 1)}
+            for u in top_users
+        ],
+        "activity": {
+            "bets_today": bets_today,
+            "total_items": total_items,
+        }
+    }
+
+
+class AdminResetGamePassRequest(BaseModel):
+    username: str
+
+@api_router.post("/admin/reset-gamepass")
+async def admin_reset_gamepass(data: AdminResetGamePassRequest, request: Request):
+    """Reset GamePass level/XP and claimed chests for a single user."""
+    if not verify_admin_key(request):
+        raise HTTPException(status_code=401, detail="Invalid admin key")
+
+    user = await db.users.find_one(
+        {"username": {"$regex": f"^{data.username}$", "$options": "i"}},
+        {"_id": 0, "user_id": 1, "username": 1}
+    )
+    if not user:
+        raise HTTPException(status_code=404, detail=f"User '{data.username}' not found")
+
+    user_id = user["user_id"]
+    actual_username = user["username"]
+
+    await db.users.update_one(
+        {"user_id": user_id},
+        {"$set": {"game_pass_level": 1, "game_pass_xp": 0}}
+    )
+    await db.user_game_pass.delete_many({"user_id": user_id})
+
+    logging.info(f"[ADMIN] GamePass reset for user '{actual_username}' ({user_id})")
+
+    return {
+        "success": True,
+        "username": actual_username,
+        "message": "GamePass level/XP and claimed chests reset to default."
+    }
+
+
+class AdminResetGamePassAllRequest(BaseModel):
+    confirm: str  # must be "RESET_GAMEPASS_ALL"
+
+@api_router.post("/admin/reset-gamepass-all")
+async def admin_reset_gamepass_all(data: AdminResetGamePassAllRequest, request: Request):
+    """Reset GamePass level/XP and claimed chests for ALL users."""
+    if not verify_admin_key(request):
+        raise HTTPException(status_code=401, detail="Invalid admin key")
+    if data.confirm != "RESET_GAMEPASS_ALL":
+        raise HTTPException(status_code=400, detail="confirm must be 'RESET_GAMEPASS_ALL'")
+
+    users = await db.users.find({}, {"user_id": 1}).to_list(10000)
+    affected = len(users)
+
+    await db.users.update_many(
+        {},
+        {"$set": {"game_pass_level": 1, "game_pass_xp": 0}}
+    )
+    await db.user_game_pass.delete_many({})
+
+    logging.info(f"[ADMIN] GamePass reset executed globally: {affected} users affected")
+
+    return {
+        "success": True,
+        "users_affected": affected,
+        "message": f"GamePass reset complete. {affected} users set to level=1, xp=0, claimed chests cleared."
+    }
+
+
 class AdminGiveChestsRequest(BaseModel):
     username: str
     amount: int
     chest_type: str = "gamepass"  # "gamepass" or "galadium"
+
+
+# ── Admin Give Item ────────────────────────────────────────────────────────────
+
+class AdminGiveItemRequest(BaseModel):
+    username: str
+    # Option A: copy an existing shop listing
+    shop_listing_id: Optional[str] = None
+    # Option B: create a brand-new custom item
+    item_name: Optional[str] = None
+    item_rarity: str = "common"
+    item_description: str = ""
+    item_image: Optional[str] = None
+    base_value: float = 0.0
+    untradeable_hours: int = 0
+
+class AdminGiveItemAllRequest(BaseModel):
+    confirm: str  # must be "GIVE_ITEM_ALL"
+    # Option A: copy existing shop listing
+    shop_listing_id: Optional[str] = None
+    # Option B: brand-new item
+    item_name: Optional[str] = None
+    item_rarity: str = "common"
+    item_description: str = ""
+    item_image: Optional[str] = None
+    base_value: float = 0.0
+    untradeable_hours: int = 0
+
+async def _build_inventory_item(user_id: str, listing: dict = None, *, name: str, rarity: str,
+                                 description: str, image: str, value: float, untradeable_hours: int) -> dict:
+    """Build a user_inventory document for an admin-gifted item."""
+    now = datetime.now(timezone.utc)
+    item_id = listing["item_id"] if listing else f"item_{uuid.uuid4().hex[:12]}"
+    untradeable_until = None
+    if untradeable_hours > 0:
+        untradeable_until = (now + timedelta(hours=untradeable_hours)).isoformat()
+    return {
+        "inventory_id": f"inv_{uuid.uuid4().hex[:12]}",
+        "user_id": user_id,
+        "item_id": item_id,
+        "item_name": name,
+        "item_rarity": rarity.lower(),
+        "item_image": image,
+        "item_flavor_text": description,
+        "purchase_price": 0.0,
+        "base_value": value,
+        "acquired_at": now.isoformat(),
+        "acquired_from": "admin_gift",
+        "untradeable_until": untradeable_until,
+    }
+
+@api_router.post("/admin/give-item")
+async def admin_give_item(data: AdminGiveItemRequest, request: Request):
+    """Give a custom or existing shop item directly to one user."""
+    if not verify_admin_key(request):
+        raise HTTPException(status_code=401, detail="Invalid admin key")
+
+    user = await db.users.find_one(
+        {"username": {"$regex": f"^{data.username}$", "$options": "i"}},
+        {"_id": 0, "user_id": 1, "username": 1}
+    )
+    if not user:
+        raise HTTPException(status_code=404, detail=f"User '{data.username}' not found")
+
+    listing = None
+    if data.shop_listing_id:
+        listing = await db.shop_listings.find_one({"shop_listing_id": data.shop_listing_id})
+        if not listing:
+            raise HTTPException(status_code=404, detail=f"Shop listing '{data.shop_listing_id}' not found")
+        name, rarity = listing["item_name"], listing["item_rarity"]
+        description = listing.get("item_flavor_text", "")
+        image = listing.get("item_image")
+        value = listing.get("base_value", 0.0)
+        untradeable_hours = 0
+    else:
+        if not data.item_name:
+            raise HTTPException(status_code=400, detail="Provide either shop_listing_id or item_name")
+        name, rarity, description = data.item_name, data.item_rarity, data.item_description
+        image, value, untradeable_hours = data.item_image, data.base_value, data.untradeable_hours
+
+    inv_item = await _build_inventory_item(
+        user["user_id"], listing,
+        name=name, rarity=rarity, description=description,
+        image=image, value=value, untradeable_hours=untradeable_hours
+    )
+    await db.user_inventory.insert_one(inv_item)
+
+    logging.info(f"[ADMIN] Gave item '{name}' to '{user['username']}'")
+    return {
+        "success": True,
+        "username": user["username"],
+        "item_name": name,
+        "item_rarity": rarity,
+        "inventory_id": inv_item["inventory_id"],
+    }
+
+
+@api_router.post("/admin/give-item-all")
+async def admin_give_item_all(data: AdminGiveItemAllRequest, request: Request):
+    """Give a custom or existing shop item to ALL users."""
+    if not verify_admin_key(request):
+        raise HTTPException(status_code=401, detail="Invalid admin key")
+    if data.confirm != "GIVE_ITEM_ALL":
+        raise HTTPException(status_code=400, detail="confirm must be 'GIVE_ITEM_ALL'")
+
+    listing = None
+    if data.shop_listing_id:
+        listing = await db.shop_listings.find_one({"shop_listing_id": data.shop_listing_id})
+        if not listing:
+            raise HTTPException(status_code=404, detail=f"Shop listing '{data.shop_listing_id}' not found")
+        name, rarity = listing["item_name"], listing["item_rarity"]
+        description = listing.get("item_flavor_text", "")
+        image = listing.get("item_image")
+        value = listing.get("base_value", 0.0)
+        untradeable_hours = 0
+    else:
+        if not data.item_name:
+            raise HTTPException(status_code=400, detail="Provide either shop_listing_id or item_name")
+        name, rarity, description = data.item_name, data.item_rarity, data.item_description
+        image, value, untradeable_hours = data.item_image, data.base_value, data.untradeable_hours
+
+    users = await db.users.find({}, {"user_id": 1}).to_list(10000)
+
+    inv_items = []
+    for u in users:
+        inv_items.append(await _build_inventory_item(
+            u["user_id"], listing,
+            name=name, rarity=rarity, description=description,
+            image=image, value=value, untradeable_hours=untradeable_hours
+        ))
+
+    if inv_items:
+        await db.user_inventory.insert_many(inv_items)
+
+    logging.info(f"[ADMIN] Gave item '{name}' to all {len(users)} users")
+    return {
+        "success": True,
+        "item_name": name,
+        "item_rarity": rarity,
+        "users_affected": len(users),
+    }
+
 
 @api_router.post("/admin/give-chests")
 async def admin_give_chests(data: AdminGiveChestsRequest, request: Request):

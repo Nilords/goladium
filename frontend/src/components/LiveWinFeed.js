@@ -15,6 +15,34 @@ import {
 } from 'lucide-react';
 import { useDraggable, NAVBAR_HEIGHT, FOOTER_HEIGHT } from '../hooks/useDraggable';
 
+// Symbol emoji map (slot_id → symbol → emoji)
+const SYMBOL_EMOJIS = {
+  classic:   { orange: '🍊', lemon: '🍋', cherry: '🍒', bar: '🎰', wild: '⭐', seven: '7️⃣', diamond: '💎' },
+  egyptian:  { ankh: '☥', scarab: '🪲', eye: '👁️', anubis: '🐺', pharaoh: '👑', book: '📖' },
+  gemstone:  { ruby: '🔴', emerald: '💚', sapphire: '💙', amethyst: '💜', diamond: '💎', crown: '👑', wild_diamond: '✨' },
+  cyberpunk: { chip: '💾', circuit: '⚡', robot: '🤖', ai: '🧠', cyber: '🔷', matrix: '🟢' },
+  viking:    { axe: '🪓', shield: '🛡️', helmet: '⚔️', ship: '🚢', wolf: '🐺', odin: '🌩️', valhalla: '⚡' },
+};
+
+const getSymbolEmoji = (slotId, symbol) => {
+  return SYMBOL_EMOJIS[slotId]?.[symbol] || '🎲';
+};
+
+const renderSymbols = (winningSymbols, slotId) => {
+  if (!winningSymbols || winningSymbols.length === 0) return null;
+  return winningSymbols.map((ws, i) => {
+    const emoji = getSymbolEmoji(slotId, ws.symbol);
+    return (
+      <span key={i} className="inline-flex items-center gap-0.5 text-xs">
+        {Array.from({ length: Math.min(ws.count, 4) }).map((_, j) => (
+          <span key={j}>{emoji}</span>
+        ))}
+        {i < winningSymbols.length - 1 && <span className="text-white/30 mx-1">+</span>}
+      </span>
+    );
+  });
+};
+
 // Panel dimensions
 const PANEL_WIDTH = 320;
 const PANEL_HEIGHT = 380;
@@ -315,7 +343,13 @@ const LiveWinFeed = () => {
                           </Badge>
                         )}
                       </div>
-                      
+
+                      {win.winning_symbols?.length > 0 && (
+                        <div className="flex items-center gap-1 mt-0.5">
+                          {renderSymbols(win.winning_symbols, win.slot_id)}
+                        </div>
+                      )}
+
                       <div className="flex items-center gap-1 mt-0.5">
                         <Coins className="w-2.5 h-2.5 text-white/40" />
                         <span className="text-white/50 text-[10px]">

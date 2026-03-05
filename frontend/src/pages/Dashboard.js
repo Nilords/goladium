@@ -110,7 +110,7 @@ const Dashboard = () => {
           credentials: 'include'
         }),
         fetch(`/api/quests`, {
-          headers: { 
+          headers: {
             'Authorization': `Bearer ${token}`,
             'Accept-Language': language
           },

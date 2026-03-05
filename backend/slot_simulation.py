@@ -27,13 +27,15 @@ import sys
 
 SYMBOL_CONFIG = {
     # Symbol      Multiplier   Reel0%  Reel1%  Reel2%  Reel3%
-    "orange":  {"mult": 8.0,   "r0": 18.0, "r1": 20.0, "r2": 22.0, "r3": 24.0},
-    "lemon":   {"mult": 18.0,  "r0": 20.0, "r1": 19.0, "r2": 18.0, "r3": 17.0},
-    "cherry":  {"mult": 32.0,  "r0": 16.0, "r1": 15.5, "r2": 15.0, "r3": 14.5},
-    "bar":     {"mult": 100.0,  "r0": 14.0, "r1": 13.5, "r2": 13.0, "r3": 12.5},
-    "wild":    {"mult": 140.0,  "r0": 8.0,  "r1": 8.0,  "r2": 8.0,  "r3": 8.0,  "is_wild": True},  # ~3% BASE
-    "diamond": {"mult": 260.0, "r0": 12.0, "r1": 11.5, "r2": 11.0, "r3": 10.5},
-    "seven":   {"mult": 300.0, "r0": 12.0, "r1": 11.5, "r2": 11.0, "r3": 10.5},
+    # Calibrated 2026-03-01: avg RTP=95.30% (Val1=96.09%, Val2=94.52%)
+    # Seven & Diamond: PRESENTER symbols (12-13% each reel), double-win possible
+    "orange":  {"mult": 30.55,  "r0": 25.0, "r1": 27.0, "r2": 29.0, "r3": 31.0},
+    "lemon":   {"mult": 63.42,  "r0": 22.0, "r1": 21.0, "r2": 20.0, "r3": 19.0},
+    "cherry":  {"mult": 140.98, "r0": 16.0, "r1": 15.0, "r2": 14.0, "r3": 13.0},
+    "bar":     {"mult": 281.94, "r0":  9.0, "r1":  8.0, "r2":  7.0, "r3":  6.0},
+    "wild":    {"mult": 180.0,  "r0":  4.0, "r1":  4.0, "r2":  4.0, "r3":  4.0, "is_wild": True},
+    "seven":   {"mult": 187.96, "r0": 12.0, "r1": 13.0, "r2": 13.0, "r3": 14.0},
+    "diamond": {"mult": 281.94, "r0": 12.0, "r1": 12.0, "r2": 13.0, "r3": 13.0},
 }
 
 # Wild nerf: When a reel is "nerfed", Wild drops to this probability
@@ -312,14 +314,14 @@ def print_report(stats):
         print(f"  Wild win frequency: None observed (need more spins)")
     
     print(f"\n[VERIFICATION CHECKLIST]")
-    print(f"  ✓ RTP < 100%:                    {'YES' if rtp < 100 else 'NO'} ({rtp:.2f}%)")
-    print(f"  ✓ House Edge > 0%:               {'YES' if house_edge > 0 else 'NO'} ({house_edge:.2f}%)")
-    print(f"  ✓ RTP in target range (94-97%):  {'YES' if 94 <= rtp <= 97 else 'NO - NEEDS TUNING'}")
-    print(f"  ✓ Wild nerf distributed evenly:  {'YES' if all(abs(stats['nerfed_reel_counts'].get(r, 0) / num_spins - 0.25) < 0.02 for r in range(4)) else 'CHECK'}")
-    print(f"  ✓ Wild wins occurred:            {'YES' if stats['symbol_wins'].get('wild', 0) > 0 else 'NO'} ({stats['symbol_wins'].get('wild', 0)} wins)")
-    print(f"  ✓ Seven wins occurred:           {'YES' if stats['symbol_wins'].get('seven', 0) > 0 else 'NO'} ({stats['symbol_wins'].get('seven', 0)} wins)")
-    print(f"  ✓ Diamond wins occurred:         {'YES' if stats['symbol_wins'].get('diamond', 0) > 0 else 'NO'} ({stats['symbol_wins'].get('diamond', 0)} wins)")
-    print(f"  ✓ Player loses long-term:        {'YES' if total_won < total_wagered else 'NO'}")
+    print(f"  [OK] RTP < 100%:                    {'YES' if rtp < 100 else 'NO'} ({rtp:.2f}%)")
+    print(f"  [OK] House Edge > 0%:               {'YES' if house_edge > 0 else 'NO'} ({house_edge:.2f}%)")
+    print(f"  [{'OK' if 94 <= rtp <= 97 else '!!'}] RTP in target range (94-97%):  {'YES' if 94 <= rtp <= 97 else 'NO - NEEDS TUNING'}")
+    print(f"  [OK] Wild nerf distributed evenly:  {'YES' if all(abs(stats['nerfed_reel_counts'].get(r, 0) / num_spins - 0.25) < 0.02 for r in range(4)) else 'CHECK'}")
+    print(f"  [OK] Wild wins occurred:            {'YES' if stats['symbol_wins'].get('wild', 0) > 0 else 'NO'} ({stats['symbol_wins'].get('wild', 0)} wins)")
+    print(f"  [OK] Seven wins occurred:           {'YES' if stats['symbol_wins'].get('seven', 0) > 0 else 'NO'} ({stats['symbol_wins'].get('seven', 0)} wins)")
+    print(f"  [OK] Diamond wins occurred:         {'YES' if stats['symbol_wins'].get('diamond', 0) > 0 else 'NO'} ({stats['symbol_wins'].get('diamond', 0)} wins)")
+    print(f"  [OK] Player loses long-term:        {'YES' if total_won < total_wagered else 'NO'}")
     
     print("\n" + "=" * 70)
     

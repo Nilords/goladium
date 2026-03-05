@@ -363,6 +363,319 @@ async def addbalance(interaction: discord.Interaction, username: str, currency: 
     else:
         await interaction.followup.send(f"Error: {result['data'].get('detail', 'Unknown error')}")
 
+# ============== RESET COMMAND ==============
+
+@bot.tree.command(name="resetuser", description="Wipe a user back to new-user state (keeps account/login)")
+@app_commands.describe(username="Goladium username to reset")
+@app_commands.guilds(discord.Object(id=GUILD_ID)) if GUILD_ID else app_commands.guilds()
+async def resetuser(interaction: discord.Interaction, username: str):
+    """Reset all stats/history/inventory for a user (Admin only). Account is preserved."""
+    if not is_admin(interaction.user.id):
+        await interaction.response.send_message("❌ No permission.", ephemeral=True)
+        return
+
+    # Confirmation step — require explicit confirm flag via a follow-up
+    await interaction.response.send_message(
+        f"⚠️ **Are you sure?**\n"
+        f"This will **completely wipe** `{username}`:\n"
+        f"• Balance → 10 G\n"
+        f"• Level/XP → reset\n"
+        f"• Bet history, inventory, quests, game pass, leaderboard entries → deleted\n"
+        f"• All sessions invalidated (forced logout)\n\n"
+        f"The account (login) is **preserved**.\n\n"
+        f"Type `/confirmreset {username}` to confirm.",
+        ephemeral=True
+    )
+
+
+@bot.tree.command(name="confirmreset", description="Confirm user reset (use after /resetuser)")
+@app_commands.describe(username="Goladium username to confirm reset")
+@app_commands.guilds(discord.Object(id=GUILD_ID)) if GUILD_ID else app_commands.guilds()
+async def confirmreset(interaction: discord.Interaction, username: str):
+    """Execute the confirmed user reset (Admin only)."""
+    if not is_admin(interaction.user.id):
+        await interaction.response.send_message("❌ No permission.", ephemeral=True)
+        return
+
+    await interaction.response.defer(ephemeral=True)
+
+    try:
+        result = await api_request("POST", "/admin/reset-user", {"username": username})
+    except app_commands.AppCommandError as e:
+        await interaction.followup.send(f"❌ {e}", ephemeral=True)
+        return
+
+    if result["status"] == 200:
+        data = result["data"]
+        embed = discord.Embed(
+            title="🔄 User Reset Complete",
+            description=f"**{data['username']}** has been wiped to new-user state.",
+            color=0xFF6600
+        )
+        embed.add_field(name="User ID", value=data["user_id"], inline=True)
+        embed.add_field(name="Balance", value="10 G", inline=True)
+        embed.add_field(name="Level", value="1", inline=True)
+        embed.add_field(name="Account", value="✅ Preserved (login works)", inline=False)
+        await interaction.followup.send(embed=embed, ephemeral=True)
+    elif result["status"] == 404:
+        await interaction.followup.send(f"❌ User '{username}' not found", ephemeral=True)
+    else:
+        await interaction.followup.send(f"❌ Error: {result['data'].get('detail', 'Unknown error')}", ephemeral=True)
+
+
+@bot.tree.command(name="ecoreset", description="Show warning before full economy reset (ALL users)")
+@app_commands.guilds(discord.Object(id=GUILD_ID)) if GUILD_ID else app_commands.guilds()
+async def ecoreset(interaction: discord.Interaction):
+    """Show eco-reset warning (Admin only). Use /confirmecoreset to execute."""
+    if not is_admin(interaction.user.id):
+        await interaction.response.send_message("❌ No permission.", ephemeral=True)
+        return
+
+    await interaction.response.send_message(
+        f"🚨 **ECONOMY RESET — ALL USERS** 🚨\n\n"
+        f"This will affect **every account**:\n"
+        f"• Balance → **10 G**\n"
+        f"• Level / XP → **reset to 1 / 0**\n"
+        f"• Total Wagered → reset\n\n"
+        f"✅ **Kept:** Inventory, prestige items, GamePass Level/XP, bet history, big wins, net profit graph\n\n"
+        f"The graph will show the balance drop as an admin event.\n\n"
+        f"Type `/confirmecoreset` to execute.",
+        ephemeral=True
+    )
+
+
+@bot.tree.command(name="confirmecoreset", description="Execute full economy reset for ALL users")
+@app_commands.guilds(discord.Object(id=GUILD_ID)) if GUILD_ID else app_commands.guilds()
+async def confirmecoreset(interaction: discord.Interaction):
+    """Execute economy reset for all users (Admin only)."""
+    if not is_admin(interaction.user.id):
+        await interaction.response.send_message("❌ No permission.", ephemeral=True)
+        return
+
+    await interaction.response.defer(ephemeral=True)
+
+    try:
+        result = await api_request("POST", "/admin/eco-reset", {"confirm": "RESET_ECO"})
+    except app_commands.AppCommandError as e:
+        await interaction.followup.send(f"❌ {e}", ephemeral=True)
+        return
+
+    if result["status"] == 200:
+        data = result["data"]
+        embed = discord.Embed(
+            title="🌍 Economy Reset Complete",
+            description=data["message"],
+            color=0xFF0000
+        )
+        embed.add_field(name="Users Affected", value=str(data["users_affected"]), inline=True)
+        embed.add_field(name="New Balance", value="10 G", inline=True)
+        embed.add_field(name="Level / XP", value="1 / 0", inline=True)
+        embed.add_field(name="Inventory", value="✅ Kept", inline=True)
+        embed.add_field(name="GamePass XP", value="✅ Kept", inline=True)
+        await interaction.followup.send(embed=embed, ephemeral=True)
+    else:
+        await interaction.followup.send(f"❌ Error: {result['data'].get('detail', 'Unknown error')}", ephemeral=True)
+
+
+# ============== SERVER STATS ==============
+
+@bot.tree.command(name="serverstats", description="Show economy-wide statistics")
+@app_commands.guilds(discord.Object(id=GUILD_ID)) if GUILD_ID else app_commands.guilds()
+async def serverstats(interaction: discord.Interaction):
+    """Show economy overview to help decide when eco reset is needed (Admin only)."""
+    if not is_admin(interaction.user.id):
+        await interaction.response.send_message("❌ No permission.", ephemeral=True)
+        return
+
+    await interaction.response.defer(ephemeral=True)
+
+    try:
+        result = await api_request("GET", "/admin/server-stats")
+    except app_commands.AppCommandError as e:
+        await interaction.followup.send(f"❌ {e}", ephemeral=True)
+        return
+
+    if result["status"] != 200:
+        await interaction.followup.send(f"❌ Error: {result['data'].get('detail', 'Unknown error')}", ephemeral=True)
+        return
+
+    d = result["data"]
+    eco = d["economy"]
+    users = d["users"]
+    activity = d["activity"]
+    whales = eco["whales"]
+    top = d["top_users"]
+
+    # Eco health indicator
+    conc = eco["top5_concentration"]
+    if conc >= 60:
+        health = "🔴 Kritisch — Eco Reset empfohlen"
+    elif conc >= 40:
+        health = "🟡 Ungleich — Reset im Auge behalten"
+    else:
+        health = "🟢 Gesund"
+
+    embed = discord.Embed(
+        title="📊 Server Economy Stats",
+        color=0x00F0FF
+    )
+
+    embed.add_field(
+        name="👥 Nutzer",
+        value=f"Gesamt: **{users['total']}**\nAktiv (>10G): **{users['active']}**",
+        inline=True
+    )
+    embed.add_field(
+        name="💰 Gesamt-G im Umlauf",
+        value=f"**{eco['total_g']:,.2f} G**\nDurchschnitt: {eco['avg_balance']:,.2f} G",
+        inline=True
+    )
+    embed.add_field(
+        name="🎫 Premium (A)",
+        value=f"**{eco['total_a']:,.2f} A**",
+        inline=True
+    )
+    embed.add_field(
+        name="🐋 Whales",
+        value=f">100G: **{whales['over_100']}**\n>1.000G: **{whales['over_1000']}**\n>10.000G: **{whales['over_10000']}**",
+        inline=True
+    )
+    embed.add_field(
+        name="📦 Items gesamt",
+        value=f"**{activity['total_items']}**",
+        inline=True
+    )
+    embed.add_field(
+        name="🎰 Bets heute",
+        value=f"**{activity['bets_today']}**",
+        inline=True
+    )
+
+    # Top 5 leaderboard
+    top_str = "\n".join(
+        f"`{i+1}.` **{u['username']}** — {u['balance']:,.2f} G (Lv.{u['level']})"
+        for i, u in enumerate(top)
+    )
+    embed.add_field(
+        name=f"🏆 Top 5 Balance (halten {conc}% aller G)",
+        value=top_str or "—",
+        inline=False
+    )
+
+    embed.add_field(
+        name="🩺 Wirtschaftsgesundheit",
+        value=health,
+        inline=False
+    )
+
+    embed.set_footer(text=f"Richest single player: {eco['max_balance']:,.2f} G · Total wagered (all time): {eco['total_wagered_all_time']:,.0f} G")
+
+    await interaction.followup.send(embed=embed, ephemeral=True)
+
+
+# ============== GAMEPASS RESET COMMANDS ==============
+
+@bot.tree.command(name="resetgamepass", description="Reset GamePass level/XP for a specific user")
+@app_commands.describe(username="Goladium username to reset GamePass for")
+@app_commands.guilds(discord.Object(id=GUILD_ID)) if GUILD_ID else app_commands.guilds()
+async def resetgamepass(interaction: discord.Interaction, username: str):
+    """Show warning before resetting a single user's GamePass (Admin only)."""
+    if not is_admin(interaction.user.id):
+        await interaction.response.send_message("❌ No permission.", ephemeral=True)
+        return
+    await interaction.response.send_message(
+        f"⚠️ **GamePass Reset — User: `{username}`** ⚠️\n\n"
+        f"This will reset:\n"
+        f"• **GamePass Level** → 1\n"
+        f"• **GamePass XP** → 0\n"
+        f"• **All claimed chest rewards** → cleared\n\n"
+        f"Type `/confirmresetgamepass {username}` to confirm.",
+        ephemeral=True
+    )
+
+@bot.tree.command(name="confirmresetgamepass", description="Confirm GamePass reset for a specific user")
+@app_commands.describe(username="Goladium username to reset GamePass for")
+@app_commands.guilds(discord.Object(id=GUILD_ID)) if GUILD_ID else app_commands.guilds()
+async def confirmresetgamepass(interaction: discord.Interaction, username: str):
+    """Execute GamePass reset for a single user (Admin only)."""
+    if not is_admin(interaction.user.id):
+        await interaction.response.send_message("❌ No permission.", ephemeral=True)
+        return
+
+    await interaction.response.defer(ephemeral=True)
+
+    try:
+        result = await api_request("POST", "/admin/reset-gamepass", {"username": username})
+    except app_commands.AppCommandError as e:
+        await interaction.followup.send(f"❌ {e}", ephemeral=True)
+        return
+
+    if result["status"] == 200:
+        data = result["data"]
+        embed = discord.Embed(
+            title="🎮 GamePass Reset Complete",
+            description=f"User **{data['username']}** has been reset.",
+            color=0xA855F7
+        )
+        embed.add_field(name="GamePass Level", value="1", inline=True)
+        embed.add_field(name="GamePass XP", value="0", inline=True)
+        embed.add_field(name="Claimed Chests", value="Cleared", inline=True)
+        await interaction.followup.send(embed=embed, ephemeral=True)
+    elif result["status"] == 404:
+        await interaction.followup.send(f"❌ User `{username}` not found.", ephemeral=True)
+    else:
+        await interaction.followup.send(f"❌ Error: {result['data'].get('detail', 'Unknown error')}", ephemeral=True)
+
+
+@bot.tree.command(name="resetgamepassall", description="Show warning before resetting GamePass for ALL users")
+@app_commands.guilds(discord.Object(id=GUILD_ID)) if GUILD_ID else app_commands.guilds()
+async def resetgamepassall(interaction: discord.Interaction):
+    """Show warning before global GamePass reset (Admin only)."""
+    if not is_admin(interaction.user.id):
+        await interaction.response.send_message("❌ No permission.", ephemeral=True)
+        return
+    await interaction.response.send_message(
+        f"🚨 **GAMEPASS RESET — ALL USERS** 🚨\n\n"
+        f"This will reset for **every user**:\n"
+        f"• **GamePass Level** → 1\n"
+        f"• **GamePass XP** → 0\n"
+        f"• **All claimed chest rewards** → cleared\n\n"
+        f"✅ **Kept:** Balance, inventory, bet history, everything else\n\n"
+        f"Type `/confirmresetgamepassall` to execute.",
+        ephemeral=True
+    )
+
+@bot.tree.command(name="confirmresetgamepassall", description="Execute global GamePass reset for ALL users")
+@app_commands.guilds(discord.Object(id=GUILD_ID)) if GUILD_ID else app_commands.guilds()
+async def confirmresetgamepassall(interaction: discord.Interaction):
+    """Execute GamePass reset for all users (Admin only)."""
+    if not is_admin(interaction.user.id):
+        await interaction.response.send_message("❌ No permission.", ephemeral=True)
+        return
+
+    await interaction.response.defer(ephemeral=True)
+
+    try:
+        result = await api_request("POST", "/admin/reset-gamepass-all", {"confirm": "RESET_GAMEPASS_ALL"})
+    except app_commands.AppCommandError as e:
+        await interaction.followup.send(f"❌ {e}", ephemeral=True)
+        return
+
+    if result["status"] == 200:
+        data = result["data"]
+        embed = discord.Embed(
+            title="🌍 GamePass Global Reset Complete",
+            description=data["message"],
+            color=0xA855F7
+        )
+        embed.add_field(name="Users Affected", value=str(data["users_affected"]), inline=True)
+        embed.add_field(name="GamePass Level", value="1 (all)", inline=True)
+        embed.add_field(name="Claimed Chests", value="Cleared (all)", inline=True)
+        await interaction.followup.send(embed=embed, ephemeral=True)
+    else:
+        await interaction.followup.send(f"❌ Error: {result['data'].get('detail', 'Unknown error')}", ephemeral=True)
+
+
 # ============== CHEST COMMANDS ==============
 
 @bot.tree.command(name="givechest", description="Give chests to a user")
@@ -408,6 +721,212 @@ async def givechest(interaction: discord.Interaction, username: str, amount: int
         await interaction.followup.send(f"❌ User '{username}' not found")
     else:
         await interaction.followup.send(f"❌ Error: {result['data'].get('detail', 'Unknown error')}")
+
+# ============== GIVE ITEM COMMANDS ==============
+
+RARITY_CHOICES = [
+    app_commands.Choice(name="Common", value="common"),
+    app_commands.Choice(name="Uncommon", value="uncommon"),
+    app_commands.Choice(name="Rare", value="rare"),
+    app_commands.Choice(name="Epic", value="epic"),
+    app_commands.Choice(name="Legendary", value="legendary"),
+]
+
+@bot.tree.command(name="giveitem", description="Create and give a brand-new custom item to a specific player")
+@app_commands.describe(
+    username="Goladium username",
+    name="Item name",
+    rarity="Item rarity",
+    value="Base sell value in G",
+    description="Flavor text / description (optional)",
+    image_url="Image URL (optional)",
+    untradeable_hours="Hours item is untradeable (0 = tradeable immediately)"
+)
+@app_commands.choices(rarity=RARITY_CHOICES)
+@app_commands.guilds(discord.Object(id=GUILD_ID)) if GUILD_ID else app_commands.guilds()
+async def giveitem(
+    interaction: discord.Interaction,
+    username: str,
+    name: str,
+    rarity: str,
+    value: float,
+    description: str = "",
+    image_url: str = None,
+    untradeable_hours: int = 0
+):
+    """Create and give a new custom item to one user (Admin only)."""
+    if not is_admin(interaction.user.id):
+        await interaction.response.send_message("❌ No permission.", ephemeral=True)
+        return
+
+    await interaction.response.defer(ephemeral=True)
+
+    try:
+        result = await api_request("POST", "/admin/give-item", {
+            "username": username,
+            "item_name": name,
+            "item_rarity": rarity,
+            "item_description": description,
+            "item_image": image_url,
+            "base_value": value,
+            "untradeable_hours": untradeable_hours,
+        })
+    except app_commands.AppCommandError as e:
+        await interaction.followup.send(f"❌ {e}", ephemeral=True)
+        return
+
+    data = result["data"]
+    embed = discord.Embed(
+        title="🎁 Item Given",
+        description=f"**{data['item_name']}** was added to **{data['username']}**'s inventory.",
+        color=get_rarity_color(rarity)
+    )
+    embed.add_field(name="Rarity", value=rarity.capitalize(), inline=True)
+    embed.add_field(name="Value", value=f"{value} G", inline=True)
+    embed.add_field(name="Tradeable", value="Immediately" if untradeable_hours == 0 else f"After {untradeable_hours}h", inline=True)
+    if image_url:
+        embed.set_thumbnail(url=image_url)
+    await interaction.followup.send(embed=embed, ephemeral=True)
+
+
+@bot.tree.command(name="copyitem", description="Copy an existing shop item directly into a player's inventory")
+@app_commands.describe(
+    username="Goladium username",
+    listing_id="Shop listing ID (get it from /shop-list)"
+)
+@app_commands.guilds(discord.Object(id=GUILD_ID)) if GUILD_ID else app_commands.guilds()
+async def copyitem(interaction: discord.Interaction, username: str, listing_id: str):
+    """Copy an existing shop listing item into one user's inventory (Admin only)."""
+    if not is_admin(interaction.user.id):
+        await interaction.response.send_message("❌ No permission.", ephemeral=True)
+        return
+
+    await interaction.response.defer(ephemeral=True)
+
+    try:
+        result = await api_request("POST", "/admin/give-item", {
+            "username": username,
+            "shop_listing_id": listing_id,
+        })
+    except app_commands.AppCommandError as e:
+        await interaction.followup.send(f"❌ {e}", ephemeral=True)
+        return
+
+    data = result["data"]
+    embed = discord.Embed(
+        title="🎁 Item Copied",
+        description=f"**{data['item_name']}** was added to **{data['username']}**'s inventory.",
+        color=get_rarity_color(data.get("item_rarity", "common"))
+    )
+    embed.add_field(name="Rarity", value=data.get("item_rarity", "—").capitalize(), inline=True)
+    embed.add_field(name="Listing ID", value=f"`{listing_id}`", inline=True)
+    await interaction.followup.send(embed=embed, ephemeral=True)
+
+
+@bot.tree.command(name="giveitemall", description="Create a new custom item and give it to ALL players")
+@app_commands.describe(
+    name="Item name",
+    rarity="Item rarity",
+    value="Base sell value in G",
+    confirm="Type GIVE_ITEM_ALL to confirm",
+    description="Flavor text / description (optional)",
+    image_url="Image URL (optional)",
+)
+@app_commands.choices(rarity=RARITY_CHOICES)
+@app_commands.guilds(discord.Object(id=GUILD_ID)) if GUILD_ID else app_commands.guilds()
+async def giveitemall(
+    interaction: discord.Interaction,
+    name: str,
+    rarity: str,
+    value: float,
+    confirm: str,
+    description: str = "",
+    image_url: str = None,
+):
+    """Give a new custom item to every user (Admin only). Requires confirm=GIVE_ITEM_ALL."""
+    if not is_admin(interaction.user.id):
+        await interaction.response.send_message("❌ No permission.", ephemeral=True)
+        return
+
+    if confirm != "GIVE_ITEM_ALL":
+        await interaction.response.send_message(
+            f"⚠️ **Bist du sicher?** Das gibt **{name}** an ALLE Spieler.\n"
+            f"Setze `confirm: GIVE_ITEM_ALL` um fortzufahren.",
+            ephemeral=True
+        )
+        return
+
+    await interaction.response.defer(ephemeral=True)
+
+    try:
+        result = await api_request("POST", "/admin/give-item-all", {
+            "confirm": "GIVE_ITEM_ALL",
+            "item_name": name,
+            "item_rarity": rarity,
+            "item_description": description,
+            "item_image": image_url,
+            "base_value": value,
+        })
+    except app_commands.AppCommandError as e:
+        await interaction.followup.send(f"❌ {e}", ephemeral=True)
+        return
+
+    data = result["data"]
+    embed = discord.Embed(
+        title="🌍 Item an alle vergeben",
+        description=f"**{data['item_name']}** wurde in das Inventar aller Spieler gelegt.",
+        color=get_rarity_color(rarity)
+    )
+    embed.add_field(name="Rarity", value=rarity.capitalize(), inline=True)
+    embed.add_field(name="Wert", value=f"{value} G", inline=True)
+    embed.add_field(name="Spieler", value=str(data["users_affected"]), inline=True)
+    if image_url:
+        embed.set_thumbnail(url=image_url)
+    await interaction.followup.send(embed=embed, ephemeral=True)
+
+
+@bot.tree.command(name="copyitemall", description="Copy an existing shop item into every player's inventory")
+@app_commands.describe(
+    listing_id="Shop listing ID (get it from /shop-list)",
+    confirm="Type GIVE_ITEM_ALL to confirm"
+)
+@app_commands.guilds(discord.Object(id=GUILD_ID)) if GUILD_ID else app_commands.guilds()
+async def copyitemall(interaction: discord.Interaction, listing_id: str, confirm: str):
+    """Copy an existing shop item to all users (Admin only). Requires confirm=GIVE_ITEM_ALL."""
+    if not is_admin(interaction.user.id):
+        await interaction.response.send_message("❌ No permission.", ephemeral=True)
+        return
+
+    if confirm != "GIVE_ITEM_ALL":
+        await interaction.response.send_message(
+            f"⚠️ **Bist du sicher?** Das gibt Listing `{listing_id}` an ALLE Spieler.\n"
+            f"Setze `confirm: GIVE_ITEM_ALL` um fortzufahren.",
+            ephemeral=True
+        )
+        return
+
+    await interaction.response.defer(ephemeral=True)
+
+    try:
+        result = await api_request("POST", "/admin/give-item-all", {
+            "confirm": "GIVE_ITEM_ALL",
+            "shop_listing_id": listing_id,
+        })
+    except app_commands.AppCommandError as e:
+        await interaction.followup.send(f"❌ {e}", ephemeral=True)
+        return
+
+    data = result["data"]
+    embed = discord.Embed(
+        title="🌍 Item an alle kopiert",
+        description=f"**{data['item_name']}** wurde in das Inventar aller Spieler gelegt.",
+        color=get_rarity_color(data.get("item_rarity", "common"))
+    )
+    embed.add_field(name="Rarity", value=data.get("item_rarity", "—").capitalize(), inline=True)
+    embed.add_field(name="Listing ID", value=f"`{listing_id}`", inline=True)
+    embed.add_field(name="Spieler", value=str(data["users_affected"]), inline=True)
+    await interaction.followup.send(embed=embed, ephemeral=True)
+
 
 # ============== GALADIUM PASS COMMANDS ==============
 
