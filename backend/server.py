@@ -5451,11 +5451,20 @@ async def get_account_chart(request: Request, range: str = "1M"):
     )
     current_profit = last_event["cumulative_profit"] if last_event else 0
     
-    if resolution == "raw":
-        # Return raw events for short ranges (1D)
+    # Smart resolution: use raw events if count is manageable (<=500),
+    # only switch to candles when there are too many points
+    raw_count = await db.account_activity_history.count_documents({
+        "user_id": user_id,
+        "timestamp": {"$gte": start_time.isoformat()}
+    })
+
+    if raw_count <= 500:
+        # Few enough events — show individual data points for full traceability
+        return await get_raw_chart_data(user_id, start_time, max_points, current_profit)
+    elif resolution == "raw":
         return await get_raw_chart_data(user_id, start_time, max_points, current_profit)
     else:
-        # Return OHLC candles for longer ranges
+        # Too many events — aggregate into candles for performance
         return await get_candle_chart_data(user_id, resolution, start_time, max_points, current_profit, range)
 
 
