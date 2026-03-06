@@ -330,10 +330,10 @@ async def setbalance(interaction: discord.Interaction, username: str, currency: 
     else:
         await interaction.followup.send(f"Error: {result['data'].get('detail', 'Unknown error')}")
 
-@bot.tree.command(name="addbalance", description="Add to a user's balance")
+@bot.tree.command(name="givemoney", description="Add to a user's balance")
 @app_commands.describe(username="Goladium username", currency="Currency (g or a)", amount="Amount to add")
 @app_commands.guilds(discord.Object(id=GUILD_ID)) if GUILD_ID else app_commands.guilds()
-async def addbalance(interaction: discord.Interaction, username: str, currency: str, amount: float):
+async def givemoney(interaction: discord.Interaction, username: str, currency: str, amount: float):
     if not is_admin(interaction.user.id):
         await interaction.response.send_message("No permission.", ephemeral=True)
         return
@@ -380,8 +380,9 @@ async def resetuser(interaction: discord.Interaction, username: str):
         f"This will **completely wipe** `{username}`:\n"
         f"• Balance → 10 G\n"
         f"• Level/XP → reset\n"
-        f"• Bet history, inventory, quests, game pass, leaderboard entries → deleted\n"
+        f"• Bet history, inventory, quests, game pass → deleted\n"
         f"• All sessions invalidated (forced logout)\n\n"
+        f"✅ **Kept:** Leaderboard (big win) entries\n"
         f"The account (login) is **preserved**.\n\n"
         f"Type `/confirmreset {username}` to confirm.",
         ephemeral=True

@@ -166,7 +166,7 @@ const LiveWinFeed = () => {
     if (amount < 1) {
       return amount.toFixed(2);
     }
-    return amount.toFixed(0);
+    return Number.isInteger(amount) ? amount.toFixed(0) : amount.toFixed(2);
   };
 
   // Handle toggle - only if not dragging

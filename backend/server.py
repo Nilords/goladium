@@ -2894,6 +2894,10 @@ async def spin_slot(bet_request: SlotBetRequest, request: Request):
     # Record big wins (>= 100 G or multiplier > 5x) to live feed
     _multiplier = round(win_amount / total_bet, 2) if total_bet > 0 else 0
     if win_amount >= 100 or _multiplier > 5:
+        _winning_symbols = [
+            {"symbol": p["symbol"], "count": p["match_count"]}
+            for p in result.get("winning_paylines", [])
+        ]
         await record_big_win(
             user=user,
             game_type="slot",
@@ -2901,7 +2905,8 @@ async def spin_slot(bet_request: SlotBetRequest, request: Request):
             win_amount=win_amount,
             slot_id=slot_id,
             slot_name=SLOT_CONFIGS[slot_id]["name"],
-            multiplier=_multiplier
+            multiplier=_multiplier,
+            winning_symbols=_winning_symbols
         )
     
     # Discord webhooks for big wins
@@ -3656,6 +3661,15 @@ async def get_bet_history(
             win_amount = float(item.get("amount", win_amount))
             bet_amount = 0.0
 
+        elif transaction_type in ("admin", "quest"):
+            # Admin/quest: preserve the raw amount directly
+            raw_amount = float(item.get("amount", item.get("net_outcome", 0)))
+            item["bet_amount"] = 0.0
+            item["win_amount"] = 0.0
+            item["net_outcome"] = raw_amount
+            item["amount"] = raw_amount
+            continue
+
 # WICHTIG: Werte setzen, die Frontend braucht
         item["bet_amount"] = bet_amount
         item["win_amount"] = win_amount
@@ -3811,7 +3825,8 @@ async def get_biggest_wins_leaderboard(limit: int = 25):
             "multiplier": round(w.get("win_amount", 0) / w.get("bet_amount", 1), 1) if w.get("bet_amount", 0) > 0 else 0,
             "timestamp": w.get("timestamp"),
             "avatar": w.get("avatar"),
-            "frame": w.get("frame")
+            "frame": w.get("frame"),
+            "winning_symbols": w.get("winning_symbols", [])
         }
         for idx, w in enumerate(big_wins)
     ]
@@ -3834,18 +3849,19 @@ async def get_live_wins(limit: int = 20):
             "win_chance": w.get("win_chance"),
             "multiplier": round(w.get("win_amount", 0) / w.get("bet_amount", 1), 1) if w.get("bet_amount", 0) > 0 else 0,
             "timestamp": w.get("timestamp"),
-            "avatar": w.get("avatar")
+            "avatar": w.get("avatar"),
+            "winning_symbols": w.get("winning_symbols", [])
         }
         for w in big_wins
     ]
 
-async def record_big_win(user: dict, game_type: str, bet_amount: float, win_amount: float, 
+async def record_big_win(user: dict, game_type: str, bet_amount: float, win_amount: float,
                          slot_id: str = None, slot_name: str = None, win_chance: float = None,
-                         multiplier: float = 0):
+                         multiplier: float = 0, winning_symbols: list = None):
     """Record a big win (>= 100 G or multiplier > 5x) to the big_wins collection"""
     if win_amount < 100 and multiplier <= 5:
         return  # Only track wins >= 100 G or multiplier > 5x
-    
+
     win_doc = {
         "win_id": f"win_{uuid.uuid4().hex[:12]}",
         "user_id": user["user_id"],
@@ -3859,9 +3875,10 @@ async def record_big_win(user: dict, game_type: str, bet_amount: float, win_amou
         "win_chance": win_chance,
         "timestamp": datetime.now(timezone.utc).isoformat(),
         "avatar": user.get("avatar"),
-        "frame": user.get("frame")
+        "frame": user.get("frame"),
+        "winning_symbols": winning_symbols or []
     }
-    
+
     await db.big_wins.insert_one(win_doc)
 
 # ============== ITEM SYSTEM ENDPOINTS ==============
@@ -5406,89 +5423,123 @@ async def update_account_candles(
 # ============== TRADINGVIEW-STYLE CHART API ==============
 
 CHART_RANGES = {
-    "1D": {"hours": 24, "resolution": "raw", "max_points": 500},
-    "1W": {"days": 7, "resolution": "1h", "max_points": 168},
-    "1M": {"days": 30, "resolution": "1h", "max_points": 720},
-    "3M": {"days": 90, "resolution": "1d", "max_points": 90},
-    "6M": {"days": 180, "resolution": "1d", "max_points": 180},
-    "1Y": {"days": 365, "resolution": "1d", "max_points": 365},
-    "ALL": {"days": 9999, "resolution": "1d", "max_points": 1000}
+    "TODAY": {"resolution": "raw", "max_points": 500},
+    "D":     {"resolution": "1d",  "max_points": 90},
+    "W":     {"resolution": "1w",  "max_points": 52},
+    "M":     {"resolution": "1M",  "max_points": 24},
+    "ALL":   {"resolution": "1d",  "max_points": 1000},
 }
 
 
 @api_router.get("/user/account-chart")
-async def get_account_chart(request: Request, range: str = "1M"):
+async def get_account_chart(request: Request, range: str = "M"):
     """
     TradingView-style account profit/loss chart.
-    
-    Ranges: 1D, 1W, 1M, 3M, 6M, 1Y, ALL
-    
-    Returns OHLC candles or raw events depending on range.
-    Automatically selects appropriate resolution for performance.
+
+    Ranges: TODAY, D, W, M, ALL
+    - TODAY: current incomplete day (raw events)
+    - D: completed full days only (up to 90)
+    - W: completed full weeks only (up to 52)
+    - M: completed full months only (up to 24)
+    - ALL: everything, smart resolution
     """
     user = await get_current_user(request)
     user_id = user["user_id"]
     now = datetime.now(timezone.utc)
-    
-    # Validate range
+    today_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
+
     if range not in CHART_RANGES:
-        range = "1M"
-    
-    config = CHART_RANGES[range]
-    resolution = config["resolution"]
-    max_points = config["max_points"]
-    
-    # Calculate start time
-    if "hours" in config:
-        start_time = now - timedelta(hours=config["hours"])
-    else:
-        start_time = now - timedelta(days=config["days"])
-    
+        range = "M"
+
+    max_points = CHART_RANGES[range]["max_points"]
+
     # Get current cumulative profit for stats
     last_event = await db.account_activity_history.find_one(
         {"user_id": user_id},
         sort=[("event_number", -1)]
     )
     current_profit = last_event["cumulative_profit"] if last_event else 0
-    
-    # Smart resolution: use raw events if count is manageable (<=500),
-    # only switch to candles when there are too many points
-    raw_count = await db.account_activity_history.count_documents({
-        "user_id": user_id,
-        "timestamp": {"$gte": start_time.isoformat()}
-    })
 
-    if raw_count <= 500:
-        # Few enough events — show individual data points for full traceability
-        return await get_raw_chart_data(user_id, start_time, max_points, current_profit)
-    elif resolution == "raw":
-        return await get_raw_chart_data(user_id, start_time, max_points, current_profit)
-    else:
-        # Too many events — aggregate into candles for performance
-        return await get_candle_chart_data(user_id, resolution, start_time, max_points, current_profit, range)
+    if range == "TODAY":
+        # Smart resolution within today: raw → 1h if too many events
+        today_count = await db.account_activity_history.count_documents({
+            "user_id": user_id,
+            "timestamp": {"$gte": today_start.isoformat()}
+        })
+        if today_count <= 500:
+            return await get_raw_chart_data(user_id, today_start, now, 500, current_profit, range)
+        else:
+            return await build_candles_from_raw(user_id, "1h", today_start, now, 24, current_profit, range)
+
+    elif range == "D":
+        # Completed full days only — today excluded
+        end_time = today_start
+        start_time = today_start - timedelta(days=90)
+        return await build_candles_from_raw(user_id, "1d", start_time, end_time, 90, current_profit, range)
+
+    elif range == "W":
+        # Completed full weeks only — current week excluded
+        week_start = today_start - timedelta(days=today_start.weekday())
+        end_time = week_start
+        start_time = week_start - timedelta(weeks=52)
+        return await build_candles_from_raw(user_id, "1w", start_time, end_time, 52, current_profit, range)
+
+    elif range == "M":
+        # Completed full months only — current month excluded
+        month_start = today_start.replace(day=1)
+        end_time = month_start
+        back_year = month_start.year
+        back_month = month_start.month - 24
+        while back_month <= 0:
+            back_month += 12
+            back_year -= 1
+        start_time = month_start.replace(year=back_year, month=back_month)
+        return await build_candles_from_raw(user_id, "1M", start_time, end_time, 24, current_profit, range)
+
+    else:  # ALL — cascading smart resolution based on time span
+        start_time = datetime(2000, 1, 1, tzinfo=timezone.utc)
+        end_time = now
+        raw_count = await db.account_activity_history.count_documents({"user_id": user_id})
+        if raw_count <= 500:
+            return await get_raw_chart_data(user_id, start_time, end_time, 500, current_profit, range)
+        # Determine time span to pick resolution
+        first_event = await db.account_activity_history.find_one(
+            {"user_id": user_id}, sort=[("timestamp", 1)]
+        )
+        if first_event:
+            first_ts = datetime.fromisoformat(first_event["timestamp"].replace("Z", "+00:00"))
+            days_span = (now - first_ts).days
+        else:
+            days_span = 0
+        if days_span <= 90:
+            resolution, mp = "1d", 90
+        elif days_span <= 730:
+            resolution, mp = "1w", 104
+        else:
+            resolution, mp = "1M", 60
+        return await build_candles_from_raw(user_id, resolution, start_time, end_time, mp, current_profit, range)
 
 
-async def get_raw_chart_data(user_id: str, start_time: datetime, max_points: int, current_profit: float):
-    """Get raw event data for short-range charts (1D)"""
-    
+async def get_raw_chart_data(user_id: str, start_time: datetime, end_time: datetime, max_points: int, current_profit: float, range_name: str = "TODAY"):
+    """Get raw individual events for TODAY and ALL (when few events)."""
+
     events = await db.account_activity_history.find(
         {
             "user_id": user_id,
-            "timestamp": {"$gte": start_time.isoformat()}
+            "timestamp": {"$gte": start_time.isoformat(), "$lte": end_time.isoformat()}
         },
         {"_id": 0}
     ).sort("timestamp", 1).limit(max_points).to_list(max_points)
-    
+
     if not events:
         return {
-            "range": "1D",
+            "range": range_name,
             "resolution": "raw",
             "mode": "empty",
             "candles": [],
             "stats": get_empty_stats(current_profit)
         }
-    
-    # Convert events to chart points
+
     candles = []
     for e in events:
         candles.append({
@@ -5502,11 +5553,11 @@ async def get_raw_chart_data(user_id: str, start_time: datetime, max_points: int
             "event_type": e["event_type"],
             "source": e["source"]
         })
-    
+
     stats = calculate_chart_stats(candles, current_profit)
-    
+
     return {
-        "range": "1D",
+        "range": range_name,
         "resolution": "raw",
         "mode": "raw",
         "candles": candles,
@@ -5556,32 +5607,36 @@ async def get_candle_chart_data(user_id: str, resolution: str, start_time: datet
     }
 
 
-async def build_candles_from_raw(user_id: str, resolution: str, start_time: datetime, max_points: int, current_profit: float, range_name: str):
-    """Build OHLC candles from raw events using MongoDB aggregation"""
-    
-    # Determine bucket size
+async def build_candles_from_raw(user_id: str, resolution: str, start_time: datetime, end_time: datetime, max_points: int, current_profit: float, range_name: str):
+    """Build aggregated candles from raw events. Supports 1h, 1d, 1w, 1M resolutions."""
+
+    match_filter = {
+        "user_id": user_id,
+        "timestamp": {"$gte": start_time.isoformat(), "$lt": end_time.isoformat()}
+    }
+
+    # Build group _id based on resolution
     if resolution == "1h":
-        date_format = "%Y-%m-%dT%H:00:00"
-        bucket_ms = 3600000
-    else:  # 1d
-        date_format = "%Y-%m-%dT00:00:00"
-        bucket_ms = 86400000
-    
+        group_id = {"$dateToString": {"format": "%Y-%m-%dT%H:00:00", "date": "$ts_date"}}
+    elif resolution == "1d":
+        group_id = {"$dateToString": {"format": "%Y-%m-%dT00:00:00", "date": "$ts_date"}}
+    elif resolution == "1w":
+        group_id = {
+            "year": {"$isoWeekYear": "$ts_date"},
+            "week": {"$isoWeek": "$ts_date"}
+        }
+    elif resolution == "1M":
+        group_id = {"$dateToString": {"format": "%Y-%m-01T00:00:00", "date": "$ts_date"}}
+    else:
+        group_id = {"$dateToString": {"format": "%Y-%m-%dT00:00:00", "date": "$ts_date"}}
+
     pipeline = [
-        {"$match": {
-            "user_id": user_id,
-            "timestamp": {"$gte": start_time.isoformat()}
-        }},
+        {"$match": match_filter},
         {"$addFields": {
             "ts_date": {"$dateFromString": {"dateString": "$timestamp"}}
         }},
         {"$group": {
-            "_id": {
-                "$dateToString": {
-                    "format": date_format,
-                    "date": "$ts_date"
-                }
-            },
+            "_id": group_id,
             "open": {"$first": "$cumulative_profit"},
             "close": {"$last": "$cumulative_profit"},
             "high": {"$max": "$cumulative_profit"},
@@ -5593,9 +5648,9 @@ async def build_candles_from_raw(user_id: str, resolution: str, start_time: date
         {"$sort": {"_id": 1}},
         {"$limit": max_points}
     ]
-    
+
     results = await db.account_activity_history.aggregate(pipeline).to_list(max_points)
-    
+
     if not results:
         return {
             "range": range_name,
@@ -5604,20 +5659,26 @@ async def build_candles_from_raw(user_id: str, resolution: str, start_time: date
             "candles": [],
             "stats": get_empty_stats(current_profit)
         }
-    
-    # Format results
+
     candles = []
     for r in results:
-        # Count event types
         breakdown = {}
         for et in r.get("events", []):
             breakdown[et] = breakdown.get(et, 0) + 1
-        
-        # Adjust open to be previous close for correct OHLC
+
+        # For weekly grouping reconstruct Monday date from ISO year+week
+        if resolution == "1w":
+            iso_year = r["_id"]["year"]
+            iso_week = r["_id"]["week"]
+            week_monday = datetime.fromisocalendar(iso_year, iso_week, 1)
+            timestamp = week_monday.strftime("%Y-%m-%dT00:00:00")
+        else:
+            timestamp = r["_id"]
+
         prev_close = candles[-1]["close"] if candles else r["open"] - r["net_change"]
-        
+
         candles.append({
-            "timestamp": r["_id"],
+            "timestamp": timestamp,
             "open": prev_close,
             "high": r["high"],
             "low": r["low"],
@@ -5626,9 +5687,9 @@ async def build_candles_from_raw(user_id: str, resolution: str, start_time: date
             "net_change": r["net_change"],
             "breakdown": breakdown
         })
-    
+
     stats = calculate_chart_stats(candles, current_profit)
-    
+
     return {
         "range": range_name,
         "resolution": resolution,
@@ -7196,9 +7257,25 @@ async def claim_quest_reward(quest_id: str, request: Request):
             user_id=user["user_id"],
             event_type="quest",
             amount=rewards["g"],
-            source=f"Quest: {quest.get('title', quest_id)}",
+            source="Quest",
             details={"quest_id": quest_id, "xp": rewards.get("xp", 0)}
         )
+        # Also write to bet_history so it appears in History tab and Dashboard
+        await db.bet_history.insert_one({
+            "bet_id": f"quest_{uuid.uuid4().hex[:12]}",
+            "user_id": user["user_id"],
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "game_type": "quest",
+            "transaction_type": "quest",
+            "amount": rewards["g"],
+            "net_outcome": rewards["g"],
+            "bet_amount": 0,
+            "details": {
+                "quest_id": quest_id,
+                "quest_title": quest.get("name_en", quest.get("name_de", quest_id)),
+                "xp": rewards.get("xp", 0)
+            }
+        })
     
     # Handle A currency (rare, with limits)
     if "a" in rewards and rewards["a"] > 0:
@@ -8064,6 +8141,23 @@ async def admin_modify_balance(data: AdminBalanceRequest, request: Request):
                 source=f"Admin: {data.action} {abs(data.amount)} G",
                 details={"action": data.action, "admin_amount": data.amount, "previous": current_balance}
             )
+            # Also write to bet_history so it appears in the History tab
+            await db.bet_history.insert_one({
+                "bet_id": f"admin_{uuid.uuid4().hex[:12]}",
+                "user_id": user["user_id"],
+                "timestamp": datetime.now(timezone.utc).isoformat(),
+                "game_type": "admin",
+                "transaction_type": "admin",
+                "amount": change_amount,
+                "net_outcome": change_amount,
+                "bet_amount": 0,
+                "details": {
+                    "action": data.action,
+                    "admin_amount": data.amount,
+                    "previous": current_balance,
+                    "new_balance": new_balance
+                }
+            })
     
     return {
         "success": True,
@@ -8191,7 +8285,7 @@ async def admin_reset_user(data: AdminResetUserRequest, request: Request):
     # 2. Wipe all per-user collections
     await db.bet_history.delete_many({"user_id": user_id})
     await db.account_activity_history.delete_many({"user_id": user_id})
-    await db.big_wins.delete_many({"user_id": user_id})
+    # big_wins intentionally NOT deleted — leaderboard entries persist through resets
     await db.user_inventory.delete_many({"user_id": user_id})
     await db.user_quests.delete_many({"user_id": user_id})
     await db.user_game_pass.delete_many({"user_id": user_id})

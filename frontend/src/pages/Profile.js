@@ -41,7 +41,9 @@ import {
   ImageIcon,
   X,
   ShoppingBag,
-  Coins
+  Coins,
+  Shield,
+  Target
 } from 'lucide-react';
 
 
@@ -359,15 +361,21 @@ const Profile = () => {
                                   <ShoppingBag className="w-4 h-4 text-blue-400" />
                                 ) : bet.game_type === 'item_sale' ? (
                                   <Coins className="w-4 h-4 text-green-400" />
+                                ) : bet.game_type === 'admin' ? (
+                                  <Shield className="w-4 h-4 text-orange-400" />
+                                ) : bet.game_type === 'quest' ? (
+                                  <Target className="w-4 h-4 text-pink-400" />
                                 ) : (
                                   <Gamepad2 className="w-4 h-4 text-primary" />
                                 )}
                                 <span className="text-white capitalize">
-                                  {bet.game_type === 'slot' ? (bet.slot_id || 'Slot') : 
-                                   bet.game_type === 'jackpot' ? 'Jackpot' : 
+                                  {bet.game_type === 'slot' ? (bet.slot_id || 'Slot') :
+                                   bet.game_type === 'jackpot' ? 'Jackpot' :
                                    bet.game_type === 'item_purchase' ? (bet.details?.item_name || 'Item') :
                                    bet.game_type === 'item_sale' ? (bet.details?.item_name || 'Item') :
-                                   'Slot'}
+                                   bet.game_type === 'admin' ? 'Admin' :
+                                   bet.game_type === 'quest' ? 'Quest' :
+                                   bet.game_type || 'Unknown'}
                                 </span>
                               </div>
                             </TableCell>
