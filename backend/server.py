@@ -3831,6 +3831,32 @@ async def get_biggest_wins_leaderboard(limit: int = 25):
         for idx, w in enumerate(big_wins)
     ]
 
+@api_router.get("/leaderboards/biggest-multiplier")
+async def get_biggest_multiplier_leaderboard(limit: int = 25):
+    """Top 25 highest multiplier wins"""
+    big_wins = await db.big_wins.find({}).sort("multiplier", -1).limit(limit).to_list(limit)
+
+    return [
+        {
+            "rank": idx + 1,
+            "win_id": w.get("win_id"),
+            "user_id": w.get("user_id"),
+            "username": w.get("username"),
+            "game_type": w.get("game_type"),
+            "slot_id": w.get("slot_id"),
+            "slot_name": w.get("slot_name"),
+            "bet_amount": round(w.get("bet_amount", 0), 2),
+            "win_amount": round(w.get("win_amount", 0), 2),
+            "win_chance": w.get("win_chance"),
+            "multiplier": round(w.get("multiplier", 0), 2),
+            "timestamp": w.get("timestamp"),
+            "avatar": w.get("avatar"),
+            "frame": w.get("frame"),
+            "winning_symbols": w.get("winning_symbols", [])
+        }
+        for idx, w in enumerate(big_wins)
+    ]
+
 @api_router.get("/live-wins")
 async def get_live_wins(limit: int = 20):
     """Get recent big wins (> 10 G) for live feed"""
