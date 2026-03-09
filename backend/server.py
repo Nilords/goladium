@@ -2411,10 +2411,7 @@ async def login(credentials: UserLogin, request: Request):
     # 🛡️ Cloudflare Turnstile verification
     logging.info(f"[Login] Received turnstile_token: {credentials.turnstile_token[:20] if credentials.turnstile_token else 'NONE'}...")
     
-    # TEMP BACKDOOR: skip turnstile for automated testing (X-Test-Bypass header)
-    _bypass = request.headers.get("x-test-bypass") == "goladium_dev_2026"
-    
-    if TURNSTILE_SECRET_KEY and not _bypass:
+    if TURNSTILE_SECRET_KEY:
         client_ip = request.client.host if request.client else None
         # Get real IP from X-Forwarded-For header if behind proxy
         forwarded_for = request.headers.get("x-forwarded-for")
@@ -2426,7 +2423,7 @@ async def login(credentials: UserLogin, request: Request):
             logging.error(f"[Login] Turnstile verification failed: {verification['error']}")
             raise HTTPException(status_code=400, detail=f"CAPTCHA verification failed: {verification['error']}")
     else:
-        logging.warning("[Login] Turnstile verification SKIPPED - no secret key or bypass active")
+        logging.warning("[Login] Turnstile verification SKIPPED - no secret key configured")
 
     user = await db.users.find_one({"username": credentials.username}, {"_id": 0})
     if not user:
