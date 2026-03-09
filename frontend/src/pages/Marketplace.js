@@ -1,8 +1,10 @@
 import React, { useState, useEffect, useCallback } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { useLanguage } from '../contexts/LanguageContext';
 import { formatCurrency } from '../lib/formatCurrency';
 import Navbar from '../components/Navbar';
+import LiveSalesFeed from '../components/LiveSalesFeed';
 import { Card, CardContent } from '../components/ui/card';
 import { Button } from '../components/ui/button';
 import { Badge } from '../components/ui/badge';
@@ -221,6 +223,7 @@ export default function Marketplace() {
   const { user, token, refreshUser } = useAuth();
   const { language } = useLanguage();
   const lang = language;
+  const [searchParams] = useSearchParams();
 
   // State
   const [listings, setListings] = useState([]);
@@ -229,8 +232,8 @@ export default function Marketplace() {
   const [loading, setLoading] = useState(true);
   const [totalListings, setTotalListings] = useState(0);
 
-  // Filters
-  const [search, setSearch] = useState('');
+  // Filters - init from URL params
+  const [search, setSearch] = useState(searchParams.get('search') || '');
   const [sortBy, setSortBy] = useState('newest');
   const [rarityFilter, setRarityFilter] = useState('all');
 
@@ -442,8 +445,12 @@ export default function Marketplace() {
           </div>
         </div>
 
-        {/* Tabs */}
-        <Tabs value={activeTab} onValueChange={setActiveTab} className="mb-6">
+        {/* Main Layout: Content + Sidebar */}
+        <div className="flex gap-6">
+          {/* Main Content */}
+          <div className="flex-1 min-w-0">
+            {/* Tabs */}
+            <Tabs value={activeTab} onValueChange={setActiveTab} className="mb-6">
           <TabsList className="bg-[#0A0A0C] border border-white/5">
             <TabsTrigger
               data-testid="tab-browse"
@@ -523,7 +530,7 @@ export default function Marketplace() {
                 <p className="text-white/30 font-mono">{t('noListings', lang)}</p>
               </div>
             ) : (
-              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-3">
+              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-3">
                 {listings.map((listing) => (
                   <ListingCard
                     key={listing.listing_id}
@@ -546,7 +553,7 @@ export default function Marketplace() {
                 <p className="text-white/30 font-mono">{t('noMyListings', lang)}</p>
               </div>
             ) : (
-              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-3">
+              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-3">
                 {myListings.map((listing) => (
                   <ListingCard
                     key={listing.listing_id}
@@ -561,6 +568,15 @@ export default function Marketplace() {
             )}
           </TabsContent>
         </Tabs>
+          </div>
+
+          {/* Live Sales Feed Sidebar */}
+          <div className="hidden lg:block w-72 flex-shrink-0">
+            <div className="sticky top-24">
+              <LiveSalesFeed />
+            </div>
+          </div>
+        </div>
       </div>
 
       {/* ─── Buy Confirmation Dialog ─────────────────── */}

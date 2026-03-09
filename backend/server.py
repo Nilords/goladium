@@ -3934,6 +3934,65 @@ async def get_all_items():
     items = await db.items.find({}, {"_id": 0}).to_list(100)
     return items
 
+@api_router.get("/items/catalog")
+async def get_items_catalog(
+    search: str = None,
+    rarity: str = None,
+    sort: str = "name",
+    limit: int = 100,
+    offset: int = 0
+):
+    """Get all items as a public catalog with market data"""
+    query = {}
+    if rarity and rarity != "all":
+        query["rarity"] = rarity
+    if search:
+        query["name"] = {"$regex": search, "$options": "i"}
+    
+    # Exclude chests from the catalog by default
+    query["category"] = {"$ne": "chest"}
+    
+    sort_key = [("name", 1)]
+    if sort == "rap_desc":
+        sort_key = [("rap", -1)]
+    elif sort == "rap_asc":
+        sort_key = [("rap", 1)]
+    elif sort == "value_desc":
+        sort_key = [("value", -1)]
+    elif sort == "rarity":
+        sort_key = [("rarity", -1)]
+    
+    total = await db.items.count_documents(query)
+    items = await db.items.find(query, {"_id": 0}).sort(sort_key).skip(offset).limit(limit).to_list(limit)
+    
+    # Enrich each item with market data
+    enriched = []
+    for item in items:
+        active_count = await db.marketplace_listings.count_documents({
+            "item_id": item["item_id"], "status": "active"
+        })
+        cheapest = await db.marketplace_listings.find(
+            {"item_id": item["item_id"], "status": "active"}, {"_id": 0, "price": 1}
+        ).sort("price", 1).limit(1).to_list(1)
+        
+        total_qty = await db.user_inventory.count_documents({"item_id": item["item_id"]})
+        
+        enriched.append({
+            "item_id": item["item_id"],
+            "name": item.get("name", "Unknown"),
+            "flavor_text": item.get("flavor_text", ""),
+            "rarity": item.get("rarity", "common"),
+            "base_value": item.get("base_value", 0),
+            "image_url": item.get("image_url"),
+            "rap": item.get("rap", 0),
+            "value": item.get("value", 0),
+            "active_listings": active_count,
+            "cheapest_price": cheapest[0]["price"] if cheapest else None,
+            "total_quantity": total_qty,
+        })
+    
+    return {"items": enriched, "total": total, "offset": offset, "limit": limit}
+
 @api_router.get("/items/{item_id}")
 async def get_item(item_id: str):
     """Get a specific item definition"""
@@ -5377,6 +5436,27 @@ async def get_item_details(item_id: str):
         "owner_count": owner_count,
         "total_quantity": total_quantity,
     }
+
+
+@api_router.get("/marketplace/recent-sales")
+async def get_recent_marketplace_sales(limit: int = 20):
+    """Get recent marketplace sales for live feed"""
+    sales = await db.item_price_history.find(
+        {}, {"_id": 0}
+    ).sort("timestamp", -1).limit(limit).to_list(limit)
+    
+    # Enrich with item data
+    enriched = []
+    for sale in sales:
+        item = await db.items.find_one({"item_id": sale["item_id"]}, {"_id": 0, "rarity": 1, "image_url": 1, "name": 1})
+        enriched.append({
+            **sale,
+            "item_rarity": item.get("rarity", "common") if item else "common",
+            "item_image": item.get("image_url") if item else None,
+            "item_name": item.get("name", sale.get("item_id", "Unknown")) if item else sale.get("item_id", "Unknown"),
+        })
+    
+    return {"sales": enriched}
 
 
 # ============== PRESTIGE SYSTEM ENDPOINTS ==============
@@ -9474,6 +9554,35 @@ async def admin_remove_shop_item(data: AdminShopRemoveRequest, request: Request)
         "shop_listing_id": data.shop_listing_id,
         "item_name": listing.get("item_name"),
         "action": "removed"
+    }
+
+
+class AdminSetValueRequest(BaseModel):
+    item_id: str
+    value: int
+
+@api_router.post("/admin/setvalue")
+async def admin_set_item_value(data: AdminSetValueRequest, request: Request):
+    """Admin: Set manual value for an item"""
+    if not verify_admin_key(request):
+        raise HTTPException(status_code=401, detail="Invalid admin key")
+    
+    item = await db.items.find_one({"item_id": data.item_id})
+    if not item:
+        raise HTTPException(status_code=404, detail=f"Item '{data.item_id}' not found")
+    
+    old_value = item.get("value", 0)
+    await db.items.update_one(
+        {"item_id": data.item_id},
+        {"$set": {"value": data.value}}
+    )
+    
+    return {
+        "success": True,
+        "item_id": data.item_id,
+        "item_name": item.get("name", "Unknown"),
+        "old_value": old_value,
+        "new_value": data.value
     }
 
 

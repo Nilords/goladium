@@ -23,6 +23,8 @@ import Profile from './pages/Profile';
 import Settings from './pages/Settings';
 import Trading from './pages/Trading';
 import Marketplace from './pages/Marketplace';
+import ItemCatalog from './pages/ItemCatalog';
+import ItemDetail from './pages/ItemDetail';
 import GamePass from './pages/GamePass';
 import AuthCallback from './components/AuthCallback';
 import PrivacyPolicy from "./pages/PrivacyPolicy";
@@ -184,6 +186,22 @@ const AppRouter = () => {
         element={
           <ProtectedRoute>
             <Marketplace />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/catalog"
+        element={
+          <ProtectedRoute>
+            <ItemCatalog />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/item/:itemId"
+        element={
+          <ProtectedRoute>
+            <ItemDetail />
           </ProtectedRoute>
         }
       />
