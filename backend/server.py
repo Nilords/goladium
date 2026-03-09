@@ -1303,6 +1303,8 @@ class TradeAdCreateRequest(BaseModel):
     offering_inventory_ids: List[str]  # inventory_ids the player offers
     seeking_item_ids: List[str]  # item_ids the player is looking for
     note: Optional[str] = ""
+    offering_g: float = 0.0  # Optional gold amount player offers alongside items
+    seeking_g: float = 0.0   # Optional gold amount player seeks alongside items
 
 class TradeAdDeleteRequest(BaseModel):
     """Request to delete a trade ad"""
@@ -3996,7 +3998,13 @@ async def get_items_catalog(
         ).sort("price", 1).limit(1).to_list(1)
         
         total_qty = await db.user_inventory.count_documents({"item_id": item["item_id"]})
-        
+
+        ever_pipeline = await db.shop_listings.aggregate([
+            {"$match": {"item_id": item["item_id"]}},
+            {"$group": {"_id": None, "total": {"$sum": "$stock_sold"}}}
+        ]).to_list(1)
+        total_ever = ever_pipeline[0]["total"] if ever_pipeline else total_qty
+
         enriched.append({
             "item_id": item["item_id"],
             "name": item.get("name", "Unknown"),
@@ -4009,6 +4017,7 @@ async def get_items_catalog(
             "active_listings": active_count,
             "cheapest_price": cheapest[0]["price"] if cheapest else None,
             "total_quantity": total_qty,
+            "total_ever_created": total_ever,
         })
     
     result = {"items": enriched, "total": total, "offset": offset, "limit": limit}
@@ -4188,6 +4197,10 @@ async def purchase_shop_item(purchase: ShopPurchaseRequest, request: Request):
         {"shop_listing_id": purchase.shop_listing_id},
         {"$inc": {"stock_sold": 1}}
     )
+
+    # Invalidate catalog cache so counts update immediately
+    _catalog_cache.clear()
+    _catalog_cache_time.clear()
     
     # Track purchase in activity/bet_history
     activity_doc = {
@@ -4893,7 +4906,11 @@ async def sell_inventory_item(sell_request: SellItemRequest, request: Request):
         "inventory_id": sell_request.inventory_id,
         "user_id": user["user_id"]
     })
-    
+
+    # Invalidate catalog cache so counts update immediately
+    _catalog_cache.clear()
+    _catalog_cache_time.clear()
+
     # Add sell amount to user balance
     user_doc = await db.users.find_one({"user_id": user["user_id"]})
     new_balance = round(user_doc.get("balance", 0) + sell_amount, 2)
@@ -5035,7 +5052,11 @@ async def sell_inventory_items_batch(data: SellItemsBatchRequest, request: Reque
         "inventory_id": {"$in": delete_ids},
         "user_id": user_id
     })
-    
+
+    # Invalidate catalog cache so counts update immediately
+    _catalog_cache.clear()
+    _catalog_cache_time.clear()
+
     # Add total sell amount to user balance
     user_doc = await db.users.find_one({"user_id": user_id})
     new_balance = round(user_doc.get("balance", 0) + total_sell_amount, 2)
@@ -5531,7 +5552,14 @@ async def get_item_details(item_id: str):
     
     # Get total in circulation
     total_quantity = await db.user_inventory.count_documents({"item_id": item_id})
-    
+
+    # Get total ever created (sum of stock_sold across all shop listings)
+    ever_pipeline = await db.shop_listings.aggregate([
+        {"$match": {"item_id": item_id}},
+        {"$group": {"_id": None, "total": {"$sum": "$stock_sold"}}}
+    ]).to_list(1)
+    total_ever_created = ever_pipeline[0]["total"] if ever_pipeline else total_quantity
+
     # Calculate demand
     demand = await calculate_demand(item_id)
     
@@ -5559,6 +5587,7 @@ async def get_item_details(item_id: str):
         "recent_sales": recent_sales,
         "owner_count": owner_count,
         "total_quantity": total_quantity,
+        "total_ever_created": total_ever_created,
         "demand": demand,
         "owner_history": enriched_history,
     }
@@ -5669,10 +5698,10 @@ async def create_trade_ad(data: TradeAdCreateRequest, request: Request):
         raise HTTPException(status_code=400, detail="Must offer at least one item")
     if not data.seeking_item_ids:
         raise HTTPException(status_code=400, detail="Must seek at least one item")
-    if len(data.offering_inventory_ids) > 8:
-        raise HTTPException(status_code=400, detail="Maximum 8 offered items")
-    if len(data.seeking_item_ids) > 8:
-        raise HTTPException(status_code=400, detail="Maximum 8 sought items")
+    if len(data.offering_inventory_ids) > 10:
+        raise HTTPException(status_code=400, detail="Maximum 10 offered items")
+    if len(data.seeking_item_ids) > 10:
+        raise HTTPException(status_code=400, detail="Maximum 10 sought items")
     
     # Limit active ads per user
     active_count = await db.trade_ads.count_documents({"user_id": user["user_id"], "status": "active"})
@@ -5733,6 +5762,8 @@ async def create_trade_ad(data: TradeAdCreateRequest, request: Request):
         "offering_names": ", ".join(i["item_name"] for i in offering_items),
         "seeking_names": ", ".join(i["item_name"] for i in seeking_items),
         "note": (data.note or "")[:200],
+        "offering_g": max(0.0, data.offering_g),
+        "seeking_g": max(0.0, data.seeking_g),
         "status": "active",
         "created_at": datetime.now(timezone.utc).isoformat(),
     }
@@ -7090,10 +7121,6 @@ async def get_user_inventory_for_trade(user_id: str, request: Request):
         
         item_def = await db.items.find_one({"item_id": inv_item["item_id"]}, {"_id": 0})
         if item_def:
-            # Also check if item definition marks it as non-tradeable
-            if not item_def.get("is_tradeable", True):
-                continue
-            
             enriched_items.append({
                 "inventory_id": inv_item["inventory_id"],
                 "item_id": inv_item["item_id"],
@@ -9348,6 +9375,26 @@ async def admin_give_item(data: AdminGiveItemRequest, request: Request):
     )
     await db.user_inventory.insert_one(inv_item)
 
+    # Ensure item definition exists in items collection (for catalog visibility)
+    await db.items.update_one(
+        {"item_id": inv_item["item_id"]},
+        {"$setOnInsert": {
+            "item_id": inv_item["item_id"],
+            "name": name,
+            "flavor_text": description or "",
+            "rarity": rarity.lower(),
+            "base_value": value,
+            "image_url": image,
+            "category": "collectible",
+            "created_at": datetime.now(timezone.utc).isoformat(),
+            "is_tradeable": False,
+            "is_sellable": False,
+        }},
+        upsert=True
+    )
+    _catalog_cache.clear()
+    _catalog_cache_time.clear()
+
     logging.info(f"[ADMIN] Gave item '{name}' to '{user['username']}'")
     return {
         "success": True,
@@ -9394,6 +9441,27 @@ async def admin_give_item_all(data: AdminGiveItemAllRequest, request: Request):
 
     if inv_items:
         await db.user_inventory.insert_many(inv_items)
+
+    # Ensure item definition exists in items collection (for catalog visibility)
+    if inv_items:
+        await db.items.update_one(
+            {"item_id": inv_items[0]["item_id"]},
+            {"$setOnInsert": {
+                "item_id": inv_items[0]["item_id"],
+                "name": name,
+                "flavor_text": description or "",
+                "rarity": rarity.lower(),
+                "base_value": value,
+                "image_url": image,
+                "category": "collectible",
+                "created_at": datetime.now(timezone.utc).isoformat(),
+                "is_tradeable": False,
+                "is_sellable": False,
+            }},
+            upsert=True
+        )
+    _catalog_cache.clear()
+    _catalog_cache_time.clear()
 
     logging.info(f"[ADMIN] Gave item '{name}' to all {len(users)} users")
     return {
