@@ -5444,6 +5444,12 @@ async def marketplace_buy_item(data: MarketplaceBuyRequest, request: Request):
     # 6. Recalculate RAP for this item
     new_rap = await calculate_rap(listing["item_id"])
     
+    # 6b. Store RAP snapshot in sale record for chart history
+    await db.item_price_history.update_one(
+        {"sale_id": sale_record["sale_id"]},
+        {"$set": {"rap_at_sale": new_rap}}
+    )
+    
     # 7. Record activity for both parties
     await record_account_activity(
         user_id=user["user_id"],
@@ -5555,6 +5561,45 @@ async def get_item_details(item_id: str):
         "total_quantity": total_quantity,
         "demand": demand,
         "owner_history": enriched_history,
+    }
+
+
+@api_router.get("/items/{item_id}/chart-data")
+async def get_item_chart_data(item_id: str):
+    """Get time-series data for item charts: Value history, RAP history, Sales"""
+    item = await db.items.find_one({"item_id": item_id}, {"_id": 0})
+    if not item:
+        raise HTTPException(status_code=404, detail="Item not found")
+    
+    # Sales with RAP snapshots (price history)
+    sales = await db.item_price_history.find(
+        {"item_id": item_id}, {"_id": 0}
+    ).sort("timestamp", 1).to_list(500)
+    
+    sales_data = [{
+        "timestamp": s["timestamp"],
+        "price": s["price"],
+        "rap": s.get("rap_at_sale", 0),
+        "buyer": s.get("buyer_username", ""),
+        "seller": s.get("seller_username", ""),
+    } for s in sales]
+    
+    # Value history
+    value_changes = await db.item_value_history.find(
+        {"item_id": item_id}, {"_id": 0}
+    ).sort("timestamp", 1).to_list(500)
+    
+    value_data = [{
+        "timestamp": v["timestamp"],
+        "value": v["value"],
+    } for v in value_changes]
+    
+    return {
+        "item_id": item_id,
+        "current_rap": item.get("rap", 0),
+        "current_value": item.get("value", 0),
+        "sales": sales_data,
+        "value_history": value_data,
     }
 
 
@@ -9845,6 +9890,14 @@ async def admin_set_item_value(data: AdminSetValueRequest, request: Request):
         {"$set": {"value": data.value}}
     )
     
+    # Track value history for charts
+    await db.item_value_history.insert_one({
+        "item_id": data.item_id,
+        "value": data.value,
+        "old_value": old_value,
+        "timestamp": datetime.now(timezone.utc).isoformat()
+    })
+    
     return {
         "success": True,
         "item_id": data.item_id,
@@ -10119,6 +10172,9 @@ async def initialize_item_system():
     await db.item_owner_history.create_index([("item_id", 1), ("acquired_at", -1)])
     await db.item_owner_history.create_index([("inventory_id", 1), ("released_at", 1)])
     await db.item_owner_history.create_index("user_id")
+    
+    # Create index for item value history
+    await db.item_value_history.create_index([("item_id", 1), ("timestamp", 1)])
     
     # Create indexes for moderation logs
     await db.moderation_logs.create_index("log_id", unique=True)

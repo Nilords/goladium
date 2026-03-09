@@ -88,9 +88,16 @@ const ChartTooltip = ({ active, payload, label, lang }) => {
   return (
     <div className="bg-[#0A0A0C] border border-white/10 rounded-lg p-3 text-xs shadow-xl min-w-[140px]">
       <p className="text-white/50 mb-1.5">{label}</p>
-      <p className="text-[#00F0FF] font-mono font-bold text-sm">{formatCurrency(data?.price)} G</p>
+      {data?.price != null && (
+        <p className="text-[#00F0FF] font-mono font-bold text-sm">
+          {lang === 'de' ? 'Kauf' : 'Sale'}: {formatCurrency(data.price)} G
+        </p>
+      )}
       {data?.rap > 0 && (
         <p className="text-[#FFD700] font-mono text-xs mt-0.5">RAP: {formatCurrency(data.rap)} G</p>
+      )}
+      {data?.value > 0 && (
+        <p className="text-[#A855F7] font-mono text-xs mt-0.5">Value: {formatCurrency(data.value)} G</p>
       )}
       {data?.buyer && (
         <div className="mt-1.5 pt-1.5 border-t border-white/5 text-white/40">
@@ -162,14 +169,64 @@ export default function ItemDetail() {
   const lang = language;
 
   const [item, setItem] = useState(null);
+  const [chartData, setChartData] = useState([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     const load = async () => {
       try {
-        const res = await fetch(`/api/items/${itemId}/details`);
-        if (res.ok) {
-          setItem(await res.json());
+        const [detailRes, chartRes] = await Promise.all([
+          fetch(`/api/items/${itemId}/details`),
+          fetch(`/api/items/${itemId}/chart-data`),
+        ]);
+        if (detailRes.ok) setItem(await detailRes.json());
+        if (chartRes.ok) {
+          const cd = await chartRes.json();
+          // Build unified timeline from sales + value changes
+          const points = [];
+          
+          // Add sales as data points
+          (cd.sales || []).forEach((s) => {
+            points.push({
+              timestamp: s.timestamp,
+              price: s.price,
+              rap: s.rap || null,
+              value: null,
+              buyer: s.buyer,
+              seller: s.seller,
+              type: 'sale',
+            });
+          });
+          
+          // Add value changes
+          (cd.value_history || []).forEach((v) => {
+            points.push({
+              timestamp: v.timestamp,
+              price: null,
+              rap: null,
+              value: v.value,
+              type: 'value',
+            });
+          });
+          
+          // Sort by time
+          points.sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp));
+          
+          // Forward-fill value and RAP so lines are continuous
+          let lastValue = cd.current_value || 0;
+          let lastRap = 0;
+          const filled = points.map((p) => {
+            if (p.value !== null) lastValue = p.value;
+            if (p.rap !== null) lastRap = p.rap;
+            return {
+              ...p,
+              value: lastValue,
+              rap: lastRap || null,
+              date: new Date(p.timestamp).toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit' }),
+            };
+          });
+          
+          setChartData(filled);
         }
       } catch (e) {
         console.error('Failed to load item:', e);
@@ -208,14 +265,6 @@ export default function ItemDetail() {
 
   const colors = RARITY_COLORS[item.rarity] || RARITY_COLORS.common;
   const sales = item.recent_sales || [];
-  const chartData = [...sales].reverse().map((s, i) => ({
-    idx: i + 1,
-    price: s.price,
-    rap: item.rap || 0,
-    date: new Date(s.timestamp).toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit' }),
-    buyer: s.buyer_username,
-    seller: s.seller_username,
-  }));
 
   return (
     <div className="min-h-screen bg-[#050505]">
@@ -328,7 +377,7 @@ export default function ItemDetail() {
           <DemandBar demand={item.demand} lang={lang} />
         )}
 
-        {/* Price Chart - Enhanced with tabs */}
+        {/* Chart: Value / RAP / Käufe over time */}
         <Card className="bg-[#0A0A0C] border border-white/5 mb-8">
           <CardContent className="p-4">
             <div className="flex items-center justify-between mb-4">
@@ -337,15 +386,17 @@ export default function ItemDetail() {
                 {t('priceHistory', lang)}
               </h2>
               {chartData.length > 0 && (
-                <div className="flex items-center gap-4 text-[10px] font-mono">
+                <div className="flex items-center gap-4 text-[10px] font-mono text-white/40">
                   <span className="flex items-center gap-1">
-                    <span className="w-2 h-2 rounded-full bg-[#00F0FF]" /> {t('price', lang)}
+                    <span className="w-2 h-2 rounded-full bg-[#00F0FF]" />
+                    {lang === 'de' ? 'Käufe' : 'Sales'}
                   </span>
-                  {item.rap > 0 && (
-                    <span className="flex items-center gap-1">
-                      <span className="w-2 h-0.5 bg-[#FFD700]" /> RAP ({formatCurrency(item.rap)})
-                    </span>
-                  )}
+                  <span className="flex items-center gap-1">
+                    <span className="w-3 h-0.5 bg-[#FFD700]" /> RAP
+                  </span>
+                  <span className="flex items-center gap-1">
+                    <span className="w-3 h-0.5 bg-[#A855F7]" style={{ borderTop: '2px dashed #A855F7', height: 0 }} /> Value
+                  </span>
                 </div>
               )}
             </div>
@@ -360,28 +411,37 @@ export default function ItemDetail() {
                       </linearGradient>
                     </defs>
                     <XAxis dataKey="date" stroke="#333" tick={{ fill: '#555', fontSize: 10 }} />
-                    <YAxis yAxisId="price" stroke="#333" tick={{ fill: '#555', fontSize: 10 }} />
+                    <YAxis stroke="#333" tick={{ fill: '#555', fontSize: 10 }} />
                     <Tooltip content={<ChartTooltip lang={lang} />} />
+                    {/* Sales price (filled area) */}
                     <Area
-                      yAxisId="price"
                       type="monotone"
                       dataKey="price"
                       stroke="#00F0FF"
                       strokeWidth={2}
                       fill="url(#priceGradient)"
                       dot={{ r: 3, fill: '#00F0FF', strokeWidth: 0 }}
+                      connectNulls={false}
                     />
-                    {item.rap > 0 && (
-                      <Line
-                        yAxisId="price"
-                        type="monotone"
-                        dataKey="rap"
-                        stroke="#FFD700"
-                        strokeWidth={1.5}
-                        strokeDasharray="4 4"
-                        dot={false}
-                      />
-                    )}
+                    {/* RAP line */}
+                    <Line
+                      type="monotone"
+                      dataKey="rap"
+                      stroke="#FFD700"
+                      strokeWidth={2}
+                      dot={false}
+                      connectNulls
+                    />
+                    {/* Value line (dashed) */}
+                    <Line
+                      type="stepAfter"
+                      dataKey="value"
+                      stroke="#A855F7"
+                      strokeWidth={1.5}
+                      strokeDasharray="6 3"
+                      dot={false}
+                      connectNulls
+                    />
                   </ComposedChart>
                 </ResponsiveContainer>
               </div>
