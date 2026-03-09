@@ -14,13 +14,11 @@ import {
 
 // Range configurations
 const RANGES = [
-  { key: '1D', label: '1D', labelDe: '1T' },
-  { key: '1W', label: '1W', labelDe: '1W' },
-  { key: '1M', label: '1M', labelDe: '1M' },
-  { key: '3M', label: '3M', labelDe: '3M' },
-  { key: '6M', label: '6M', labelDe: '6M' },
-  { key: '1Y', label: '1Y', labelDe: '1J' },
-  { key: 'ALL', label: 'ALL', labelDe: 'ALLE' }
+  { key: 'TODAY', label: 'Today', labelDe: 'Heute' },
+  { key: 'D',     label: 'D',     labelDe: 'T' },
+  { key: 'W',     label: 'W',     labelDe: 'W' },
+  { key: 'M',     label: 'M',     labelDe: 'M' },
+  { key: 'ALL',   label: 'ALL',   labelDe: 'ALLE' },
 ];
 
 // Event type config
@@ -41,7 +39,7 @@ const AccountActivityChart = () => {
   const { language } = useLanguage();
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
-  const [selectedRange, setSelectedRange] = useState('1M');
+  const [selectedRange, setSelectedRange] = useState('TODAY');
 
   const loadData = useCallback(async () => {
     if (!token) return;
@@ -69,17 +67,27 @@ const AccountActivityChart = () => {
     
     return data.candles.map((candle, idx) => {
       const date = new Date(candle.timestamp);
-      const isShortRange = selectedRange === '1D' || selectedRange === '1W';
       const eventType = candle.event_type || Object.keys(candle.breakdown || {})[0] || 'slot';
       const config = EVENT_CONFIG[eventType] || EVENT_CONFIG.slot;
-      
+      const locale = language === 'de' ? 'de-DE' : 'en-US';
+
+      // Use actual resolution from API response for correct x-axis labels
+      const resolution = data.resolution || 'raw';
+      let displayTime;
+      if (resolution === 'raw' || resolution === '1h') {
+        displayTime = date.toLocaleTimeString(locale, { hour: '2-digit', minute: '2-digit' });
+      } else if (resolution === '1M') {
+        displayTime = date.toLocaleDateString(locale, { month: 'short', year: '2-digit' });
+      } else {
+        // 1d or 1w: show day + month
+        displayTime = date.toLocaleDateString(locale, { day: '2-digit', month: 'short' });
+      }
+
       return {
         ...candle,
         index: idx,
-        displayTime: isShortRange 
-          ? date.toLocaleTimeString(language === 'de' ? 'de-DE' : 'en-US', { hour: '2-digit', minute: '2-digit' })
-          : date.toLocaleDateString(language === 'de' ? 'de-DE' : 'en-US', { day: '2-digit', month: 'short' }),
-        fullDate: date.toLocaleString(language === 'de' ? 'de-DE' : 'en-US'),
+        displayTime,
+        fullDate: date.toLocaleString(locale),
         value: candle.close,
         eventType,
         eventColor: config.color,
@@ -161,23 +169,50 @@ const AccountActivityChart = () => {
     );
   }
 
-  if (!data || data.mode === 'empty') {
-    return (
-      <Card className="bg-[#0A0A0C] border-white/5">
-        <CardContent className="p-8 text-center">
-          <Activity className="w-12 h-12 text-white/20 mx-auto mb-4" />
-          <p className="text-white/40">
-            {language === 'de' 
-              ? 'Noch keine Aktivität. Spiele um Daten zu generieren!' 
-              : 'No activity yet. Play to generate data!'}
-          </p>
-        </CardContent>
-      </Card>
-    );
-  }
+  const emptyMsg = {
+    TODAY: { de: 'Heute noch keine Aktivität.', en: 'No activity today yet.' },
+    D:     { de: 'Noch keine abgeschlossenen Tage.', en: 'No completed days yet — check back tomorrow.' },
+    W:     { de: 'Noch keine abgeschlossenen Wochen.', en: 'No completed weeks yet.' },
+    M:     { de: 'Noch keine abgeschlossenen Monate.', en: 'No completed months yet.' },
+    ALL:   { de: 'Noch keine Aktivität. Spiele um Daten zu generieren!', en: 'No activity yet. Play to generate data!' },
+  }[selectedRange] || { de: 'Keine Daten.', en: 'No data.' };
+
+  const isEmpty = !data || data.mode === 'empty';
 
   return (
     <div className="space-y-4">
+      {/* Range Buttons — always visible */}
+      <div className="flex justify-end">
+        <div className="flex items-center gap-1 bg-black/40 rounded-lg p-1 border border-white/5">
+          {RANGES.map(r => (
+            <Button
+              key={r.key}
+              variant={selectedRange === r.key ? 'default' : 'ghost'}
+              size="sm"
+              onClick={() => setSelectedRange(r.key)}
+              className={`h-7 px-3 text-xs font-semibold transition-all ${
+                selectedRange === r.key
+                  ? 'bg-primary text-black shadow-lg shadow-primary/20'
+                  : 'text-white/50 hover:text-white hover:bg-white/5'
+              }`}
+            >
+              {language === 'de' ? r.labelDe : r.label}
+            </Button>
+          ))}
+        </div>
+      </div>
+
+      {isEmpty ? (
+        <Card className="bg-[#0A0A0C] border-white/5">
+          <CardContent className="p-8 text-center">
+            <Activity className="w-12 h-12 text-white/20 mx-auto mb-4" />
+            <p className="text-white/40">
+              {language === 'de' ? emptyMsg.de : emptyMsg.en}
+            </p>
+          </CardContent>
+        </Card>
+      ) : (
+      <>
       {/* Header Stats */}
       <div className="flex flex-wrap items-center justify-between gap-4">
         {/* Main Profit Display */}
@@ -190,7 +225,7 @@ const AccountActivityChart = () => {
               {isPositive ? '+' : ''}{stats.current_profit?.toFixed(2)} G
             </p>
           </div>
-          
+
           {/* Period Change */}
           <div className={`flex items-center gap-1 px-2 py-1 rounded ${
             periodPositive ? 'bg-green-500/20 text-green-400' : 'bg-red-500/20 text-red-400'
@@ -200,25 +235,6 @@ const AccountActivityChart = () => {
               {periodPositive ? '+' : ''}{stats.percent_change?.toFixed(1)}%
             </span>
           </div>
-        </div>
-
-        {/* Range Buttons */}
-        <div className="flex items-center gap-1 bg-black/40 rounded-lg p-1 border border-white/5">
-          {RANGES.map(r => (
-            <Button
-              key={r.key}
-              variant={selectedRange === r.key ? 'default' : 'ghost'}
-              size="sm"
-              onClick={() => setSelectedRange(r.key)}
-              className={`h-7 px-3 text-xs font-semibold transition-all ${
-                selectedRange === r.key 
-                  ? 'bg-primary text-black shadow-lg shadow-primary/20' 
-                  : 'text-white/50 hover:text-white hover:bg-white/5'
-              }`}
-            >
-              {language === 'de' ? r.labelDe : r.label}
-            </Button>
-          ))}
         </div>
       </div>
 
@@ -347,6 +363,8 @@ const AccountActivityChart = () => {
           );
         })}
       </div>
+      </>
+      )}
     </div>
   );
 };

@@ -1,8 +1,7 @@
 import React, { useState, useCallback } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { useLanguage } from '../contexts/LanguageContext';
-import { useSound } from '../contexts/SoundContext';
-import { SettingsSEO } from '../components/SEO';
+import { useSound, MUSIC_TRACKS } from '../contexts/SoundContext';
 import Navbar from '../components/Navbar';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '../components/ui/card';
 import { Button } from '../components/ui/button';
@@ -12,10 +11,10 @@ import { Separator } from '../components/ui/separator';
 import { Slider } from '../components/ui/slider';
 import { Avatar, AvatarFallback, AvatarImage } from '../components/ui/avatar';
 import { toast } from 'sonner';
-import { 
-  Settings as SettingsIcon, 
-  Globe, 
-  LogOut, 
+import {
+  Settings as SettingsIcon,
+  Globe,
+  LogOut,
   User,
   Bell,
   Volume2,
@@ -24,17 +23,22 @@ import {
   Upload,
   X,
   Camera,
-  MousePointer
+  MousePointer,
+  Music,
+  Music2
 } from 'lucide-react';
 
 const Settings = () => {
   const { user, token, updateUser, logout } = useAuth();
   const { t, language, changeLanguage, showLanguageToggle } = useLanguage();
-  const { 
-    settings: audioSettings, 
+  const {
+    settings: audioSettings,
     setSoundEnabled,
     setVolume,
     setHoverSoundsEnabled,
+    setMusicEnabled,
+    setMusicVolume,
+    setCurrentTrack,
     playClick
   } = useSound();
   
@@ -138,7 +142,6 @@ const Settings = () => {
 
   return (
     <div className="min-h-screen bg-[#050505] flex flex-col">
-      <SettingsSEO />
       <Navbar />
       
       <main className="flex-1 max-w-2xl mx-auto px-4 w-full sm:px-6 lg:px-8 py-8">
@@ -271,6 +274,78 @@ const Settings = () => {
                     <Volume2 className="w-4 h-4 mr-2" />
                     {language === 'de' ? 'Sound testen' : 'Test Sound'}
                   </Button>
+                </>
+              )}
+            </CardContent>
+          </Card>
+
+          {/* Background Music */}
+          <Card className="bg-[#0A0A0C] border-white/5">
+            <CardHeader>
+              <CardTitle className="text-lg text-white flex items-center gap-2">
+                <Music className="w-5 h-5 text-primary" />
+                {language === 'de' ? 'Hintergrundmusik' : 'Background Music'}
+              </CardTitle>
+              <CardDescription className="text-white/50">
+                {language === 'de' ? 'Musik im Hintergrund anpassen' : 'Customize background music'}
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-5">
+              {/* Music Toggle */}
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  {audioSettings.musicEnabled
+                    ? <Music className="w-5 h-5 text-primary" />
+                    : <Music2 className="w-5 h-5 text-white/40" />}
+                  <div>
+                    <Label className="text-white">{language === 'de' ? 'Musik aktiviert' : 'Music Enabled'}</Label>
+                    <p className="text-white/50 text-sm">{language === 'de' ? 'Hintergrundmusik ein/aus' : 'Toggle background music'}</p>
+                  </div>
+                </div>
+                <Switch checked={audioSettings.musicEnabled} onCheckedChange={setMusicEnabled} />
+              </div>
+
+              {audioSettings.musicEnabled && (
+                <>
+                  <Separator className="bg-white/10" />
+
+                  {/* Music Volume */}
+                  <div className="space-y-3">
+                    <div className="flex items-center justify-between">
+                      <Label className="text-white">{language === 'de' ? 'Musik-Lautstärke' : 'Music Volume'}</Label>
+                      <span className="text-white/60 text-sm font-mono">{audioSettings.musicVolume}%</span>
+                    </div>
+                    <Slider
+                      value={[audioSettings.musicVolume]}
+                      onValueChange={([v]) => setMusicVolume(v)}
+                      max={100}
+                      step={1}
+                      className="w-full"
+                    />
+                  </div>
+
+                  <Separator className="bg-white/10" />
+
+                  {/* Track Selection */}
+                  <div className="space-y-3">
+                    <Label className="text-white">{language === 'de' ? 'Track auswählen' : 'Select Track'}</Label>
+                    <div className="grid grid-cols-2 gap-2">
+                      {MUSIC_TRACKS.map(track => (
+                        <button
+                          key={track.id}
+                          onClick={() => setCurrentTrack(track.id)}
+                          className={`p-3 rounded-lg border text-sm font-medium transition-all text-left flex items-center gap-2
+                            ${audioSettings.currentTrack === track.id
+                              ? 'border-primary bg-primary/10 text-primary'
+                              : 'border-white/10 bg-white/5 text-white/60 hover:border-white/30 hover:text-white'
+                            }`}
+                        >
+                          <Music className="w-4 h-4 shrink-0" />
+                          {track.name}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
                 </>
               )}
             </CardContent>

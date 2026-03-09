@@ -10,16 +10,42 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '../components/ui/tabs'
 import { Avatar, AvatarFallback, AvatarImage } from '../components/ui/avatar';
 import { Badge } from '../components/ui/badge';
 import { ScrollArea } from '../components/ui/scroll-area';
-import { 
-  Trophy, 
-  Crown, 
+import {
+  Trophy,
+  Crown,
   Coins,
   Star,
   Gamepad2,
-  Zap
+  Zap,
+  TrendingUp
 } from 'lucide-react';
 
+const SYMBOL_EMOJIS = {
+  classic:   { orange: '🍊', lemon: '🍋', cherry: '🍒', bar: '🎰', wild: '⭐', seven: '7️⃣', diamond: '💎' },
+  egyptian:  { ankh: '☥', scarab: '🪲', eye: '👁️', anubis: '🐺', pharaoh: '👑', book: '📖' },
+  gemstone:  { ruby: '🔴', emerald: '💚', sapphire: '💙', amethyst: '💜', diamond: '💎', crown: '👑', wild_diamond: '✨' },
+  cyberpunk: { chip: '💾', circuit: '⚡', robot: '🤖', ai: '🧠', cyber: '🔷', matrix: '🟢' },
+  viking:    { axe: '🪓', shield: '🛡️', helmet: '⚔️', ship: '🚢', wolf: '🐺', odin: '🌩️', valhalla: '⚡' },
+};
 
+const renderWinningSymbols = (winningSymbols, slotId) => {
+  if (!winningSymbols || winningSymbols.length === 0) return null;
+  return (
+    <div className="flex items-center gap-1 flex-wrap mt-1">
+      {winningSymbols.map((ws, i) => {
+        const emoji = SYMBOL_EMOJIS[slotId]?.[ws.symbol] || '🎲';
+        return (
+          <span key={i} className="inline-flex items-center gap-0.5 bg-white/5 rounded px-1.5 py-0.5 text-sm">
+            {Array.from({ length: Math.min(ws.count, 4) }).map((_, j) => (
+              <span key={j}>{emoji}</span>
+            ))}
+            {i < winningSymbols.length - 1 && <span className="text-white/30 ml-1">+</span>}
+          </span>
+        );
+      })}
+    </div>
+  );
+};
 
 const Leaderboards = () => {
   const { user } = useAuth();
@@ -28,6 +54,7 @@ const Leaderboards = () => {
   const [balanceLeaderboard, setBalanceLeaderboard] = useState([]);
   const [levelLeaderboard, setLevelLeaderboard] = useState([]);
   const [bigWinsLeaderboard, setBigWinsLeaderboard] = useState([]);
+  const [multiplierLeaderboard, setMultiplierLeaderboard] = useState([]);
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState('balance');
 
@@ -37,15 +64,17 @@ const Leaderboards = () => {
 
   const loadLeaderboards = async () => {
     try {
-      const [balanceRes, levelRes, winsRes] = await Promise.all([
+      const [balanceRes, levelRes, winsRes, multRes] = await Promise.all([
         fetch(`/api/leaderboards/balance?limit=25`),
         fetch(`/api/leaderboards/level?limit=25`),
-        fetch(`/api/leaderboards/biggest-wins?limit=25`)
+        fetch(`/api/leaderboards/biggest-wins?limit=25`),
+        fetch(`/api/leaderboards/biggest-multiplier?limit=25`)
       ]);
 
       if (balanceRes.ok) setBalanceLeaderboard(await balanceRes.json());
       if (levelRes.ok) setLevelLeaderboard(await levelRes.json());
       if (winsRes.ok) setBigWinsLeaderboard(await winsRes.json());
+      if (multRes.ok) setMultiplierLeaderboard(await multRes.json());
     } catch (error) {
       console.error('Failed to load leaderboards:', error);
     } finally {
@@ -94,7 +123,7 @@ const Leaderboards = () => {
         </div>
 
         <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-          <TabsList className="grid w-full grid-cols-3 bg-[#0A0A0C] border border-white/10 mb-6">
+          <TabsList className="grid w-full grid-cols-4 bg-[#0A0A0C] border border-white/10 mb-6">
             <TabsTrigger 
               value="balance" 
               className="data-[state=active]:bg-gold/20 data-[state=active]:text-gold flex items-center gap-2"
@@ -111,13 +140,21 @@ const Leaderboards = () => {
               <span className="hidden sm:inline">{language === 'de' ? 'Höchstes Level' : 'Highest Level'}</span>
               <span className="sm:hidden">Level</span>
             </TabsTrigger>
-            <TabsTrigger 
-              value="wins" 
+            <TabsTrigger
+              value="wins"
               className="data-[state=active]:bg-green-500/20 data-[state=active]:text-green-400 flex items-center gap-2"
             >
               <Zap className="w-4 h-4" />
               <span className="hidden sm:inline">{language === 'de' ? 'Größte Gewinne' : 'Biggest Wins'}</span>
               <span className="sm:hidden">{language === 'de' ? 'Gewinne' : 'Wins'}</span>
+            </TabsTrigger>
+            <TabsTrigger
+              value="multiplier"
+              className="data-[state=active]:bg-yellow-500/20 data-[state=active]:text-yellow-400 flex items-center gap-2"
+            >
+              <TrendingUp className="w-4 h-4" />
+              <span className="hidden sm:inline">{language === 'de' ? 'Höchste Mult.' : 'Highest Mult.'}</span>
+              <span className="sm:hidden">Mult.</span>
             </TabsTrigger>
           </TabsList>
 
@@ -233,6 +270,7 @@ const Leaderboards = () => {
 
           {/* Biggest Wins Leaderboard */}
           <TabsContent value="wins">
+
             <Card className="bg-[#0A0A0C] border-white/5">
               <CardHeader className="border-b border-white/5">
                 <CardTitle className="text-xl text-white flex items-center gap-2">
@@ -290,12 +328,89 @@ const Leaderboards = () => {
                               )}
                               <span>• {win.multiplier}x</span>
                             </div>
+                            {renderWinningSymbols(win.winning_symbols, win.slot_id)}
                             <p className="text-white/30 text-xs mt-1">{formatTimestamp(win.timestamp)}</p>
                           </div>
                           <div className="text-right">
                             <p className="text-green-400 font-mono font-bold text-lg">
                               +{win.win_amount.toLocaleString(undefined, { minimumFractionDigits: 2 })} G
                             </p>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </ScrollArea>
+              </CardContent>
+            </Card>
+          </TabsContent>
+          {/* Highest Multiplier Leaderboard */}
+          <TabsContent value="multiplier">
+            <Card className="bg-[#0A0A0C] border-white/5">
+              <CardHeader className="border-b border-white/5">
+                <CardTitle className="text-xl text-white flex items-center gap-2">
+                  <TrendingUp className="w-6 h-6 text-yellow-400" />
+                  {language === 'de' ? 'Top 25 Höchste Multiplikatoren' : 'Top 25 Highest Multipliers'}
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="p-0">
+                <ScrollArea className="h-[600px]">
+                  {loading ? (
+                    <div className="flex items-center justify-center h-40">
+                      <div className="w-8 h-8 border-2 border-yellow-500 border-t-transparent rounded-full animate-spin" />
+                    </div>
+                  ) : multiplierLeaderboard.length === 0 ? (
+                    <div className="text-center text-white/40 py-12">
+                      <TrendingUp className="w-12 h-12 text-white/20 mx-auto mb-4" />
+                      <p>{language === 'de' ? 'Noch keine Daten' : 'No data yet'}</p>
+                    </div>
+                  ) : (
+                    <div className="divide-y divide-white/5">
+                      {multiplierLeaderboard.map((win) => (
+                        <div
+                          key={win.win_id}
+                          className={`flex items-center gap-4 p-4 border-l-2 ${getRankStyle(win.rank)} ${
+                            win.user_id === user?.user_id ? 'bg-yellow-500/10' : ''
+                          }`}
+                        >
+                          <div className="w-8 flex justify-center shrink-0">
+                            {getRankIcon(win.rank)}
+                          </div>
+                          <Avatar className="h-10 w-10 shrink-0">
+                            <AvatarImage src={win.avatar} />
+                            <AvatarFallback className="bg-yellow-500/20 text-yellow-400">
+                              {win.username?.charAt(0).toUpperCase()}
+                            </AvatarFallback>
+                          </Avatar>
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center gap-2 mb-1 flex-wrap">
+                              <p className="text-white font-medium truncate">{win.username}</p>
+                              {/* Multiplier badge — prominent */}
+                              <Badge className="bg-yellow-500/25 text-yellow-300 border border-yellow-500/40 font-bold text-sm px-2">
+                                {win.multiplier}x
+                              </Badge>
+                              <Badge className={`text-xs border-0 ${
+                                win.game_type === 'slot' ? 'bg-primary/20 text-primary' : 'bg-purple-500/20 text-purple-400'
+                              }`}>
+                                {win.game_type === 'slot' ? (
+                                  <><Gamepad2 className="w-3 h-3 mr-1" />{win.slot_name || 'Slot'}</>
+                                ) : (
+                                  <><Trophy className="w-3 h-3 mr-1" />Jackpot</>
+                                )}
+                              </Badge>
+                            </div>
+                            <div className="text-white/40 text-xs space-x-2">
+                              <span>{language === 'de' ? 'Einsatz' : 'Bet'}: {win.bet_amount} G</span>
+                              <span>• {language === 'de' ? 'Gewinn' : 'Win'}: +{win.win_amount.toLocaleString(undefined, { minimumFractionDigits: 2 })} G</span>
+                            </div>
+                            {renderWinningSymbols(win.winning_symbols, win.slot_id)}
+                            <p className="text-white/30 text-xs mt-1">{formatTimestamp(win.timestamp)}</p>
+                          </div>
+                          <div className="text-right shrink-0">
+                            <p className="text-yellow-400 font-mono font-black text-2xl leading-none">
+                              {win.multiplier}x
+                            </p>
+                            <p className="text-white/30 text-xs mt-1">mult.</p>
                           </div>
                         </div>
                       ))}

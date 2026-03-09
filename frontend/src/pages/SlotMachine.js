@@ -550,7 +550,15 @@ const SlotMachine = () => {
                         onChange={(e) => {
                           const val = parseFloat(e.target.value);
                           if (!isNaN(val) && val >= MIN_BET) {
-                            setBetPerLine(val);
+                            setBetPerLine(Math.round(val * 100) / 100);
+                          }
+                        }}
+                        onBlur={(e) => {
+                          const val = parseFloat(e.target.value);
+                          if (isNaN(val) || val < MIN_BET) {
+                            setBetPerLine(MIN_BET);
+                          } else {
+                            setBetPerLine(Math.round(val * 100) / 100);
                           }
                         }}
                         step={0.01}

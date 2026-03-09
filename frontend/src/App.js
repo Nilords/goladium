@@ -1,11 +1,11 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { BrowserRouter, Routes, Route, useLocation, Navigate } from 'react-router-dom';
-import { HelmetProvider } from 'react-helmet-async';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 import { LanguageProvider } from './contexts/LanguageContext';
 import { SoundProvider } from './contexts/SoundContext';
 import { Toaster } from './components/ui/sonner';
 import Footer from './components/Footer';
+import AgeGate from './components/AgeGate';
 
 // Pages
 import LandingPage from './pages/LandingPage';
@@ -190,32 +190,35 @@ const AppRouter = () => {
 };
 
 function App() {
+  const [ageVerified, setAgeVerified] = useState(
+    () => !!sessionStorage.getItem('goladium_age_verified')
+  );
+
   return (
     <BrowserRouter>
-      <HelmetProvider>
-        <AuthProvider>
-          <LanguageProvider>
-            <SoundProvider>
-              <div className="min-h-screen bg-[#050505] flex flex-col">
-                <div className="flex-1">
-                  <AppRouter />
-                </div>
-                <FooterWrapper />
-                <Toaster 
-                  position="top-right" 
-                  toastOptions={{
-                    style: {
-                      background: '#0A0A0C',
-                      border: '1px solid rgba(255,255,255,0.1)',
-                      color: '#fff'
-                    }
-                  }}
-                />
+      <AuthProvider>
+        <LanguageProvider>
+          <SoundProvider>
+            {!ageVerified && <AgeGate onConfirm={() => setAgeVerified(true)} />}
+            <div className="min-h-screen bg-[#050505] flex flex-col">
+              <div className="flex-1">
+                <AppRouter />
               </div>
-            </SoundProvider>
-          </LanguageProvider>
-        </AuthProvider>
-      </HelmetProvider>
+              <FooterWrapper />
+              <Toaster
+                position="top-right"
+                toastOptions={{
+                  style: {
+                    background: '#0A0A0C',
+                    border: '1px solid rgba(255,255,255,0.1)',
+                    color: '#fff'
+                  }
+                }}
+              />
+            </div>
+          </SoundProvider>
+        </LanguageProvider>
+      </AuthProvider>
     </BrowserRouter>
   );
 }

@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect, useRef, useCallback } from 'react';
+import React, { createContext, useContext, useState, useEffect, useRef, useCallback, useMemo } from 'react';
 
 const SoundContext = createContext();
 
@@ -12,10 +12,22 @@ const SOUND_FILES = {
   chest: '/sounds/chest.mp3',
 };
 
+// Background music tracks - place MP3s in /public/sounds/music/
+export const MUSIC_TRACKS = [
+  { id: 'track1', name: 'Track 1', file: '/sounds/music/track1.mp3' },
+  { id: 'track2', name: 'Track 2', file: '/sounds/music/track2.mp3' },
+  { id: 'track3', name: 'Track 3', file: '/sounds/music/track3.mp3' },
+  { id: 'track4', name: 'Track 4', file: '/sounds/music/track4.mp3' },
+  { id: 'track5', name: 'Track 5', file: '/sounds/music/track5.mp3' },
+];
+
 const DEFAULT_SETTINGS = {
   soundEnabled: true,
   volume: 60,
-  hoverSoundsEnabled: true
+  hoverSoundsEnabled: true,
+  musicEnabled: true,
+  musicVolume: 40,
+  currentTrack: 'track1',
 };
 
 const STORAGE_KEY = 'goladium_audio_settings';
@@ -33,6 +45,21 @@ export const SoundProvider = ({ children }) => {
   const [userInteracted, setUserInteracted] = useState(false);
   const audioContextRef = useRef(null);
   const gainNodeRef = useRef(null);
+  const musicRef = useRef(null);
+
+  // Preload current track immediately on mount so it's ready when user clicks
+  useEffect(() => {
+    if (settings.musicEnabled) {
+      const track = MUSIC_TRACKS.find(t => t.id === settings.currentTrack);
+      const file = track ? track.file : MUSIC_TRACKS[0].file;
+      const audio = new Audio(file);
+      audio.preload = 'auto';
+      audio.loop = true;
+      audio.volume = settings.musicVolume / 100;
+      musicRef.current = audio;
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // Initialize Web Audio API
   const getAudioContext = useCallback(() => {
@@ -71,9 +98,24 @@ export const SoundProvider = ({ children }) => {
   const handleUserInteraction = useCallback(() => {
     if (!userInteracted) {
       setUserInteracted(true);
-      getAudioContext(); // Initialize on first interaction
+      getAudioContext();
+      // Start music directly inside user gesture (browser requires this)
+      if (settings.musicEnabled) {
+        if (musicRef.current) {
+          // Already preloaded — just play (instant start)
+          musicRef.current.play().catch(() => {});
+        } else {
+          const track = MUSIC_TRACKS.find(t => t.id === settings.currentTrack);
+          const file = track ? track.file : MUSIC_TRACKS[0].file;
+          const audio = new Audio(file);
+          audio.loop = true;
+          audio.volume = settings.musicVolume / 100;
+          audio.play().catch(() => {});
+          musicRef.current = audio;
+        }
+      }
     }
-  }, [userInteracted, getAudioContext]);
+  }, [userInteracted, getAudioContext, settings]);
 
   useEffect(() => {
     const handler = () => handleUserInteraction();
@@ -84,6 +126,56 @@ export const SoundProvider = ({ children }) => {
       document.removeEventListener(e, handler)
     );
   }, [handleUserInteraction]);
+
+  // Background music
+  const currentTrackFile = useMemo(() => {
+    const track = MUSIC_TRACKS.find(t => t.id === settings.currentTrack);
+    return track ? track.file : MUSIC_TRACKS[0].file;
+  }, [settings.currentTrack]);
+
+  useEffect(() => {
+    if (!userInteracted) return;
+
+    if (!settings.musicEnabled) {
+      if (musicRef.current) {
+        musicRef.current.pause();
+        musicRef.current = null;
+      }
+      return;
+    }
+
+    // Start or switch track
+    if (musicRef.current) {
+      musicRef.current.pause();
+      musicRef.current = null;
+    }
+
+    const audio = new Audio(currentTrackFile);
+    audio.loop = true;
+    audio.volume = settings.musicVolume / 100;
+    audio.play().catch(() => {
+      // Autoplay blocked — retry on next user interaction
+      const retryPlay = () => {
+        audio.play().catch(() => {});
+      };
+      document.addEventListener('click', retryPlay, { once: true });
+    });
+    musicRef.current = audio;
+
+    return () => {
+      if (musicRef.current) {
+        musicRef.current.pause();
+        musicRef.current = null;
+      }
+    };
+  }, [settings.musicEnabled, settings.currentTrack, userInteracted, currentTrackFile]);
+
+  // Update music volume without restarting track
+  useEffect(() => {
+    if (musicRef.current) {
+      musicRef.current.volume = settings.musicVolume / 100;
+    }
+  }, [settings.musicVolume]);
 
   // Global click sound for ALL buttons
   useEffect(() => {
@@ -485,6 +577,18 @@ export const SoundProvider = ({ children }) => {
     setSettings(s => ({ ...s, hoverSoundsEnabled: enabled }));
   }, []);
 
+  const setMusicEnabled = useCallback((enabled) => {
+    setSettings(s => ({ ...s, musicEnabled: enabled }));
+  }, []);
+
+  const setMusicVolume = useCallback((volume) => {
+    setSettings(s => ({ ...s, musicVolume: Math.max(0, Math.min(100, volume)) }));
+  }, []);
+
+  const setCurrentTrack = useCallback((trackId) => {
+    setSettings(s => ({ ...s, currentTrack: trackId }));
+  }, []);
+
   // Cleanup
   useEffect(() => {
     return () => {
@@ -515,6 +619,9 @@ export const SoundProvider = ({ children }) => {
       setSoundEnabled,
       setVolume,
       setHoverSoundsEnabled,
+      setMusicEnabled,
+      setMusicVolume,
+      setCurrentTrack,
       handleUserInteraction
     }}>
       {children}
