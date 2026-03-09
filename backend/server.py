@@ -3943,6 +3943,11 @@ async def get_all_items():
     items = await db.items.find({}, {"_id": 0}).to_list(100)
     return items
 
+# Simple catalog cache (30s TTL)
+_catalog_cache = {}
+_catalog_cache_time = {}
+CATALOG_CACHE_TTL = 30  # seconds
+
 @api_router.get("/items/catalog")
 async def get_items_catalog(
     search: str = None,
@@ -3951,7 +3956,13 @@ async def get_items_catalog(
     limit: int = 100,
     offset: int = 0
 ):
-    """Get all items as a public catalog with market data"""
+    """Get all items as a public catalog with market data (cached 30s)"""
+    cache_key = f"{search}:{rarity}:{sort}:{limit}:{offset}"
+    now = datetime.now(timezone.utc).timestamp()
+    
+    if cache_key in _catalog_cache and (now - _catalog_cache_time.get(cache_key, 0)) < CATALOG_CACHE_TTL:
+        return _catalog_cache[cache_key]
+    
     query = {}
     if rarity and rarity != "all":
         query["rarity"] = rarity
@@ -4000,7 +4011,10 @@ async def get_items_catalog(
             "total_quantity": total_qty,
         })
     
-    return {"items": enriched, "total": total, "offset": offset, "limit": limit}
+    result = {"items": enriched, "total": total, "offset": offset, "limit": limit}
+    _catalog_cache[cache_key] = result
+    _catalog_cache_time[cache_key] = now
+    return result
 
 @api_router.get("/items/{item_id}")
 async def get_item(item_id: str):
@@ -5619,6 +5633,18 @@ async def create_trade_ad(data: TradeAdCreateRequest, request: Request):
     active_count = await db.trade_ads.count_documents({"user_id": user["user_id"], "status": "active"})
     if active_count >= 10:
         raise HTTPException(status_code=400, detail="Maximum 10 active trade ads")
+    
+    # Cooldown: 5 minutes between ads
+    last_ad = await db.trade_ads.find_one(
+        {"user_id": user["user_id"]},
+        sort=[("created_at", -1)]
+    )
+    if last_ad and last_ad.get("created_at"):
+        last_time = datetime.fromisoformat(last_ad["created_at"].replace("Z", "+00:00")) if isinstance(last_ad["created_at"], str) else last_ad["created_at"]
+        cooldown_end = last_time + timedelta(minutes=5)
+        if datetime.now(timezone.utc) < cooldown_end:
+            remaining = int((cooldown_end - datetime.now(timezone.utc)).total_seconds())
+            raise HTTPException(status_code=429, detail=f"Cooldown: wait {remaining} seconds before creating another ad")
     
     # Validate offered items belong to user
     offering_items = []

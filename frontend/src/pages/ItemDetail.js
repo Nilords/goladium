@@ -23,7 +23,7 @@ import {
   ArrowRight,
 } from 'lucide-react';
 import {
-  LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, Area, AreaChart,
+  LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, Area, AreaChart, Bar, BarChart, ComposedChart,
 } from 'recharts';
 
 const RARITY_COLORS = {
@@ -82,12 +82,21 @@ const StatBox = ({ label, value, icon: Icon, color = '#00F0FF', sub = null }) =>
   </div>
 );
 
-const CustomTooltip = ({ active, payload, label }) => {
+const ChartTooltip = ({ active, payload, label, lang }) => {
   if (!active || !payload?.length) return null;
+  const data = payload[0]?.payload;
   return (
-    <div className="bg-[#0A0A0C] border border-white/10 rounded-lg p-2 text-xs shadow-xl">
-      <p className="text-white/50 mb-1">{label}</p>
-      <p className="text-[#00F0FF] font-mono font-bold">{formatCurrency(payload[0].value)} G</p>
+    <div className="bg-[#0A0A0C] border border-white/10 rounded-lg p-3 text-xs shadow-xl min-w-[140px]">
+      <p className="text-white/50 mb-1.5">{label}</p>
+      <p className="text-[#00F0FF] font-mono font-bold text-sm">{formatCurrency(data?.price)} G</p>
+      {data?.rap > 0 && (
+        <p className="text-[#FFD700] font-mono text-xs mt-0.5">RAP: {formatCurrency(data.rap)} G</p>
+      )}
+      {data?.buyer && (
+        <div className="mt-1.5 pt-1.5 border-t border-white/5 text-white/40">
+          <p>{data.buyer} &larr; {data.seller}</p>
+        </div>
+      )}
     </div>
   );
 };
@@ -202,7 +211,10 @@ export default function ItemDetail() {
   const chartData = [...sales].reverse().map((s, i) => ({
     idx: i + 1,
     price: s.price,
+    rap: item.rap || 0,
     date: new Date(s.timestamp).toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit' }),
+    buyer: s.buyer_username,
+    seller: s.seller_username,
   }));
 
   return (
@@ -316,17 +328,31 @@ export default function ItemDetail() {
           <DemandBar demand={item.demand} lang={lang} />
         )}
 
-        {/* Price Chart */}
+        {/* Price Chart - Enhanced with tabs */}
         <Card className="bg-[#0A0A0C] border border-white/5 mb-8">
           <CardContent className="p-4">
-            <h2 className="text-white/60 text-sm font-mono uppercase tracking-wider mb-4 flex items-center gap-2">
-              <BarChart3 className="w-4 h-4 text-[#00F0FF]" />
-              {t('priceHistory', lang)}
-            </h2>
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-white/60 text-sm font-mono uppercase tracking-wider flex items-center gap-2">
+                <BarChart3 className="w-4 h-4 text-[#00F0FF]" />
+                {t('priceHistory', lang)}
+              </h2>
+              {chartData.length > 0 && (
+                <div className="flex items-center gap-4 text-[10px] font-mono">
+                  <span className="flex items-center gap-1">
+                    <span className="w-2 h-2 rounded-full bg-[#00F0FF]" /> {t('price', lang)}
+                  </span>
+                  {item.rap > 0 && (
+                    <span className="flex items-center gap-1">
+                      <span className="w-2 h-0.5 bg-[#FFD700]" /> RAP ({formatCurrency(item.rap)})
+                    </span>
+                  )}
+                </div>
+              )}
+            </div>
             {chartData.length > 0 ? (
-              <div className="h-48">
+              <div className="h-56">
                 <ResponsiveContainer width="100%" height="100%">
-                  <AreaChart data={chartData}>
+                  <ComposedChart data={chartData}>
                     <defs>
                       <linearGradient id="priceGradient" x1="0" y1="0" x2="0" y2="1">
                         <stop offset="5%" stopColor="#00F0FF" stopOpacity={0.3} />
@@ -334,20 +360,33 @@ export default function ItemDetail() {
                       </linearGradient>
                     </defs>
                     <XAxis dataKey="date" stroke="#333" tick={{ fill: '#555', fontSize: 10 }} />
-                    <YAxis stroke="#333" tick={{ fill: '#555', fontSize: 10 }} />
-                    <Tooltip content={<CustomTooltip />} />
+                    <YAxis yAxisId="price" stroke="#333" tick={{ fill: '#555', fontSize: 10 }} />
+                    <Tooltip content={<ChartTooltip lang={lang} />} />
                     <Area
+                      yAxisId="price"
                       type="monotone"
                       dataKey="price"
                       stroke="#00F0FF"
                       strokeWidth={2}
                       fill="url(#priceGradient)"
+                      dot={{ r: 3, fill: '#00F0FF', strokeWidth: 0 }}
                     />
-                  </AreaChart>
+                    {item.rap > 0 && (
+                      <Line
+                        yAxisId="price"
+                        type="monotone"
+                        dataKey="rap"
+                        stroke="#FFD700"
+                        strokeWidth={1.5}
+                        strokeDasharray="4 4"
+                        dot={false}
+                      />
+                    )}
+                  </ComposedChart>
                 </ResponsiveContainer>
               </div>
             ) : (
-              <div className="h-48 flex items-center justify-center">
+              <div className="h-56 flex items-center justify-center">
                 <p className="text-white/20 font-mono text-sm">{t('noData', lang)}</p>
               </div>
             )}
