@@ -18,6 +18,9 @@ import {
   BarChart3,
   Loader2,
   ShoppingCart,
+  Flame,
+  History,
+  ArrowRight,
 } from 'lucide-react';
 import {
   LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, Area, AreaChart,
@@ -51,6 +54,17 @@ const t = (key, lang) => {
     notFound: { de: 'Item nicht gefunden', en: 'Item not found' },
     loading: { de: 'Lade...', en: 'Loading...' },
     noData: { de: 'Keine Daten', en: 'No data' },
+    demand: { de: 'Nachfrage', en: 'Demand' },
+    demandNone: { de: 'Keine', en: 'None' },
+    demandLow: { de: 'Niedrig', en: 'Low' },
+    demandMedium: { de: 'Mittel', en: 'Medium' },
+    demandHigh: { de: 'Hoch', en: 'High' },
+    demandExtreme: { de: 'Extrem', en: 'Extreme' },
+    seekingAds: { de: 'Suchanzeigen', en: 'Seeking Ads' },
+    salesWeek: { de: 'Verkäufe (7T)', en: 'Sales (7d)' },
+    ownerHistory: { de: 'Besitzer-Verlauf', en: 'Owner History' },
+    noHistory: { de: 'Noch kein Verlauf', en: 'No history yet' },
+    acquiredVia: { de: 'über', en: 'via' },
   };
   return translations[key]?.[lang] || translations[key]?.en || key;
 };
@@ -75,6 +89,55 @@ const CustomTooltip = ({ active, payload, label }) => {
       <p className="text-white/50 mb-1">{label}</p>
       <p className="text-[#00F0FF] font-mono font-bold">{formatCurrency(payload[0].value)} G</p>
     </div>
+  );
+};
+
+const DEMAND_CONFIG = {
+  none: { color: '#555', width: '5%', emoji: '' },
+  low: { color: '#9CA3AF', width: '25%', emoji: '' },
+  medium: { color: '#F59E0B', width: '50%', emoji: '' },
+  high: { color: '#EF4444', width: '75%', emoji: '' },
+  extreme: { color: '#FF0040', width: '100%', emoji: '' },
+};
+
+const DemandBar = ({ demand, lang }) => {
+  const config = DEMAND_CONFIG[demand.label] || DEMAND_CONFIG.none;
+  const labelKey = `demand${demand.label.charAt(0).toUpperCase() + demand.label.slice(1)}`;
+
+  return (
+    <Card data-testid="demand-indicator" className="bg-[#0A0A0C] border border-white/5 mb-8">
+      <CardContent className="p-4">
+        <div className="flex items-center justify-between mb-3">
+          <h2 className="text-white/60 text-sm font-mono uppercase tracking-wider flex items-center gap-2">
+            <Flame className="w-4 h-4" style={{ color: config.color }} />
+            {t('demand', lang)}
+          </h2>
+          <div className="flex items-center gap-4 text-xs text-white/30 font-mono">
+            <span>{demand.seeking_ads} {t('seekingAds', lang)}</span>
+            <span>{demand.recent_sales_7d} {t('salesWeek', lang)}</span>
+            <span>{demand.active_listings} {t('activeListings', lang)}</span>
+          </div>
+        </div>
+        <div className="flex items-center gap-3">
+          <div className="flex-1 h-3 bg-black/40 rounded-full overflow-hidden border border-white/5">
+            <div
+              className="h-full rounded-full transition-all duration-700"
+              style={{
+                width: config.width,
+                background: `linear-gradient(90deg, ${config.color}80, ${config.color})`,
+                boxShadow: demand.label !== 'none' ? `0 0 10px ${config.color}40` : 'none',
+              }}
+            />
+          </div>
+          <span
+            className="text-sm font-mono font-bold uppercase tracking-wider min-w-[80px] text-right"
+            style={{ color: config.color }}
+          >
+            {t(labelKey, lang)}
+          </span>
+        </div>
+      </CardContent>
+    </Card>
   );
 };
 
@@ -243,6 +306,11 @@ export default function ItemDetail() {
           />
         </div>
 
+        {/* Demand Indicator */}
+        {item.demand && (
+          <DemandBar demand={item.demand} lang={lang} />
+        )}
+
         {/* Price Chart */}
         <Card className="bg-[#0A0A0C] border border-white/5 mb-8">
           <CardContent className="p-4">
@@ -322,6 +390,49 @@ export default function ItemDetail() {
                     ))}
                   </tbody>
                 </table>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+
+        {/* Owner History */}
+        <Card className="bg-[#0A0A0C] border border-white/5">
+          <CardContent className="p-4">
+            <h2 className="text-white/60 text-sm font-mono uppercase tracking-wider mb-4 flex items-center gap-2">
+              <History className="w-4 h-4 text-[#A855F7]" />
+              {t('ownerHistory', lang)}
+            </h2>
+
+            {(!item.owner_history || item.owner_history.length === 0) ? (
+              <p className="text-white/20 font-mono text-sm text-center py-8">{t('noHistory', lang)}</p>
+            ) : (
+              <div className="space-y-2">
+                {item.owner_history.map((record, i) => (
+                  <div key={record.record_id || i} className="flex items-center gap-3 py-2 px-3 rounded-md bg-black/30 border border-white/[0.03]">
+                    <div className="w-7 h-7 rounded-full bg-[#A855F7]/10 flex items-center justify-center flex-shrink-0">
+                      <Users className="w-3.5 h-3.5 text-[#A855F7]" />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-white text-sm font-medium">
+                        {record.username}
+                      </p>
+                      <p className="text-white/30 text-xs">
+                        {t('acquiredVia', lang)} <span className="text-white/50 capitalize">{record.acquired_via}</span>
+                        {record.released_at && (
+                          <span className="text-white/20">
+                            {' '}<ArrowRight className="w-3 h-3 inline" />{' '}
+                            {new Date(record.released_at).toLocaleDateString('de-DE')}
+                          </span>
+                        )}
+                      </p>
+                    </div>
+                    <span className="text-white/20 text-xs font-mono flex-shrink-0">
+                      {new Date(record.acquired_at).toLocaleDateString('de-DE', {
+                        day: '2-digit', month: '2-digit', year: '2-digit',
+                      })}
+                    </span>
+                  </div>
+                ))}
               </div>
             )}
           </CardContent>

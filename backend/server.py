@@ -5114,6 +5114,74 @@ async def calculate_rap(item_id: str):
     return rap
 
 
+async def record_owner_change(inventory_id: str, item_id: str, from_user_id: str, to_user_id: str, source: str):
+    """Record an item ownership change in history"""
+    now = datetime.now(timezone.utc).isoformat()
+    # Close the previous owner's record
+    await db.item_owner_history.update_one(
+        {"inventory_id": inventory_id, "user_id": from_user_id, "released_at": None},
+        {"$set": {"released_at": now, "released_via": source}}
+    )
+    # Create new owner record
+    await db.item_owner_history.insert_one({
+        "record_id": f"oh_{uuid.uuid4().hex[:12]}",
+        "inventory_id": inventory_id,
+        "item_id": item_id,
+        "user_id": to_user_id,
+        "acquired_at": now,
+        "acquired_via": source,
+        "released_at": None,
+        "released_via": None,
+    })
+
+
+async def calculate_demand(item_id: str):
+    """Calculate demand score for an item based on trade ads seeking it and recent marketplace activity"""
+    # Count active trade ads seeking this item
+    seeking_count = await db.trade_ads.count_documents({
+        "status": "active",
+        "seeking_items.item_id": item_id
+    })
+    
+    # Count recent sales (last 7 days)
+    week_ago = (datetime.now(timezone.utc) - timedelta(days=7)).isoformat()
+    recent_sales = await db.item_price_history.count_documents({
+        "item_id": item_id,
+        "timestamp": {"$gte": week_ago}
+    })
+    
+    # Count active marketplace listings
+    active_listings = await db.marketplace_listings.count_documents({
+        "item_id": item_id,
+        "status": "active"
+    })
+    
+    # Demand formula: seeking pressure + sales velocity - supply
+    # Higher = more demanded
+    demand_score = (seeking_count * 3) + (recent_sales * 2) - active_listings
+    demand_score = max(0, demand_score)
+    
+    # Classify demand
+    if demand_score >= 10:
+        demand_label = "extreme"
+    elif demand_score >= 6:
+        demand_label = "high"
+    elif demand_score >= 3:
+        demand_label = "medium"
+    elif demand_score >= 1:
+        demand_label = "low"
+    else:
+        demand_label = "none"
+    
+    return {
+        "score": demand_score,
+        "label": demand_label,
+        "seeking_ads": seeking_count,
+        "recent_sales_7d": recent_sales,
+        "active_listings": active_listings,
+    }
+
+
 @api_router.get("/marketplace/listings")
 async def get_marketplace_listings(
     sort: str = "newest",
@@ -5324,6 +5392,12 @@ async def marketplace_buy_item(data: MarketplaceBuyRequest, request: Request):
         }}
     )
     
+    # 3b. Record owner history
+    await record_owner_change(
+        listing["inventory_id"], listing["item_id"],
+        listing["seller_id"], user["user_id"], "marketplace"
+    )
+    
     # 4. Mark listing as sold
     await db.marketplace_listings.update_one(
         {"listing_id": data.listing_id},
@@ -5413,7 +5487,7 @@ async def marketplace_delist_item(data: MarketplaceDelistRequest, request: Reque
 
 @api_router.get("/items/{item_id}/details")
 async def get_item_details(item_id: str):
-    """Get detailed item info including RAP, value, and recent sales"""
+    """Get detailed item info including RAP, value, demand, and recent sales"""
     item = await db.items.find_one({"item_id": item_id}, {"_id": 0})
     if not item:
         raise HTTPException(status_code=404, detail="Item not found")
@@ -5437,6 +5511,23 @@ async def get_item_details(item_id: str):
     # Get total in circulation
     total_quantity = await db.user_inventory.count_documents({"item_id": item_id})
     
+    # Calculate demand
+    demand = await calculate_demand(item_id)
+    
+    # Get owner history (last 20 changes)
+    owner_history = await db.item_owner_history.find(
+        {"item_id": item_id}, {"_id": 0}
+    ).sort("acquired_at", -1).limit(20).to_list(20)
+    
+    # Enrich owner history with usernames
+    enriched_history = []
+    for record in owner_history:
+        user_doc = await db.users.find_one({"user_id": record["user_id"]}, {"_id": 0, "username": 1})
+        enriched_history.append({
+            **record,
+            "username": user_doc["username"] if user_doc else "Unknown",
+        })
+    
     return {
         **item,
         "created_at": item.get("created_at").isoformat() if isinstance(item.get("created_at"), datetime) else str(item.get("created_at", "")),
@@ -5447,6 +5538,8 @@ async def get_item_details(item_id: str):
         "recent_sales": recent_sales,
         "owner_count": owner_count,
         "total_quantity": total_quantity,
+        "demand": demand,
+        "owner_history": enriched_history,
     }
 
 
@@ -7214,6 +7307,10 @@ async def accept_trade(trade_id: str, request: Request):
                 }
             }
         )
+        await record_owner_change(
+            item["inventory_id"], item["item_id"],
+            initiator["user_id"], recipient["user_id"], "trade"
+        )
     
     # Transfer items from recipient to initiator
     for item in trade["recipient"]["items"]:
@@ -7226,6 +7323,10 @@ async def accept_trade(trade_id: str, request: Request):
                     "acquired_at": now
                 }
             }
+        )
+        await record_owner_change(
+            item["inventory_id"], item["item_id"],
+            recipient["user_id"], initiator["user_id"], "trade"
         )
     
     # Transfer G currency (with fees burned)
@@ -9866,6 +9967,12 @@ async def initialize_item_system():
     await db.trade_ads.create_index("ad_id", unique=True)
     await db.trade_ads.create_index([("user_id", 1), ("status", 1)])
     await db.trade_ads.create_index([("status", 1), ("created_at", -1)])
+    
+    # Create indexes for item owner history
+    await db.item_owner_history.create_index("record_id", unique=True)
+    await db.item_owner_history.create_index([("item_id", 1), ("acquired_at", -1)])
+    await db.item_owner_history.create_index([("inventory_id", 1), ("released_at", 1)])
+    await db.item_owner_history.create_index("user_id")
     
     # Create indexes for moderation logs
     await db.moderation_logs.create_index("log_id", unique=True)
