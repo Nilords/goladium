@@ -5737,8 +5737,10 @@ async def create_trade_ad(data: TradeAdCreateRequest, request: Request):
             "item_name": item.get("item_name", item_def.get("name", "Unknown") if item_def else "Unknown"),
             "item_rarity": item.get("item_rarity", item_def.get("rarity", "common") if item_def else "common"),
             "item_image": item.get("item_image", item_def.get("image_url") if item_def else None),
+            "item_value": item_def.get("value", 0) if item_def else 0,
+            "item_rap": item_def.get("rap", 0) if item_def else 0,
         })
-    
+
     # Validate seeking items exist
     seeking_items = []
     for item_id in data.seeking_item_ids:
@@ -5750,6 +5752,8 @@ async def create_trade_ad(data: TradeAdCreateRequest, request: Request):
             "item_name": item_def.get("name", "Unknown"),
             "item_rarity": item_def.get("rarity", "common"),
             "item_image": item_def.get("image_url"),
+            "item_value": item_def.get("value", 0),
+            "item_rap": item_def.get("rap", 0),
         })
     
     ad_id = f"ta_{uuid.uuid4().hex[:12]}"

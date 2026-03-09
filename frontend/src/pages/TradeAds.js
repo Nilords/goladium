@@ -91,7 +91,16 @@ const ItemChip = ({ item }) => {
       style={{ background: colors.bg, borderColor: colors.border }}
     >
       <Package className="w-3 h-3" style={{ color: colors.text }} />
-      <span className="text-white font-medium truncate max-w-[120px]">{item.item_name}</span>
+      <div className="flex flex-col leading-tight">
+        <span className="text-white font-medium truncate max-w-[120px]">{item.item_name}</span>
+        {(item.item_value > 0 || item.item_rap > 0) && (
+          <span className="text-[9px] font-mono text-white/40">
+            {item.item_value > 0 && <span className="text-amber-400/70">V:{formatCurrency(item.item_value)}</span>}
+            {item.item_value > 0 && item.item_rap > 0 && <span className="text-white/20"> · </span>}
+            {item.item_rap > 0 && <span className="text-sky-400/70">R:{formatCurrency(item.item_rap)}</span>}
+          </span>
+        )}
+      </div>
     </div>
   );
 };
@@ -179,9 +188,11 @@ const SlotCard = ({ item, onRemove }) => {
   const colors = RARITY_COLORS[item.item_rarity || item.rarity] || RARITY_COLORS.common;
   const imgUrl = item.item_image || item.image_url;
   const name = item.item_name || item.name || 'Unknown';
+  const val = item.value || item.item_value || 0;
+  const rap = item.rap || item.item_rap || 0;
   return (
     <div
-      className="relative w-[72px] h-[72px] rounded-xl border-2 flex flex-col items-center justify-center bg-black/60 flex-shrink-0 group cursor-default"
+      className="relative w-[80px] rounded-xl border-2 flex flex-col items-center bg-black/60 flex-shrink-0 group cursor-default pt-2 pb-1.5 px-1"
       style={{ borderColor: colors.border, background: colors.bg }}
       title={name}
     >
@@ -190,7 +201,13 @@ const SlotCard = ({ item, onRemove }) => {
       ) : (
         <Package className="w-8 h-8" style={{ color: colors.text }} />
       )}
-      <p className="text-[8px] text-white/60 truncate w-full text-center px-1 mt-0.5 leading-tight">{name}</p>
+      <p className="text-[8px] text-white/70 truncate w-full text-center mt-1 leading-tight font-medium">{name}</p>
+      {(val > 0 || rap > 0) && (
+        <div className="flex flex-col items-center gap-0 mt-0.5">
+          {val > 0 && <span className="text-[8px] font-mono text-amber-400/80">V {formatCurrency(val)}</span>}
+          {rap > 0 && <span className="text-[8px] font-mono text-sky-400/80">R {formatCurrency(rap)}</span>}
+        </div>
+      )}
       <button
         onClick={onRemove}
         className="absolute -top-1.5 -right-1.5 w-4 h-4 rounded-full bg-red-500 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity shadow-md"
@@ -207,6 +224,8 @@ const ItemPickerRow = ({ item, onAdd, disabled }) => {
   const imgUrl = item.image_url || item.item_image;
   const name = item.name || item.item_name || 'Unknown';
   const rarity = item.rarity || item.item_rarity || 'common';
+  const val = item.value || item.item_value || 0;
+  const rap = item.rap || item.item_rap || 0;
   return (
     <div
       onClick={disabled ? undefined : onAdd}
@@ -230,6 +249,12 @@ const ItemPickerRow = ({ item, onAdd, disabled }) => {
         <p className="text-white text-xs font-medium truncate">{name}</p>
         <p className="text-[10px] font-mono uppercase" style={{ color: colors.text }}>{rarity}</p>
       </div>
+      {(val > 0 || rap > 0) && (
+        <div className="flex flex-col items-end gap-0 flex-shrink-0">
+          {val > 0 && <span className="text-[9px] font-mono text-amber-400/70">V {formatCurrency(val)}</span>}
+          {rap > 0 && <span className="text-[9px] font-mono text-sky-400/70">R {formatCurrency(rap)}</span>}
+        </div>
+      )}
       {!disabled && <Plus className="w-3.5 h-3.5 text-white/25 flex-shrink-0" />}
     </div>
   );
@@ -266,21 +291,21 @@ export default function TradeAds() {
 
   const headers = token ? { Authorization: `Bearer ${token}` } : {};
 
-  // Value lookup map from catalog
-  const itemValueMap = useMemo(() => {
+  // Value/RAP lookup map from catalog
+  const itemCatalogMap = useMemo(() => {
     const map = {};
-    for (const item of allItems) map[item.item_id] = item.value || 0;
+    for (const item of allItems) map[item.item_id] = { value: item.value || 0, rap: item.rap || 0 };
     return map;
   }, [allItems]);
 
   const offeringTotal = useMemo(() =>
-    offeringSlots.reduce((s, i) => s + (itemValueMap[i.item_id] || 0), 0) + (parseFloat(offeringG) || 0),
-    [offeringSlots, offeringG, itemValueMap]
+    offeringSlots.reduce((s, i) => s + (itemCatalogMap[i.item_id]?.value || i.value || 0), 0) + (parseFloat(offeringG) || 0),
+    [offeringSlots, offeringG, itemCatalogMap]
   );
 
   const seekingTotal = useMemo(() =>
-    seekingSlots.reduce((s, i) => s + (itemValueMap[i.item_id] || 0), 0) + (parseFloat(seekingG) || 0),
-    [seekingSlots, seekingG, itemValueMap]
+    seekingSlots.reduce((s, i) => s + (itemCatalogMap[i.item_id]?.value || i.value || 0), 0) + (parseFloat(seekingG) || 0),
+    [seekingSlots, seekingG, itemCatalogMap]
   );
 
   const usedInventoryIds = useMemo(() => new Set(offeringSlots.map(i => i.inventory_id)), [offeringSlots]);
@@ -326,21 +351,26 @@ export default function TradeAds() {
         fetch('/api/inventory', { headers }),
         fetch('/api/items/catalog?limit=200'),
       ]);
+      let catalogItems = [];
+      if (itemsRes.ok) {
+        const data = await itemsRes.json();
+        catalogItems = data.items;
+        setAllItems(catalogItems);
+      }
       if (invRes.ok) {
         const data = await invRes.json();
+        const catalogById = {};
+        for (const ci of catalogItems) catalogById[ci.item_id] = ci;
         const expanded = [];
         for (const item of data.items) {
           if (item.item_id?.includes('chest') || item.category === 'chest') continue;
+          const ci = catalogById[item.item_id] || {};
           const ids = item.inventory_ids?.length ? item.inventory_ids : [item.inventory_id];
           for (const inv_id of ids) {
-            expanded.push({ ...item, inventory_id: inv_id });
+            expanded.push({ ...item, inventory_id: inv_id, value: ci.value || 0, rap: ci.rap || 0 });
           }
         }
         setInventory(expanded);
-      }
-      if (itemsRes.ok) {
-        const data = await itemsRes.json();
-        setAllItems(data.items);
       }
     } catch (e) { console.error(e); }
   }, [token]);
@@ -373,7 +403,8 @@ export default function TradeAds() {
 
   const addToOffering = (item) => {
     if (offeringSlots.length >= 10) return;
-    setOfferingSlots(prev => [...prev, item]);
+    const catalogData = itemCatalogMap[item.item_id] || {};
+    setOfferingSlots(prev => [...prev, { ...item, value: catalogData.value || 0, rap: catalogData.rap || 0 }]);
   };
 
   const addToSeeking = (item) => {
