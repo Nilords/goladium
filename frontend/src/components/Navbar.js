@@ -17,7 +17,8 @@ import {
   Package,
   Crown,
   Palette,
-  ArrowLeftRight
+  ArrowLeftRight,
+  Store
 } from 'lucide-react';
 import { Button } from './ui/button';
 import {
@@ -45,6 +46,7 @@ const Navbar = () => {
     { path: '/shop', label: 'Shop', icon: ShoppingBag },
     { path: '/prestige-shop', label: 'Prestige', icon: Crown },
     { path: '/trading', label: 'Trading', icon: ArrowLeftRight },
+    { path: '/marketplace', label: language === 'de' ? 'Marktplatz' : 'Market', icon: Store },
   ];
 
   const isActive = (path) => {

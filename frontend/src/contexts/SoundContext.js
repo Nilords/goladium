@@ -181,6 +181,8 @@ export const SoundProvider = ({ children }) => {
   useEffect(() => {
     const handleGlobalClick = (e) => {
       // Check if clicked element is a button or inside a button
+      // Guard against elements without closest method (text nodes, SVG elements, etc.)
+      if (!e.target || typeof e.target.closest !== 'function') return;
       const button = e.target.closest('button, [role="button"], a.btn, .btn');
       if (button && settings.soundEnabled && userInteracted) {
         // Play click sound
@@ -211,6 +213,8 @@ export const SoundProvider = ({ children }) => {
   // Global hover sound for buttons
   useEffect(() => {
     const handleGlobalHover = (e) => {
+      // Guard against elements without closest method (text nodes, SVG elements, etc.)
+      if (!e.target || typeof e.target.closest !== 'function') return;
       const button = e.target.closest('button, [role="button"]');
       if (button && settings.soundEnabled && settings.hoverSoundsEnabled && userInteracted) {
         const ctx = audioContextRef.current;

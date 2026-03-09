@@ -22,6 +22,7 @@ import Customization from './pages/Customization';
 import Profile from './pages/Profile';
 import Settings from './pages/Settings';
 import Trading from './pages/Trading';
+import Marketplace from './pages/Marketplace';
 import GamePass from './pages/GamePass';
 import AuthCallback from './components/AuthCallback';
 import PrivacyPolicy from "./pages/PrivacyPolicy";
@@ -175,6 +176,14 @@ const AppRouter = () => {
         element={
           <ProtectedRoute>
             <Trading />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/marketplace"
+        element={
+          <ProtectedRoute>
+            <Marketplace />
           </ProtectedRoute>
         }
       />
