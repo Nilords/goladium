@@ -25,6 +25,7 @@ import Trading from './pages/Trading';
 import Marketplace from './pages/Marketplace';
 import ItemCatalog from './pages/ItemCatalog';
 import ItemDetail from './pages/ItemDetail';
+import TradeAds from './pages/TradeAds';
 import GamePass from './pages/GamePass';
 import AuthCallback from './components/AuthCallback';
 import PrivacyPolicy from "./pages/PrivacyPolicy";
@@ -202,6 +203,14 @@ const AppRouter = () => {
         element={
           <ProtectedRoute>
             <ItemDetail />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/trade-ads"
+        element={
+          <ProtectedRoute>
+            <TradeAds />
           </ProtectedRoute>
         }
       />
