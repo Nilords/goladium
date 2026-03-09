@@ -93,11 +93,11 @@ const CustomTooltip = ({ active, payload, label }) => {
 };
 
 const DEMAND_CONFIG = {
-  none: { color: '#555', width: '5%', emoji: '' },
-  low: { color: '#9CA3AF', width: '25%', emoji: '' },
-  medium: { color: '#F59E0B', width: '50%', emoji: '' },
-  high: { color: '#EF4444', width: '75%', emoji: '' },
-  extreme: { color: '#FF0040', width: '100%', emoji: '' },
+  none: { color: '#555', width: '5%' },
+  low: { color: '#9CA3AF', width: '25%' },
+  medium: { color: '#F59E0B', width: '50%' },
+  high: { color: '#EF4444', width: '75%' },
+  extreme: { color: '#FF0040', width: '100%' },
 };
 
 const DemandBar = ({ demand, lang }) => {
@@ -111,6 +111,11 @@ const DemandBar = ({ demand, lang }) => {
           <h2 className="text-white/60 text-sm font-mono uppercase tracking-wider flex items-center gap-2">
             <Flame className="w-4 h-4" style={{ color: config.color }} />
             {t('demand', lang)}
+            {demand.is_manual && (
+              <span className="text-[10px] px-1.5 py-0.5 rounded bg-[#FFD700]/10 text-[#FFD700] border border-[#FFD700]/20">
+                MANUAL
+              </span>
+            )}
           </h2>
           <div className="flex items-center gap-4 text-xs text-white/30 font-mono">
             <span>{demand.seeking_ads} {t('seekingAds', lang)}</span>

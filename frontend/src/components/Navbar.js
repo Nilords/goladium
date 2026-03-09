@@ -20,7 +20,8 @@ import {
   ArrowLeftRight,
   Store,
   BookOpen,
-  Megaphone
+  Megaphone,
+  Users
 } from 'lucide-react';
 import { Button } from './ui/button';
 import {
@@ -51,6 +52,7 @@ const Navbar = () => {
     { path: '/marketplace', label: language === 'de' ? 'Marktplatz' : 'Market', icon: Store },
     { path: '/catalog', label: language === 'de' ? 'Katalog' : 'Catalog', icon: BookOpen },
     { path: '/trade-ads', label: language === 'de' ? 'Anzeigen' : 'Ads', icon: Megaphone },
+    { path: '/players', label: language === 'de' ? 'Spieler' : 'Players', icon: Users },
   ];
 
   const isActive = (path) => {

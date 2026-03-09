@@ -5133,46 +5133,50 @@ async def record_owner_change(inventory_id: str, item_id: str, from_user_id: str
 
 
 async def calculate_demand(item_id: str):
-    """Calculate demand score for an item based on trade ads seeking it and recent marketplace activity"""
-    # Count active trade ads seeking this item
+    """Calculate demand for an item. Manual demand (from admin) has priority over auto-calculation."""
+    # Check for manual demand first
+    item = await db.items.find_one({"item_id": item_id}, {"_id": 0, "manual_demand": 1})
+    manual = item.get("manual_demand") if item else None
+    
+    # Always compute auto stats for display
     seeking_count = await db.trade_ads.count_documents({
         "status": "active",
         "seeking_items.item_id": item_id
     })
     
-    # Count recent sales (last 7 days)
     week_ago = (datetime.now(timezone.utc) - timedelta(days=7)).isoformat()
     recent_sales = await db.item_price_history.count_documents({
         "item_id": item_id,
         "timestamp": {"$gte": week_ago}
     })
     
-    # Count active marketplace listings
     active_listings = await db.marketplace_listings.count_documents({
         "item_id": item_id,
         "status": "active"
     })
     
-    # Demand formula: seeking pressure + sales velocity - supply
-    # Higher = more demanded
-    demand_score = (seeking_count * 3) + (recent_sales * 2) - active_listings
-    demand_score = max(0, demand_score)
-    
-    # Classify demand
-    if demand_score >= 10:
-        demand_label = "extreme"
-    elif demand_score >= 6:
-        demand_label = "high"
-    elif demand_score >= 3:
-        demand_label = "medium"
-    elif demand_score >= 1:
-        demand_label = "low"
+    # Auto score
+    auto_score = max(0, (seeking_count * 3) + (recent_sales * 2) - active_listings)
+    if auto_score >= 10:
+        auto_label = "extreme"
+    elif auto_score >= 6:
+        auto_label = "high"
+    elif auto_score >= 3:
+        auto_label = "medium"
+    elif auto_score >= 1:
+        auto_label = "low"
     else:
-        demand_label = "none"
+        auto_label = "none"
+    
+    # Manual overrides auto
+    label = manual if manual else auto_label
+    is_manual = manual is not None
     
     return {
-        "score": demand_score,
-        "label": demand_label,
+        "label": label,
+        "is_manual": is_manual,
+        "auto_label": auto_label,
+        "auto_score": auto_score,
         "seeking_ads": seeking_count,
         "recent_sales_7d": recent_sales,
         "active_listings": active_listings,
@@ -9821,6 +9825,125 @@ async def admin_set_item_value(data: AdminSetValueRequest, request: Request):
         "item_name": item.get("name", "Unknown"),
         "old_value": old_value,
         "new_value": data.value
+    }
+
+
+class AdminSetDemandRequest(BaseModel):
+    item_id: str
+    demand: str  # "none", "low", "medium", "high", "extreme"
+
+@api_router.post("/admin/setdemand")
+async def admin_set_item_demand(data: AdminSetDemandRequest, request: Request):
+    """Admin: Set manual demand label for an item. Manual demand overrides auto-calculation."""
+    if not verify_admin_key(request):
+        raise HTTPException(status_code=401, detail="Invalid admin key")
+    
+    valid_labels = ["none", "low", "medium", "high", "extreme"]
+    if data.demand not in valid_labels:
+        raise HTTPException(status_code=400, detail=f"Invalid demand label. Must be one of: {', '.join(valid_labels)}")
+    
+    item = await db.items.find_one({"item_id": data.item_id})
+    if not item:
+        raise HTTPException(status_code=404, detail=f"Item '{data.item_id}' not found")
+    
+    old_demand = item.get("manual_demand")
+    await db.items.update_one(
+        {"item_id": data.item_id},
+        {"$set": {"manual_demand": data.demand}}
+    )
+    
+    return {
+        "success": True,
+        "item_id": data.item_id,
+        "item_name": item.get("name", "Unknown"),
+        "old_demand": old_demand,
+        "new_demand": data.demand
+    }
+
+
+# ============== PLAYER DIRECTORY ==============
+
+@api_router.get("/players")
+async def get_player_directory(
+    search: str = None,
+    sort: str = "level",
+    limit: int = 50,
+    offset: int = 0
+):
+    """Public player directory with search"""
+    query = {}
+    if search:
+        query["username"] = {"$regex": search, "$options": "i"}
+    
+    sort_key = [("level", -1), ("xp", -1)]
+    if sort == "name":
+        sort_key = [("username", 1)]
+    elif sort == "balance":
+        sort_key = [("balance", -1)]
+    elif sort == "newest":
+        sort_key = [("created_at", -1)]
+    
+    total = await db.users.count_documents(query)
+    users = await db.users.find(
+        query,
+        {"_id": 0, "password_hash": 0, "email": 0, "turnstile_validated": 0}
+    ).sort(sort_key).skip(offset).limit(limit).to_list(limit)
+    
+    players = []
+    for u in users:
+        item_count = await db.user_inventory.count_documents({"user_id": u["user_id"]})
+        players.append({
+            "user_id": u["user_id"],
+            "username": u["username"],
+            "avatar": u.get("avatar"),
+            "level": u.get("level", 1),
+            "xp": u.get("xp", 0),
+            "active_tag": u.get("active_tag"),
+            "active_name_color": u.get("active_name_color"),
+            "badge": u.get("badge"),
+            "item_count": item_count,
+            "created_at": u.get("created_at"),
+        })
+    
+    return {"players": players, "total": total}
+
+
+@api_router.get("/players/{user_id}/profile")
+async def get_player_public_profile(user_id: str):
+    """Get a player's public profile with inventory and market activity"""
+    user = await db.users.find_one({"user_id": user_id}, {"_id": 0, "password_hash": 0, "email": 0})
+    if not user:
+        raise HTTPException(status_code=404, detail="Player not found")
+    
+    # Get inventory
+    items = await db.user_inventory.find(
+        {"user_id": user_id}, {"_id": 0}
+    ).sort("acquired_at", -1).to_list(500)
+    
+    # Get active marketplace listings
+    listings = await db.marketplace_listings.find(
+        {"seller_id": user_id, "status": "active"}, {"_id": 0}
+    ).to_list(50)
+    
+    # Get active trade ads
+    ads = await db.trade_ads.find(
+        {"user_id": user_id, "status": "active"}, {"_id": 0}
+    ).to_list(20)
+    
+    return {
+        "user_id": user["user_id"],
+        "username": user["username"],
+        "avatar": user.get("avatar"),
+        "level": user.get("level", 1),
+        "xp": user.get("xp", 0),
+        "badge": user.get("badge"),
+        "active_tag": user.get("active_tag"),
+        "active_name_color": user.get("active_name_color"),
+        "created_at": user.get("created_at"),
+        "inventory": items,
+        "inventory_count": len(items),
+        "marketplace_listings": listings,
+        "trade_ads": ads,
     }
 
 

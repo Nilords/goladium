@@ -26,6 +26,8 @@ import Marketplace from './pages/Marketplace';
 import ItemCatalog from './pages/ItemCatalog';
 import ItemDetail from './pages/ItemDetail';
 import TradeAds from './pages/TradeAds';
+import PlayerDirectory from './pages/PlayerDirectory';
+import PlayerProfile from './pages/PlayerProfile';
 import GamePass from './pages/GamePass';
 import AuthCallback from './components/AuthCallback';
 import PrivacyPolicy from "./pages/PrivacyPolicy";
@@ -211,6 +213,22 @@ const AppRouter = () => {
         element={
           <ProtectedRoute>
             <TradeAds />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/players"
+        element={
+          <ProtectedRoute>
+            <PlayerDirectory />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/player/:userId"
+        element={
+          <ProtectedRoute>
+            <PlayerProfile />
           </ProtectedRoute>
         }
       />
