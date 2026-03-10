@@ -24,35 +24,22 @@ from slowapi.util import get_remote_address
 from slowapi.errors import RateLimitExceeded
 from fastapi.responses import JSONResponse
 
+from config import *
+from models import *
+
 # ================= HOTFIX =================
-# Disable broken quest definitions temporarily
+# Quests temporarily disabled - override config value
 QUEST_DEFINITIONS = []
 # =========================================
-
-ROOT_DIR = Path(__file__).parent
-load_dotenv(ROOT_DIR / '.env')
 
 # MongoDB connection
 mongo_url = os.environ['MONGO_URL']
 client = AsyncIOMotorClient(mongo_url)
 db = client[os.environ['DB_NAME']]
 
-# JWT Configuration
-JWT_SECRET = os.environ.get('JWT_SECRET', secrets.token_hex(32))
-JWT_ALGORITHM = "HS256"
-JWT_EXPIRATION_HOURS = 168  # 7 days
-
-# Discord Webhook (configurable placeholder)
-DISCORD_WEBHOOK_URL = os.environ.get('DISCORD_WEBHOOK_URL', '')
-
 # Password hashing
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
-# ALPHA REGISTRATION LOCK
-ALPHA_REGISTRATION_OPEN = False
-
-# Cloudflare Turnstile Configuration
-TURNSTILE_SECRET_KEY = os.environ.get('TURNSTILE_SECRET_KEY', '')
 logging.info(f"Turnstile Secret Key loaded: {'YES' if TURNSTILE_SECRET_KEY else 'NO'}")
 
 async def verify_turnstile(token: str, ip: str = None) -> dict:
@@ -133,8 +120,8 @@ api_router = APIRouter()
 
 import re
 
-# Profanity blacklist (German + English common offensive words)
-PROFANITY_BLACKLIST = [
+# PROFANITY_BLACKLIST, ADVERTISING_PATTERNS, spam/mute constants -> config.py
+_PROFANITY_BLACKLIST_REF = [
     # German
     "hurensohn", "wichser", "fotze", "schlampe", "arschloch", "missgeburt",
     "spast", "behindert", "schwuchtel", "kanake", "nigger", "neger",
@@ -166,36 +153,7 @@ ADVERTISING_PATTERNS = [
     r'promo\s*code',                 # Promo codes
 ]
 
-# Spam detection settings
-SPAM_TIME_WINDOW_SECONDS = 15  # Time window to check for repeated messages
-SPAM_SIMILARITY_THRESHOLD = 0.85  # 85% similarity = considered same message
 
-# Mute durations in seconds
-MUTE_2_MIN = 120
-MUTE_5_MIN = 300
-MUTE_10_MIN = 600
-
-# Escalation configurations
-SPAM_ESCALATION = [
-    MUTE_2_MIN,   # 1st offense: 2 min
-    MUTE_2_MIN,   # 2nd offense: 2 min
-    MUTE_10_MIN,  # 3rd offense: 10 min
-    -1            # 4th offense: permanent
-]
-
-PROFANITY_ESCALATION = [
-    0,            # 1st offense: warning only
-    MUTE_2_MIN,   # 2nd offense: 2 min
-    MUTE_5_MIN,   # 3rd offense: 5 min
-    MUTE_10_MIN,  # 4th offense: 10 min
-    -1            # 5th offense: permanent
-]
-
-ADVERTISING_ESCALATION = [
-    MUTE_5_MIN,   # 1st offense: 5 min
-    MUTE_10_MIN,  # 2nd offense: 10 min
-    -1            # 3rd offense: permanent
-]
 
 
 def normalize_message(message: str) -> str:
@@ -501,40 +459,7 @@ async def moderate_message(user_id: str, username: str, message: str) -> Moderat
     return ModerationResult(allowed=True)
 
 
-# ============== XP SYSTEM CONFIG ==============
-# 1 XP per 0.01 G bet (100 XP per 1 G wagered)
-XP_PER_G = 100
-
-# Level XP requirements (progressive scaling)
-# Level 1->2: 500 XP, Level 2->3: 800 XP, etc. scaling up
-LEVEL_XP_REQUIREMENTS = [
-    0,      # Level 1 (starting level)
-    500,    # Level 2
-    800,    # Level 3
-    1200,   # Level 4
-    1700,   # Level 5
-    2300,   # Level 6
-    3000,   # Level 7
-    3800,   # Level 8
-    4700,   # Level 9
-    5700,   # Level 10
-    6800,   # Level 11
-    8000,   # Level 12
-    9300,   # Level 13
-    10700,  # Level 14
-    12200,  # Level 15
-    13800,  # Level 16
-    15500,  # Level 17
-    17300,  # Level 18
-    19200,  # Level 19
-    21200,  # Level 20
-]
-
-# ============== GAME PASS CONFIG ==============
-# Game Pass is ~3-5x easier than normal levels (20-30% effort per level)
-# If normal level = 500 XP, Game Pass level = 100-150 XP
-GAME_PASS_XP_PER_LEVEL = 150  # XP needed per Game Pass level
-GAME_PASS_MAX_LEVEL = 50  # Max level for the pass (resets monthly)
+# XP_PER_G, LEVEL_XP_REQUIREMENTS, GAME_PASS_XP_PER_LEVEL, GAME_PASS_MAX_LEVEL -> config.py
 
 # ============== QUEST DEFINITIONS ==============
 # Quests contribute to Game Pass progression
@@ -714,271 +639,6 @@ GALADIUM_CHEST = {
     "base_value": 15.0,
     "category": "chest"
 }
-
-# ============== MODELS ==============
-
-class UserCreate(BaseModel):
-    email: Optional[str] = None  # Optional - auto-generated from username if not provided
-    password: str
-    username: str
-    turnstile_token: Optional[str] = None  # Cloudflare Turnstile token
-
-class UserLogin(BaseModel):
-    username: str
-    password: str
-    turnstile_token: Optional[str] = None  # Cloudflare Turnstile token
-
-class UserResponse(BaseModel):
-    model_config = ConfigDict(extra="ignore")
-    user_id: str
-    email: str
-    username: str
-    balance: float
-    balance_a: float = 0.0  # Prestige currency
-    level: int
-    xp: int
-    xp_progress: Optional[dict] = None  # XP progress info for level-up tracking
-    total_spins: int
-    total_wins: int
-    total_losses: int
-    net_profit: float
-    total_wagered: float = 0.0
-    avatar: Optional[str] = None
-    vip_status: Optional[str] = None
-    name_color: Optional[str] = None
-    badge: Optional[str] = None
-    frame: Optional[str] = None
-    # Active prestige cosmetics
-    active_tag: Optional[str] = None
-    active_name_color: Optional[str] = None
-    active_jackpot_pattern: Optional[str] = None
-    created_at: datetime
-    last_wheel_spin: Optional[datetime] = None
-    # Game Pass fields
-    game_pass_level: int = 1
-    game_pass_xp: int = 0
-    galadium_pass_active: bool = False
-    game_pass_reset_date: Optional[datetime] = None
-
-class TokenResponse(BaseModel):
-    access_token: str
-    token_type: str = "bearer"
-    user: UserResponse
-
-# Quest-related models
-class QuestProgress(BaseModel):
-    quest_id: str
-    current: int = 0
-    target: int
-    completed: bool = False
-    claimed: bool = False
-
-class QuestResponse(BaseModel):
-    quest_id: str
-    name: str
-    description: str
-    type: str
-    target: int
-    current: int
-    completed: bool
-    claimed: bool
-    rewards: Dict[str, Any]
-    game_pass_xp: int
-    difficulty: str
-
-class GamePassStatus(BaseModel):
-    level: int
-    xp: int
-    xp_to_next: int
-    galadium_active: bool
-    rewards_claimed: List[int] = []
-    next_reward_level: int
-
-class SlotBetRequest(BaseModel):
-    bet_per_line: float = Field(..., ge=0.01)  # No upper limit - constrained by balance only
-    active_lines: List[int] = Field(..., min_length=1)  # At least 1 line required
-    slot_id: str = "classic"
-
-class PaylineWin(BaseModel):
-    line_number: int
-    line_path: List[List[int]]  # [[row, col], ...] - all 5 positions
-    symbol: str
-    match_count: int = 5  # Always 5 for full-line wins (no partial payouts)
-    multiplier: float
-    payout: float
-
-class SlotResult(BaseModel):
-    reels: List[List[str]]  # 4 rows x 5 cols
-    total_bet: float
-    win_amount: float
-    is_win: bool
-    new_balance: float
-    xp_gained: int
-    winning_paylines: List[PaylineWin] = []
-    is_jackpot: bool = False
-
-class WheelSpinResult(BaseModel):
-    reward: float
-    new_balance: float
-    next_spin_available: datetime
-
-class BetHistoryItem(BaseModel):
-    model_config = ConfigDict(extra="ignore")
-    bet_id: str
-    timestamp: datetime
-    game_type: str
-    slot_id: Optional[str] = None
-    bet_amount: float
-    result: str
-    win_amount: float
-    net_outcome: float
-
-class ChatMessage(BaseModel):
-    model_config = ConfigDict(extra="ignore")
-    message_id: str
-    user_id: str
-    username: str
-    message: str
-    timestamp: datetime
-    name_color: Optional[str] = None
-    badge: Optional[str] = None
-    active_tag: Optional[str] = None  # Prestige tag emoji/icon
-    active_name_color: Optional[str] = None  # Prestige name color hex
-
-class ChatMessageCreate(BaseModel):
-    message: str = Field(..., max_length=500)
-
-class LeaderboardEntry(BaseModel):
-    model_config = ConfigDict(extra="ignore")
-    user_id: str
-    username: str
-    level: int
-    total_wins: int
-    net_profit: float
-    total_wagered: float = 0.0
-    avatar: Optional[str] = None
-    vip_status: Optional[str] = None
-    frame: Optional[str] = None
-
-# ============== ITEM SYSTEM MODELS ==============
-# Items are collectible assets that persist across economy resets
-# Items are NOT gambleable - they represent long-term value and identity
-
-class ItemRarity(BaseModel):
-    """Item rarity levels"""
-    name: str  # common, uncommon, rare, epic, legendary
-    color: str  # hex color for display
-
-class ItemDefinition(BaseModel):
-    """Master item definition - stored in items collection"""
-    model_config = ConfigDict(extra="ignore")
-    item_id: str
-    name: str
-    flavor_text: str
-    rarity: str  # common, uncommon, rare, epic, legendary
-    base_value: float  # G value when sellable (0 = not sellable yet)
-    image_url: Optional[str] = None
-    category: str = "collectible"  # collectible, cosmetic, etc.
-    created_at: datetime
-    is_tradeable: bool = False  # Can be traded between players
-    is_sellable: bool = False  # Can be sold back to system
-
-class InventoryItem(BaseModel):
-    """Item in a user's inventory"""
-    model_config = ConfigDict(extra="ignore")
-    inventory_id: str
-    user_id: str
-    item_id: str
-    item_name: str
-    item_rarity: str
-    item_image: Optional[str] = None
-    item_flavor_text: str
-    acquired_at: datetime
-    acquired_from: str  # shop, trade, gamepass, reward
-
-class ShopItem(BaseModel):
-    """Item available in the rotating shop"""
-    model_config = ConfigDict(extra="ignore")
-    shop_listing_id: str
-    item_id: str
-    item_name: str
-    item_rarity: str
-    item_image: Optional[str] = None
-    item_flavor_text: str
-    price: float  # G cost
-    available_from: datetime
-    available_until: Optional[datetime] = None  # None = permanent
-    stock_limit: Optional[int] = None  # None = unlimited
-    stock_sold: int = 0
-    is_active: bool = True
-
-class ShopPurchaseRequest(BaseModel):
-    """Request to purchase an item from the shop"""
-    shop_listing_id: str
-
-class UserInventoryResponse(BaseModel):
-    """Response for user inventory"""
-    items: List[InventoryItem]
-    total_items: int
-
-# Item rarity definitions with colors
-ITEM_RARITIES = {
-    "common": {"name": "Common", "color": "#9CA3AF"},      # gray
-    "uncommon": {"name": "Uncommon", "color": "#22C55E"},  # green
-    "rare": {"name": "Rare", "color": "#3B82F6"},          # blue
-    "epic": {"name": "Epic", "color": "#A855F7"},          # purple
-    "legendary": {"name": "Legendary", "color": "#F59E0B"} # gold
-}
-
-# ============== PRESTIGE SYSTEM MODELS ==============
-# Prestige currency (A) is earned by converting G at 1000:1 ratio
-# Prestige cosmetics are account-bound, non-tradeable, non-sellable
-
-# Conversion rate: 1000 G = 1 A
-PRESTIGE_CONVERSION_RATE = 1000
-
-class CosmeticType(str):
-    """Cosmetic category types"""
-    TAG = "tag"              # Icon next to player name
-    NAME_COLOR = "name_color" # Color of player name in chat
-    JACKPOT_PATTERN = "jackpot_pattern"  # Visible during jackpot wins
-
-class PrestigeCosmeticTemplate(BaseModel):
-    """Template definition for a prestige cosmetic item"""
-    model_config = ConfigDict(extra="ignore")
-    cosmetic_id: str          # Unique identifier
-    display_name: str         # Human-readable name
-    cosmetic_type: str        # tag, name_color, jackpot_pattern
-    description: str          # Flavor text
-    asset_path: Optional[str] = None  # Path to visual asset (icon/pattern)
-    asset_value: Optional[str] = None # Direct value (e.g., hex color)
-    prestige_cost: int        # Cost in A currency
-    tier: str = "standard"    # standard, premium, legendary
-    unlock_level: int = 0     # Minimum level required (0 = no requirement)
-    is_available: bool = True # Can be purchased
-
-class UserPrestigeItem(BaseModel):
-    """Record of owned prestige cosmetic"""
-    model_config = ConfigDict(extra="ignore")
-    ownership_id: str
-    user_id: str
-    cosmetic_id: str
-    cosmetic_type: str
-    purchased_at: datetime
-    purchase_price: int  # A spent
-
-class PrestigePurchaseRequest(BaseModel):
-    """Request to purchase a prestige cosmetic"""
-    cosmetic_id: str
-
-class PrestigeActivateRequest(BaseModel):
-    """Request to activate a prestige cosmetic"""
-    cosmetic_id: str
-    cosmetic_type: str  # tag, name_color, jackpot_pattern
-
-class CurrencyConvertRequest(BaseModel):
-    """Request to convert G to A"""
-    g_amount: float = Field(..., ge=1000)  # Minimum 1000 G (= 1 A)
 
 # ============== PRESTIGE COSMETIC TEMPLATES ==============
 # All cosmetics defined as data - adding new items only requires new entries here
@@ -1209,107 +869,6 @@ PRESTIGE_COSMETICS = {
     }
 }
 
-# ============== JACKPOT MODELS ==============
-
-class JackpotJoinRequest(BaseModel):
-    bet_amount: float = Field(..., ge=0.01)  # No upper limit - constrained by balance only
-
-class JackpotParticipant(BaseModel):
-    user_id: str
-    username: str
-    bet_amount: float
-    win_chance: float
-    avatar: Optional[str] = None
-    jackpot_pattern: Optional[str] = None
-
-class JackpotStatus(BaseModel):
-    state: str  # idle, waiting, active, spinning, complete
-    total_pot: float
-    participants: List[JackpotParticipant]
-    countdown_seconds: Optional[int] = None
-    winner: Optional[JackpotParticipant] = None
-    winner_index: Optional[int] = None  # Server-authoritative winner position
-    jackpot_id: Optional[str] = None
-    max_participants: int = 50  # Hard cap for frontend display
-    is_full: bool = False       # True when max reached
-
-# ============== TRADING SYSTEM MODELS ==============
-
-TRADE_G_FEE_PERCENT = 0.30  # 30% fee on G transfers (burned from economy)
-TRADE_MAX_ITEMS_PER_SIDE = 10
-
-class TradeOfferItem(BaseModel):
-    """An item offered in a trade"""
-    inventory_id: str
-    item_id: str
-    item_name: str
-    item_rarity: str
-    item_image: Optional[str] = None
-
-class TradeOffer(BaseModel):
-    """One side's offer in a trade"""
-    user_id: str
-    username: str
-    items: List[TradeOfferItem] = []
-    g_amount: float = 0.0  # G currency offered (before fee)
-
-class TradeCreateRequest(BaseModel):
-    """Request to create a new trade"""
-    recipient_username: str
-    offered_items: List[str] = []  # List of inventory_ids
-    offered_g: float = 0.0
-    requested_items: List[str] = []  # List of inventory_ids from recipient
-    requested_g: float = 0.0
-
-class TradeCounterRequest(BaseModel):
-    """Request to counter a trade offer"""
-    offered_items: List[str] = []  # List of inventory_ids
-    offered_g: float = 0.0
-    requested_items: List[str] = []  # List of inventory_ids from other party
-    requested_g: float = 0.0
-
-class TradeResponse(BaseModel):
-    """Trade data response"""
-    trade_id: str
-    status: str  # pending, completed
-    initiator: TradeOffer
-    recipient: TradeOffer
-    created_at: str
-    completed_at: Optional[str] = None
-    initiator_id: str
-    recipient_id: str
-    g_fee_amount: Optional[float] = None  # Calculated fee if G involved
-
-# ============== MARKETPLACE MODELS ==============
-MARKETPLACE_FEE_PERCENT = 5  # 5% fee on marketplace sales (currency sink)
-
-class MarketplaceListRequest(BaseModel):
-    """Request to list an item on the marketplace"""
-    inventory_id: str
-    price: float  # Price in G
-
-class MarketplaceBuyRequest(BaseModel):
-    """Request to buy an item from the marketplace"""
-    listing_id: str
-
-class MarketplaceDelistRequest(BaseModel):
-    """Request to remove a marketplace listing"""
-    listing_id: str
-
-# ============== TRADE ADS MODELS ==============
-
-class TradeAdCreateRequest(BaseModel):
-    """Request to create a trade advertisement"""
-    offering_inventory_ids: List[str]  # inventory_ids the player offers
-    seeking_item_ids: List[str]  # item_ids the player is looking for
-    note: Optional[str] = ""
-    offering_g: float = 0.0  # Optional gold amount player offers alongside items
-    seeking_g: float = 0.0   # Optional gold amount player seeks alongside items
-
-class TradeAdDeleteRequest(BaseModel):
-    """Request to delete a trade ad"""
-    ad_id: str
-
 # ============== PAYLINE DEFINITIONS (5x4 Grid) ==============
 # Each payline is a list of (row, col) positions from left to right
 # Row 0 = top, Row 3 = bottom; Col 0 = leftmost reel
@@ -1332,11 +891,7 @@ PAYLINES_4x4 = {
     8: [(0, 3), (1, 3), (2, 3), (3, 3)],   # Column 3 - Rightmost vertical
 }
 
-# Line presets for quick selection (max 8 lines now)
-LINE_PRESETS = {
-    4: [1, 2, 3, 4],           # Horizontal only
-    8: list(range(1, 9)),      # All 8 lines
-}
+# LINE_PRESETS -> config.py
 
 # ============================================================================
 # REEL STRIP BUILDER
@@ -1359,283 +914,11 @@ def build_reel_strip(distribution: dict, strip_length: int = 1000) -> list:
     random.shuffle(strip)
     return strip
 
-# ============================================================================
-# MASTER SLOT CONFIGURATION TABLE
-# ============================================================================
-# Single source of truth for ALL symbol settings
-# 
-# Design principles:
-# - Wild: ~3% BASE probability (SUPPORT symbol, creates tension, not the jackpot path)
-# - Wild NERF mechanic: Each spin, one random reel has Wild reduced to ~0.1%
-#   This makes 4-Wild wins rare but achievable, not farmable
-# - Jackpot symbols (Seven/Diamond): TRUE JACKPOTS - rarer than Wild but HIGHEST multipliers
-# - Common symbols: High frequency, moderate payout (drives RTP to target 94-96%)
-#
-# RTP TUNING NOTES:
-# - 4-of-a-kind probability for common symbols drives most of the RTP
-# - Rare symbols (Wild/Seven/Diamond) contribute little to RTP but create excitement
-# - Multipliers calibrated so common wins sustain RTP, rare wins feel like jackpots
-# - Target RTP: 94-96% (house edge 4-6%)
-#
-# To rebalance: Modify multipliers in this table only
-# ============================================================================
+# CLASSIC_SYMBOL_CONFIG, build_reel_strip, build_config_from_table, CLASSIC_SYMBOLS,
+# CLASSIC_REEL_DISTRIBUTIONS, CLASSIC_REEL_STRIPS, SLOT_CONFIGS -> config.py
 
-CLASSIC_SYMBOL_CONFIG = {
-    # Symbol       Multiplier   Reel0%   Reel1%   Reel2%   Reel3%   Tier         Notes
-    # Calibrated 2026-03-01: avg RTP=95.30% (Val1=96.09%, Val2=94.52%)
-    # Seven & Diamond are PRESENTER symbols (12-13% each reel) - visible, lower mult
-    # Double-diamond / double-seven on multiple paylines IS possible (GTA-feel)
-    "orange":   {"mult": 30.55, "r0": 25.0, "r1": 27.0, "r2": 29.0, "r3": 31.0, "tier": "common"},
-    "lemon":    {"mult": 63.42, "r0": 22.0, "r1": 21.0, "r2": 20.0, "r3": 19.0, "tier": "common"},
-    "cherry":   {"mult": 140.98,"r0": 16.0, "r1": 15.0, "r2": 14.0, "r3": 13.0, "tier": "uncommon"},
-    "bar":      {"mult": 281.94,"r0":  9.0, "r1":  8.0, "r2":  7.0, "r3":  6.0, "tier": "rare"},
-
-    # Wild: joker for all symbols, one reel nerfed per spin (anti-farm)
-    "wild":     {"mult": 180.0, "r0":  4.0, "r1":  4.0, "r2":  4.0, "r3":  4.0, "tier": "special", "is_wild": True},
-
-    # Presenter symbols: frequent (12-13%), moderate multiplier, exciting double-wins
-    "seven":    {"mult": 187.96,"r0": 12.0, "r1": 13.0, "r2": 13.0, "r3": 14.0, "tier": "jackpot"},
-    "diamond":  {"mult": 281.94,"r0": 12.0, "r1": 12.0, "r2": 13.0, "r3": 13.0, "tier": "jackpot"},
-}
-# Note: Percentages should sum to ~96-100% per reel (remainder goes to orange)
-
-# Wild nerf probability (when a reel is "nerfed", Wild drops to this)
-WILD_NERF_PROBABILITY = 0.1  # 0.1% instead of 3%
-
-# Convert config table to symbols dict and reel distributions
-def build_config_from_table(config_table):
-    """Build symbols dict and reel distributions from master config table."""
-    symbols = {}
-    reel_distributions = {0: {}, 1: {}, 2: {}, 3: {}}
-    
-    for sym_name, cfg in config_table.items():
-        # Build symbols dict
-        symbols[sym_name] = {
-            "multiplier": cfg["mult"],
-            "tier": cfg["tier"],
-        }
-        if cfg.get("is_wild"):
-            symbols[sym_name]["is_wild"] = True
-        
-        # Build reel distributions (convert % to weight out of 1000)
-        for reel_idx in range(4):
-            pct = cfg.get(f"r{reel_idx}", 0)
-            weight = int(pct * 10)  # Convert % to weight (1000-based)
-            reel_distributions[reel_idx][sym_name] = weight
-    
-    # Normalize each reel to exactly 1000
-    for reel_idx in range(4):
-        total = sum(reel_distributions[reel_idx].values())
-        if total < 1000:
-            # Add remainder to orange (most common)
-            reel_distributions[reel_idx]["orange"] += (1000 - total)
-        elif total > 1000:
-            # Reduce orange if over
-            reel_distributions[reel_idx]["orange"] -= (total - 1000)
-    
-    return symbols, reel_distributions
-
-# Build configuration
-CLASSIC_SYMBOLS, CLASSIC_REEL_DISTRIBUTIONS = build_config_from_table(CLASSIC_SYMBOL_CONFIG)
-
-# Build the actual reel strips at startup (1000 positions for precise control)
-CLASSIC_REEL_STRIPS = {
-    reel_idx: build_reel_strip(dist, 1000)
-    for reel_idx, dist in CLASSIC_REEL_DISTRIBUTIONS.items()
-}
-
-def get_symbol_probability_on_reel(symbol: str, reel_idx: int) -> float:
-    """Calculate probability of a symbol appearing on a specific reel."""
-    dist = CLASSIC_REEL_DISTRIBUTIONS.get(reel_idx, {})
-    total = sum(dist.values())
-    return (dist.get(symbol, 0) / total * 100) if total > 0 else 0
-
-def get_average_symbol_probability(symbol: str, reel_distributions: dict) -> float:
-    """Calculate average appearance probability for a symbol across all reels."""
-    total_prob = 0
-    for reel_idx, dist in reel_distributions.items():
-        reel_total = sum(dist.values())
-        symbol_count = dist.get(symbol, 0)
-        total_prob += (symbol_count / reel_total) * 100 if reel_total > 0 else 0
-    return round(total_prob / len(reel_distributions), 2)
-
-# ============== SLOT MACHINE CONFIGS (All 4x4) ==============
-
-SLOT_CONFIGS = {
-    "classic": {
-        "name": "Classic Fruits Deluxe",
-        "reels": 4,
-        "rows": 4,
-        "max_paylines": 8,  # 4 horizontal + 4 vertical
-        "volatility": "medium",
-        "rtp": 95.5,
-        "symbols": CLASSIC_SYMBOLS,
-        "reel_strips": CLASSIC_REEL_STRIPS,
-        "reel_distributions": CLASSIC_REEL_DISTRIBUTIONS,
-        "features": {"wilds": True}
-    },
-    "book": {
-        "name": "Book of Pharaohs",
-        "reels": 5,
-        "rows": 4,
-        "max_paylines": 20,
-        "volatility": "high",
-        "rtp": 96.2,
-        "symbols": {
-            "ankh": {"multiplier": 2.0},
-            "scarab": {"multiplier": 3.0},
-            "eye": {"multiplier": 5.0},
-            "anubis": {"multiplier": 10.0},
-            "pharaoh": {"multiplier": 25.0},
-            "book": {"multiplier": 100.0, "is_wild": True}
-        },
-        "features": {"wilds": True, "expanding_symbols": True}
-    },
-    "diamond": {
-        "name": "Diamond Empire",
-        "reels": 5,
-        "rows": 4,
-        "max_paylines": 20,
-        "volatility": "medium-high",
-        "rtp": 95.8,
-        "symbols": {
-            "ruby": {"multiplier": 2.0},
-            "emerald": {"multiplier": 3.0, "weight": 20},
-            "sapphire": {"multiplier": 5.0, "weight": 15},
-            "amethyst": {"multiplier": 8.0, "weight": 12},
-            "diamond": {"multiplier": 20.0, "weight": 8},
-            "crown": {"multiplier": 50.0, "weight": 5},
-            "wild_diamond": {"multiplier": 100.0, "weight": 3, "is_wild": True}
-        },
-        "features": {"wilds": True}
-    },
-    "cyber": {
-        "name": "Cyber Reels",
-        "reels": 5,
-        "rows": 4,
-        "max_paylines": 20,
-        "volatility": "medium",
-        "rtp": 95.5,
-        "symbols": {
-            "chip": {"multiplier": 2.0, "weight": 24},
-            "circuit": {"multiplier": 3.0, "weight": 20},
-            "robot": {"multiplier": 5.0, "weight": 16},
-            "ai": {"multiplier": 10.0, "weight": 12},
-            "cyber": {"multiplier": 25.0, "weight": 8},
-            "matrix": {"multiplier": 50.0, "weight": 5, "is_wild": True}
-        },
-        "features": {"wilds": True, "sticky_wilds": True}
-    },
-    "viking": {
-        "name": "Viking Storm",
-        "reels": 5,
-        "rows": 4,
-        "max_paylines": 20,
-        "volatility": "high",
-        "rtp": 96.0,
-        "symbols": {
-            "axe": {"multiplier": 2.0, "weight": 22},
-            "shield": {"multiplier": 3.0, "weight": 20},
-            "helmet": {"multiplier": 5.0, "weight": 15},
-            "ship": {"multiplier": 10.0, "weight": 12},
-            "thor": {"multiplier": 25.0, "weight": 8},
-            "odin": {"multiplier": 50.0, "weight": 5, "is_wild": True}
-        },
-        "features": {"wilds": True, "expanding_wilds": True}
-    },
-    "fortune": {
-        "name": "Asian Fortune",
-        "reels": 5,
-        "rows": 4,
-        "max_paylines": 20,
-        "volatility": "medium",
-        "rtp": 95.6,
-        "symbols": {
-            "fan": {"multiplier": 2.0, "weight": 24},
-            "lantern": {"multiplier": 3.0, "weight": 20},
-            "koi": {"multiplier": 5.0, "weight": 16},
-            "dragon": {"multiplier": 10.0, "weight": 12},
-            "lucky": {"multiplier": 25.0, "weight": 8},
-            "wild": {"multiplier": 50.0, "weight": 5, "is_wild": True}
-        },
-        "features": {"wilds": True}
-    },
-    "pirate": {
-        "name": "Pirate's Chest",
-        "reels": 5,
-        "rows": 4,
-        "max_paylines": 20,
-        "volatility": "medium-high",
-        "rtp": 95.4,
-        "symbols": {
-            "compass": {"multiplier": 2.0, "weight": 22},
-            "map": {"multiplier": 3.0, "weight": 20},
-            "parrot": {"multiplier": 5.0, "weight": 15},
-            "ship": {"multiplier": 10.0, "weight": 12},
-            "captain": {"multiplier": 25.0, "weight": 8},
-            "skull": {"multiplier": 100.0, "weight": 5, "is_wild": True}
-        },
-        "features": {"wilds": True}
-    },
-    "mythic": {
-        "name": "Mythic Gods",
-        "reels": 5,
-        "rows": 4,
-        "max_paylines": 20,
-        "volatility": "high",
-        "rtp": 96.1,
-        "symbols": {
-            "scroll": {"multiplier": 2.0, "weight": 22},
-            "lyre": {"multiplier": 3.0, "weight": 18},
-            "athena": {"multiplier": 5.0, "weight": 14},
-            "poseidon": {"multiplier": 10.0, "weight": 12},
-            "hades": {"multiplier": 20.0, "weight": 10},
-            "zeus": {"multiplier": 50.0, "weight": 6, "is_wild": True}
-        },
-        "features": {"wilds": True, "stacked_symbols": True}
-    },
-    "inferno": {
-        "name": "Inferno Reels",
-        "reels": 5,
-        "rows": 4,
-        "max_paylines": 20,
-        "volatility": "very-high",
-        "rtp": 94.5,
-        "symbols": {
-            "ember": {"multiplier": 2.0, "weight": 25},
-            "flame": {"multiplier": 3.0, "weight": 20},
-            "phoenix": {"multiplier": 8.0, "weight": 15},
-            "demon": {"multiplier": 15.0, "weight": 12},
-            "devil": {"multiplier": 30.0, "weight": 8},
-            "inferno": {"multiplier": 100.0, "weight": 5, "is_wild": True}
-        },
-        "features": {"wilds": True, "high_volatility": True}
-    },
-    "battle": {
-        "name": "Slot Battle Arena",
-        "reels": 5,
-        "rows": 4,
-        "max_paylines": 20,
-        "volatility": "medium",
-        "rtp": 95.0,
-        "symbols": {
-            "sword": {"multiplier": 2.0, "weight": 24},
-            "shield": {"multiplier": 3.0, "weight": 20},
-            "armor": {"multiplier": 5.0, "weight": 16},
-            "knight": {"multiplier": 10.0, "weight": 12},
-            "king": {"multiplier": 25.0, "weight": 8},
-            "trophy": {"multiplier": 50.0, "weight": 5, "is_wild": True}
-        },
-        "features": {"wilds": True}
-    }
-}
-
-# Jackpot state (in production, use Redis)
 # ============== JACKPOT CONFIGURATION ==============
-JACKPOT_MAX_PARTICIPANTS = 50  # Hard cap: 2-50 players per jackpot
-JACKPOT_MIN_PARTICIPANTS = 2   # Minimum to start spinning
-JACKPOT_WAIT_SECONDS = 600     # 10 minutes wait for second player
-JACKPOT_COUNTDOWN_SECONDS = 30 # 30 seconds countdown after 2+ players
+# JACKPOT constants -> config.py
 
 jackpot_state = {
     "state": "idle",
@@ -1763,35 +1046,7 @@ def get_weighted_symbol(symbols: dict) -> str:
             return symbol
     return list(symbols.keys())[0]
 
-# ============== OUTCOME TABLE RNG SYSTEM ==============
-# FULL-LINE-ONLY wins - ALL 5 positions on a payline must match
-# No partial payouts (3/4 from left NOT allowed)
-
-OUTCOME_TABLE = [
-    # Losses - 50% of spins
-    {"type": "loss", "weight": 50, "wins": 0},
-    
-    # Small wins (low-value symbols, FULL LINE) - 25% of spins  
-    {"type": "win_cherry", "weight": 10, "wins": 1, "symbol": "cherry"},
-    {"type": "win_lemon", "weight": 8, "wins": 1, "symbol": "lemon"},
-    {"type": "win_orange", "weight": 7, "wins": 1, "symbol": "orange"},
-    
-    # Medium wins (mid-value symbols, FULL LINE) - 15% of spins
-    {"type": "win_bar", "weight": 8, "wins": 1, "symbol": "bar"},
-    {"type": "win_bar_multi", "weight": 4, "wins": 2, "symbol": "bar"},
-    {"type": "win_lemon_multi", "weight": 3, "wins": 2, "symbol": "lemon"},
-    
-    # Big wins (high-value symbols, FULL LINE) - 7% of spins
-    {"type": "win_seven", "weight": 4, "wins": 1, "symbol": "seven"},
-    {"type": "win_seven_multi", "weight": 2, "wins": 2, "symbol": "seven"},
-    {"type": "win_diamond", "weight": 1, "wins": 1, "symbol": "diamond"},
-    
-    # Jackpot wins (premium symbols, FULL LINE) - 3% of spins
-    {"type": "win_wild", "weight": 1.5, "wins": 1, "symbol": "wild"},
-    {"type": "win_diamond_multi", "weight": 0.8, "wins": 2, "symbol": "diamond"},
-    {"type": "win_wild_multi", "weight": 0.5, "wins": 2, "symbol": "wild"},
-    {"type": "win_mega", "weight": 0.2, "wins": 3, "symbol": "seven"},
-]
+# OUTCOME_TABLE -> config.py
 
 def get_random_outcome():
     """Select outcome from weighted outcome table"""
@@ -2687,9 +1942,6 @@ async def logout(request: Request, response: Response):
     return {"message": "Logged out successfully"}
 
 # ============== USER AVATAR ENDPOINTS ==============
-
-class AvatarUpdate(BaseModel):
-    avatar: str  # Base64 encoded image
 
 @api_router.post("/user/avatar")
 async def update_avatar(avatar_data: AvatarUpdate, request: Request):
@@ -3948,7 +3200,7 @@ async def get_all_items():
 # Simple catalog cache (30s TTL)
 _catalog_cache = {}
 _catalog_cache_time = {}
-CATALOG_CACHE_TTL = 30  # seconds
+# CATALOG_CACHE_TTL -> config.py
 
 @api_router.get("/items/catalog")
 async def get_items_catalog(
@@ -4348,12 +3600,7 @@ async def get_user_inventory(request: Request):
 # Simple chest system - one chest per GamePass level up
 
 # G Drop rates and ranges
-CHEST_G_DROPS = {
-    "normal": {"min": 5, "max": 15, "chance": 80, "label": "Normal", "color": "#9ca3af"},
-    "good": {"min": 16, "max": 40, "chance": 15, "label": "Gut", "color": "#22c55e"},
-    "rare": {"min": 41, "max": 100, "chance": 4, "label": "Selten", "color": "#a855f7"},
-}
-ITEM_DROP_CHANCE = 1  # 1% chance for item from shop
+# CHEST_G_DROPS, ITEM_DROP_CHANCE -> config.py
 
 
 async def get_random_shop_item():
@@ -4458,10 +3705,6 @@ async def get_chest_payout_table():
             "pool_size": shop_count
         }
     }
-
-
-class OpenChestRequest(BaseModel):
-    inventory_id: str
 
 
 @api_router.post("/inventory/open-chest")
@@ -4639,9 +3882,6 @@ async def open_chest(data: OpenChestRequest, request: Request):
         "new_balance": (await db.users.find_one({"user_id": user_id})).get("balance", 0)
     }
 
-
-class OpenChestsBatchRequest(BaseModel):
-    inventory_ids: list[str]
 
 @api_router.post("/inventory/open-chests-batch")
 async def open_chests_batch(data: OpenChestsBatchRequest, request: Request):
@@ -4872,10 +4112,6 @@ async def get_inventory_item_detail(inventory_id: str, request: Request):
     
     return item
 
-class SellItemRequest(BaseModel):
-    """Request to sell an inventory item"""
-    inventory_id: str
-
 @api_router.post("/inventory/sell")
 async def sell_inventory_item(sell_request: SellItemRequest, request: Request):
     """Sell an item from inventory for 70% of purchase price (30% fee)"""
@@ -4979,9 +4215,6 @@ async def sell_inventory_item(sell_request: SellItemRequest, request: Request):
         "new_balance": new_balance
     }
 
-
-class SellItemsBatchRequest(BaseModel):
-    inventory_ids: list[str]
 
 @api_router.post("/inventory/sell-batch")
 async def sell_inventory_items_batch(data: SellItemsBatchRequest, request: Request):
@@ -6268,13 +5501,7 @@ async def update_account_candles(
 
 # ============== TRADINGVIEW-STYLE CHART API ==============
 
-CHART_RANGES = {
-    "TODAY": {"resolution": "raw", "max_points": 500},
-    "D":     {"resolution": "1d",  "max_points": 90},
-    "W":     {"resolution": "1w",  "max_points": 52},
-    "M":     {"resolution": "1M",  "max_points": 24},
-    "ALL":   {"resolution": "1d",  "max_points": 1000},
-}
+# CHART_RANGES -> config.py
 
 
 @api_router.get("/user/account-chart")
@@ -8722,7 +7949,7 @@ SEED_ITEMS = [
 # These endpoints are called by the Discord bot for moderation
 # Authentication via ADMIN_API_KEY header
 
-ADMIN_API_KEY = os.environ.get('ADMIN_API_KEY', '')
+# ADMIN_API_KEY -> config.py
 
 def verify_admin_key(request: Request) -> bool:
     """Verify admin API key from request header"""
@@ -8730,55 +7957,6 @@ def verify_admin_key(request: Request) -> bool:
     if not ADMIN_API_KEY or not api_key:
         return False
     return api_key == ADMIN_API_KEY
-
-class AdminMuteRequest(BaseModel):
-    username: str
-    duration_seconds: int  # 0 = unmute, -1 = permanent mute
-
-class AdminBanRequest(BaseModel):
-    username: str
-    duration_seconds: int  # 0 = unban
-
-class AdminBalanceRequest(BaseModel):
-    username: str
-    currency: str  # "g" or "a"
-    amount: float
-    action: str  # "set" or "add"
-
-class AdminGaladiumPassRequest(BaseModel):
-    username: str
-    activate: bool  # True = activate, False = deactivate
-
-# ============== SHOP ADMIN MODELS ==============
-
-class AdminShopAddRequest(BaseModel):
-    """Request to add a new item to the shop"""
-    item_name: str
-    item_rarity: str  # common, uncommon, rare, epic, legendary
-    item_description: str
-    item_image: Optional[str] = None  # URL to image
-    price: float  # G cost
-    base_value: float  # Base value for selling
-    available_hours: int  # How many hours until item disappears from shop
-    untradeable_hours: int  # How many hours the item is untradeable after purchase
-    stock_limit: Optional[int] = None  # None = unlimited
-
-class AdminShopEditRequest(BaseModel):
-    """Request to edit an existing shop item"""
-    shop_listing_id: str
-    item_name: Optional[str] = None
-    item_description: Optional[str] = None
-    item_image: Optional[str] = None
-    price: Optional[float] = None
-    base_value: Optional[float] = None
-    available_hours: Optional[int] = None  # Extend/shorten availability
-    untradeable_hours: Optional[int] = None
-    stock_limit: Optional[int] = None
-    is_active: Optional[bool] = None
-
-class AdminShopRemoveRequest(BaseModel):
-    """Request to remove an item from the shop"""
-    shop_listing_id: str
 
 @api_router.post("/admin/galadium-pass")
 async def admin_toggle_galadium_pass(data: AdminGaladiumPassRequest, request: Request):
@@ -9024,9 +8202,6 @@ async def admin_modify_balance(data: AdminBalanceRequest, request: Request):
         "modified": result.modified_count > 0
     }
 
-class AdminEcoResetRequest(BaseModel):
-    confirm: str  # must be "RESET_ECO" to execute
-
 @api_router.post("/admin/eco-reset")
 async def admin_eco_reset(data: AdminEcoResetRequest, request: Request):
     """Reset economy for ALL users: balance→10G, level→1, xp→0.
@@ -9092,9 +8267,6 @@ async def admin_eco_reset(data: AdminEcoResetRequest, request: Request):
         "message": f"Economy reset complete. {affected} users set to balance=10G, level=1, xp=0."
     }
 
-
-class AdminResetUserRequest(BaseModel):
-    username: str
 
 @api_router.post("/admin/reset-user")
 async def admin_reset_user(data: AdminResetUserRequest, request: Request):
@@ -9234,9 +8406,6 @@ async def admin_server_stats(request: Request):
     }
 
 
-class AdminResetGamePassRequest(BaseModel):
-    username: str
-
 @api_router.post("/admin/reset-gamepass")
 async def admin_reset_gamepass(data: AdminResetGamePassRequest, request: Request):
     """Reset GamePass level/XP and claimed chests for a single user."""
@@ -9268,9 +8437,6 @@ async def admin_reset_gamepass(data: AdminResetGamePassRequest, request: Request
     }
 
 
-class AdminResetGamePassAllRequest(BaseModel):
-    confirm: str  # must be "RESET_GAMEPASS_ALL"
-
 @api_router.post("/admin/reset-gamepass-all")
 async def admin_reset_gamepass_all(data: AdminResetGamePassAllRequest, request: Request):
     """Reset GamePass level/XP and claimed chests for ALL users."""
@@ -9297,37 +8463,6 @@ async def admin_reset_gamepass_all(data: AdminResetGamePassAllRequest, request: 
     }
 
 
-class AdminGiveChestsRequest(BaseModel):
-    username: str
-    amount: int
-    chest_type: str = "gamepass"  # "gamepass" or "galadium"
-
-
-# ── Admin Give Item ────────────────────────────────────────────────────────────
-
-class AdminGiveItemRequest(BaseModel):
-    username: str
-    # Option A: copy an existing shop listing
-    shop_listing_id: Optional[str] = None
-    # Option B: create a brand-new custom item
-    item_name: Optional[str] = None
-    item_rarity: str = "common"
-    item_description: str = ""
-    item_image: Optional[str] = None
-    base_value: float = 0.0
-    untradeable_hours: int = 0
-
-class AdminGiveItemAllRequest(BaseModel):
-    confirm: str  # must be "GIVE_ITEM_ALL"
-    # Option A: copy existing shop listing
-    shop_listing_id: Optional[str] = None
-    # Option B: brand-new item
-    item_name: Optional[str] = None
-    item_rarity: str = "common"
-    item_description: str = ""
-    item_image: Optional[str] = None
-    base_value: float = 0.0
-    untradeable_hours: int = 0
 
 async def _build_inventory_item(user_id: str, listing: dict = None, *, name: str, rarity: str,
                                  description: str, image: str, value: float, untradeable_hours: int) -> dict:
@@ -9951,10 +9086,6 @@ async def admin_remove_shop_item(data: AdminShopRemoveRequest, request: Request)
     }
 
 
-class AdminSetValueRequest(BaseModel):
-    item_id: str
-    value: int
-
 @api_router.post("/admin/setvalue")
 async def admin_set_item_value(data: AdminSetValueRequest, request: Request):
     """Admin: Set manual value for an item"""
@@ -9987,10 +9118,6 @@ async def admin_set_item_value(data: AdminSetValueRequest, request: Request):
         "new_value": data.value
     }
 
-
-class AdminSetDemandRequest(BaseModel):
-    item_id: str
-    demand: str  # "none", "low", "medium", "high", "extreme"
 
 @api_router.post("/admin/setdemand")
 async def admin_set_item_demand(data: AdminSetDemandRequest, request: Request):
