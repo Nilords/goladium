@@ -773,6 +773,95 @@ async def spin_slot(bet_request: SlotBetRequest, request: Request):
         is_jackpot=result["is_jackpot"]
     )
 
+@api_router.get("/user/account-chart")
+async def get_account_chart(request: Request, range: str = "M"):
+    """
+    TradingView-style account profit/loss chart.
+
+    Ranges: TODAY, D, W, M, ALL
+    - TODAY: current incomplete day (raw events)
+    - D: completed full days only (up to 90)
+    - W: completed full weeks only (up to 52)
+    - M: completed full months only (up to 24)
+    - ALL: everything, smart resolution
+    """
+    user = await get_current_user(request)
+    user_id = user["user_id"]
+    now = datetime.now(timezone.utc)
+    today_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
+
+    if range not in CHART_RANGES:
+        range = "M"
+
+    max_points = CHART_RANGES[range]["max_points"]
+
+    # Get current cumulative profit for stats
+    last_event = await db.account_activity_history.find_one(
+        {"user_id": user_id},
+        sort=[("event_number", -1)]
+    )
+    current_profit = last_event["cumulative_profit"] if last_event else 0
+
+    if range == "TODAY":
+        # Smart resolution within today: raw → 1h if too many events
+        today_count = await db.account_activity_history.count_documents({
+            "user_id": user_id,
+            "timestamp": {"$gte": today_start.isoformat()}
+        })
+        if today_count <= 500:
+            return await get_raw_chart_data(user_id, today_start, now, 500, current_profit, range)
+        else:
+            return await build_candles_from_raw(user_id, "1h", today_start, now, 24, current_profit, range)
+
+    elif range == "D":
+        # Completed full days only — today excluded
+        end_time = today_start
+        start_time = today_start - timedelta(days=90)
+        return await build_candles_from_raw(user_id, "1d", start_time, end_time, 90, current_profit, range)
+
+    elif range == "W":
+        # Completed full weeks only — current week excluded
+        week_start = today_start - timedelta(days=today_start.weekday())
+        end_time = week_start
+        start_time = week_start - timedelta(weeks=52)
+        return await build_candles_from_raw(user_id, "1w", start_time, end_time, 52, current_profit, range)
+
+    elif range == "M":
+        # Completed full months only — current month excluded
+        month_start = today_start.replace(day=1)
+        end_time = month_start
+        back_year = month_start.year
+        back_month = month_start.month - 24
+        while back_month <= 0:
+            back_month += 12
+            back_year -= 1
+        start_time = month_start.replace(year=back_year, month=back_month)
+        return await build_candles_from_raw(user_id, "1M", start_time, end_time, 24, current_profit, range)
+
+    else:  # ALL — cascading smart resolution based on time span
+        start_time = datetime(2000, 1, 1, tzinfo=timezone.utc)
+        end_time = now
+        raw_count = await db.account_activity_history.count_documents({"user_id": user_id})
+        if raw_count <= 500:
+            return await get_raw_chart_data(user_id, start_time, end_time, 500, current_profit, range)
+        # Determine time span to pick resolution
+        first_event = await db.account_activity_history.find_one(
+            {"user_id": user_id}, sort=[("timestamp", 1)]
+        )
+        if first_event:
+            first_ts = datetime.fromisoformat(first_event["timestamp"].replace("Z", "+00:00"))
+            days_span = (now - first_ts).days
+        else:
+            days_span = 0
+        if days_span <= 90:
+            resolution, mp = "1d", 90
+        elif days_span <= 730:
+            resolution, mp = "1w", 104
+        else:
+            resolution, mp = "1M", 60
+        return await build_candles_from_raw(user_id, resolution, start_time, end_time, mp, current_profit, range)
+
+
 # Legacy endpoint for backwards compatibility
 @api_router.get("/games/slot/info")
 async def get_classic_slot_info():
@@ -1700,33 +1789,6 @@ async def get_live_wins(limit: int = 20):
         for w in big_wins
     ]
 
-async def record_big_win(user: dict, game_type: str, bet_amount: float, win_amount: float,
-                         slot_id: str = None, slot_name: str = None, win_chance: float = None,
-                         multiplier: float = 0, winning_symbols: list = None):
-    """Record a big win (>= 100 G or multiplier > 5x) to the big_wins collection"""
-    if win_amount < 100 and multiplier <= 5:
-        return  # Only track wins >= 100 G or multiplier > 5x
-
-    win_doc = {
-        "win_id": f"win_{uuid.uuid4().hex[:12]}",
-        "user_id": user["user_id"],
-        "username": user["username"],
-        "game_type": game_type,
-        "slot_id": slot_id,
-        "slot_name": slot_name,
-        "bet_amount": round(bet_amount, 2),
-        "win_amount": round(win_amount, 2),
-        "multiplier": round(multiplier, 2),
-        "win_chance": win_chance,
-        "timestamp": datetime.now(timezone.utc).isoformat(),
-        "avatar": user.get("avatar"),
-        "frame": user.get("frame"),
-        "winning_symbols": winning_symbols or []
-    }
-
-    await db.big_wins.insert_one(win_doc)
-
-# ============== ITEM SYSTEM ENDPOINTS ==============
 
 @api_router.get("/items")
 async def get_all_items():
@@ -2138,66 +2200,6 @@ async def get_user_inventory(request: Request):
 
 # G Drop rates and ranges
 # CHEST_G_DROPS, ITEM_DROP_CHANCE -> config.py
-
-
-async def get_random_shop_item():
-    """Get a random item from the shop for 1% chest drop"""
-    # Get all active shop listings
-    now = datetime.now(timezone.utc)
-    shop_items = await db.shop_listings.find({
-        "available_until": {"$gt": now.isoformat()},
-        "stock": {"$gt": 0}
-    }).to_list(100)
-    
-    if not shop_items:
-        # Fallback to items collection if no shop listings
-        items = await db.items.find({
-            "category": {"$ne": "chest"}  # Exclude chests
-        }).to_list(100)
-        if items:
-            import random
-            return random.choice(items)
-        return None
-    
-    import random
-    return random.choice(shop_items)
-
-
-def generate_simple_chest_reward_sync() -> dict:
-    """Generate G reward from a chest (sync version for non-item drops)"""
-    import random
-    
-    roll = random.randint(1, 100)
-    
-    # 1% item drop - handled separately in async function
-    if roll <= ITEM_DROP_CHANCE:
-        return {"type": "item_roll"}  # Signal to fetch shop item
-    
-    # G drops (remaining 99%)
-    cumulative = ITEM_DROP_CHANCE
-    for tier, config in CHEST_G_DROPS.items():
-        cumulative += config["chance"]
-        if roll <= cumulative:
-            g_amount = round(random.uniform(config["min"], config["max"]), 2)
-            return {
-                "type": "currency",
-                "currency": "G",
-                "amount": g_amount,
-                "tier": tier,
-                "tier_label": config["label"],
-                "tier_color": config["color"]
-            }
-    
-    # Fallback to normal
-    g_amount = round(random.uniform(5, 15), 2)
-    return {
-        "type": "currency",
-        "currency": "G", 
-        "amount": g_amount,
-        "tier": "normal",
-        "tier_label": "Normal",
-        "tier_color": "#9ca3af"
-    }
 
 
 @api_router.get("/chest/payout-table")
@@ -2895,107 +2897,6 @@ async def sell_inventory_items_batch(data: SellItemsBatchRequest, request: Reque
     }
 
 # ============== MARKETPLACE ENDPOINTS ==============
-
-async def calculate_rap(item_id: str):
-    """Calculate Recent Average Price from last 10 sales (weighted: newer sales count more)"""
-    sales = await db.item_price_history.find(
-        {"item_id": item_id},
-        {"_id": 0, "price": 1}
-    ).sort("timestamp", -1).limit(10).to_list(10)
-    
-    if not sales:
-        return 0.0
-    
-    # Weighted average: newest sale has weight=10, oldest has weight=1
-    total_weight = 0
-    weighted_sum = 0
-    for i, sale in enumerate(sales):
-        weight = len(sales) - i  # newest = highest weight
-        weighted_sum += sale["price"] * weight
-        total_weight += weight
-    
-    rap = round(weighted_sum / total_weight, 2) if total_weight > 0 else 0.0
-    
-    # Update RAP in items collection
-    await db.items.update_one(
-        {"item_id": item_id},
-        {"$set": {"rap": rap}}
-    )
-    
-    return rap
-
-
-async def record_owner_change(inventory_id: str, item_id: str, from_user_id: str, to_user_id: str, source: str):
-    """Record an item ownership change in history"""
-    now = datetime.now(timezone.utc).isoformat()
-    # Close the previous owner's record
-    await db.item_owner_history.update_one(
-        {"inventory_id": inventory_id, "user_id": from_user_id, "released_at": None},
-        {"$set": {"released_at": now, "released_via": source}}
-    )
-    # Create new owner record
-    await db.item_owner_history.insert_one({
-        "record_id": f"oh_{uuid.uuid4().hex[:12]}",
-        "inventory_id": inventory_id,
-        "item_id": item_id,
-        "user_id": to_user_id,
-        "acquired_at": now,
-        "acquired_via": source,
-        "released_at": None,
-        "released_via": None,
-    })
-
-
-async def calculate_demand(item_id: str):
-    """Calculate demand for an item. Manual demand (from admin) has priority over auto-calculation."""
-    # Check for manual demand first
-    item = await db.items.find_one({"item_id": item_id}, {"_id": 0, "manual_demand": 1})
-    manual = item.get("manual_demand") if item else None
-    
-    # Always compute auto stats for display
-    seeking_count = await db.trade_ads.count_documents({
-        "status": "active",
-        "seeking_items.item_id": item_id
-    })
-    
-    week_ago = (datetime.now(timezone.utc) - timedelta(days=7)).isoformat()
-    recent_sales = await db.item_price_history.count_documents({
-        "item_id": item_id,
-        "timestamp": {"$gte": week_ago}
-    })
-    
-    active_listings = await db.marketplace_listings.count_documents({
-        "item_id": item_id,
-        "status": "active"
-    })
-    
-    # Auto score
-    auto_score = max(0, (seeking_count * 3) + (recent_sales * 2) - active_listings)
-    if auto_score >= 10:
-        auto_label = "extreme"
-    elif auto_score >= 6:
-        auto_label = "high"
-    elif auto_score >= 3:
-        auto_label = "medium"
-    elif auto_score >= 1:
-        auto_label = "low"
-    else:
-        auto_label = "none"
-    
-    # Manual overrides auto
-    label = manual if manual else auto_label
-    is_manual = manual is not None
-    
-    return {
-        "label": label,
-        "is_manual": is_manual,
-        "auto_label": auto_label,
-        "auto_score": auto_score,
-        "seeking_ads": seeking_count,
-        "recent_sales_7d": recent_sales,
-        "active_listings": active_listings,
-    }
-
 
 @api_router.get("/marketplace/listings")
 async def get_marketplace_listings(
@@ -3899,464 +3800,6 @@ async def get_user_active_cosmetics(user_id: str):
         "username": user.get("username"),
         "active_cosmetics": active
     }
-
-# ============== ACCOUNT VALUE TRACKING ==============
-
-async def record_value_snapshot(user_id: str, balance_g: float, balance_a: float, trigger: str = "auto"):
-    """Record a snapshot of user's account value"""
-    now = datetime.now(timezone.utc)
-    total_value = balance_g + balance_a
-    
-    snapshot = {
-        "snapshot_id": f"snap_{uuid.uuid4().hex[:12]}",
-        "user_id": user_id,
-        "balance_g": round(balance_g, 2),
-        "balance_a": round(balance_a, 2),
-        "total_value": round(total_value, 2),
-        "trigger": trigger,
-        "timestamp": now.isoformat()
-    }
-    
-    await db.value_snapshots.insert_one(snapshot)
-    return snapshot
-
-
-async def record_account_activity(
-    user_id: str,
-    event_type: str,
-    amount: float,
-    source: str,
-    details: dict = None
-):
-    """
-    Record an account activity event for the profit/loss graph.
-    Also updates OHLC candles for TradingView-style charts.
-    
-    This tracks NET CHANGES (profit/loss), not absolute balance.
-    - Positive amount = profit/gain
-    - Negative amount = loss/expense
-    
-    event_type: slot, jackpot, wheel, trade, admin, item_sale, item_purchase, chest
-    source: descriptive source like "Slot: Golden Fruits", "Trade from User123", "Admin: Ghost"
-    """
-    now = datetime.now(timezone.utc)
-    
-    # Get previous cumulative profit
-    last_event = await db.account_activity_history.find_one(
-        {"user_id": user_id},
-        sort=[("event_number", -1)]
-    )
-    
-    if last_event:
-        previous_cumulative = last_event["cumulative_profit"]
-        event_number = last_event["event_number"] + 1
-    else:
-        previous_cumulative = 0.0
-        event_number = 1
-    
-    # Calculate new cumulative (CAN GO NEGATIVE!)
-    amount = round(amount, 2)
-    new_cumulative = round(previous_cumulative + amount, 2)
-    
-    event_doc = {
-        "event_id": f"act_{uuid.uuid4().hex[:12]}",
-        "user_id": user_id,
-        "event_number": event_number,
-        "event_type": event_type,
-        "amount": amount,
-        "cumulative_profit": new_cumulative,
-        "source": source,
-        "details": details or {},
-        "timestamp": now.isoformat()
-    }
-    
-    await db.account_activity_history.insert_one(event_doc)
-    
-    # Update OHLC candles (1h and 1d resolutions)
-    await update_account_candles(user_id, now, previous_cumulative, new_cumulative, amount, event_type)
-    
-    return event_doc
-
-
-async def update_account_candles(
-    user_id: str,
-    timestamp: datetime,
-    previous_value: float,
-    current_value: float,
-    delta: float,
-    event_type: str
-):
-    """
-    Update OHLC candles for multiple resolutions.
-    Uses upsert to create or update candles atomically.
-    """
-    resolutions = [
-        ("1h", 3600),   # 1 hour in seconds
-        ("1d", 86400),  # 1 day in seconds
-    ]
-    
-    for resolution, seconds in resolutions:
-        # Calculate bucket start time
-        bucket_ts = timestamp.replace(
-            minute=0 if resolution == "1h" else 0,
-            second=0,
-            microsecond=0
-        )
-        if resolution == "1d":
-            bucket_ts = bucket_ts.replace(hour=0)
-        
-        bucket_key = bucket_ts.isoformat()
-        collection_name = f"account_candles_{resolution}"
-        collection = db[collection_name]
-        
-        # Try to update existing candle
-        result = await collection.update_one(
-            {
-                "user_id": user_id,
-                "bucket": bucket_key
-            },
-            {
-                "$min": {"low": current_value},
-                "$max": {"high": current_value},
-                "$set": {"close": current_value},
-                "$inc": {
-                    "volume": 1,
-                    "net_change": delta,
-                    f"breakdown.{event_type}": 1
-                },
-                "$setOnInsert": {
-                    "user_id": user_id,
-                    "bucket": bucket_key,
-                    "resolution": resolution,
-                    "open": previous_value,
-                    "timestamp": bucket_ts.isoformat()
-                }
-            },
-            upsert=True
-        )
-
-
-# ============== TRADINGVIEW-STYLE CHART API ==============
-
-# CHART_RANGES -> config.py
-
-
-@api_router.get("/user/account-chart")
-async def get_account_chart(request: Request, range: str = "M"):
-    """
-    TradingView-style account profit/loss chart.
-
-    Ranges: TODAY, D, W, M, ALL
-    - TODAY: current incomplete day (raw events)
-    - D: completed full days only (up to 90)
-    - W: completed full weeks only (up to 52)
-    - M: completed full months only (up to 24)
-    - ALL: everything, smart resolution
-    """
-    user = await get_current_user(request)
-    user_id = user["user_id"]
-    now = datetime.now(timezone.utc)
-    today_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
-
-    if range not in CHART_RANGES:
-        range = "M"
-
-    max_points = CHART_RANGES[range]["max_points"]
-
-    # Get current cumulative profit for stats
-    last_event = await db.account_activity_history.find_one(
-        {"user_id": user_id},
-        sort=[("event_number", -1)]
-    )
-    current_profit = last_event["cumulative_profit"] if last_event else 0
-
-    if range == "TODAY":
-        # Smart resolution within today: raw → 1h if too many events
-        today_count = await db.account_activity_history.count_documents({
-            "user_id": user_id,
-            "timestamp": {"$gte": today_start.isoformat()}
-        })
-        if today_count <= 500:
-            return await get_raw_chart_data(user_id, today_start, now, 500, current_profit, range)
-        else:
-            return await build_candles_from_raw(user_id, "1h", today_start, now, 24, current_profit, range)
-
-    elif range == "D":
-        # Completed full days only — today excluded
-        end_time = today_start
-        start_time = today_start - timedelta(days=90)
-        return await build_candles_from_raw(user_id, "1d", start_time, end_time, 90, current_profit, range)
-
-    elif range == "W":
-        # Completed full weeks only — current week excluded
-        week_start = today_start - timedelta(days=today_start.weekday())
-        end_time = week_start
-        start_time = week_start - timedelta(weeks=52)
-        return await build_candles_from_raw(user_id, "1w", start_time, end_time, 52, current_profit, range)
-
-    elif range == "M":
-        # Completed full months only — current month excluded
-        month_start = today_start.replace(day=1)
-        end_time = month_start
-        back_year = month_start.year
-        back_month = month_start.month - 24
-        while back_month <= 0:
-            back_month += 12
-            back_year -= 1
-        start_time = month_start.replace(year=back_year, month=back_month)
-        return await build_candles_from_raw(user_id, "1M", start_time, end_time, 24, current_profit, range)
-
-    else:  # ALL — cascading smart resolution based on time span
-        start_time = datetime(2000, 1, 1, tzinfo=timezone.utc)
-        end_time = now
-        raw_count = await db.account_activity_history.count_documents({"user_id": user_id})
-        if raw_count <= 500:
-            return await get_raw_chart_data(user_id, start_time, end_time, 500, current_profit, range)
-        # Determine time span to pick resolution
-        first_event = await db.account_activity_history.find_one(
-            {"user_id": user_id}, sort=[("timestamp", 1)]
-        )
-        if first_event:
-            first_ts = datetime.fromisoformat(first_event["timestamp"].replace("Z", "+00:00"))
-            days_span = (now - first_ts).days
-        else:
-            days_span = 0
-        if days_span <= 90:
-            resolution, mp = "1d", 90
-        elif days_span <= 730:
-            resolution, mp = "1w", 104
-        else:
-            resolution, mp = "1M", 60
-        return await build_candles_from_raw(user_id, resolution, start_time, end_time, mp, current_profit, range)
-
-
-async def get_raw_chart_data(user_id: str, start_time: datetime, end_time: datetime, max_points: int, current_profit: float, range_name: str = "TODAY"):
-    """Get raw individual events for TODAY and ALL (when few events)."""
-
-    events = await db.account_activity_history.find(
-        {
-            "user_id": user_id,
-            "timestamp": {"$gte": start_time.isoformat(), "$lte": end_time.isoformat()}
-        },
-        {"_id": 0}
-    ).sort("timestamp", 1).limit(max_points).to_list(max_points)
-
-    if not events:
-        return {
-            "range": range_name,
-            "resolution": "raw",
-            "mode": "empty",
-            "candles": [],
-            "stats": get_empty_stats(current_profit)
-        }
-
-    candles = []
-    for e in events:
-        candles.append({
-            "timestamp": e["timestamp"],
-            "open": e["cumulative_profit"] - e["amount"],
-            "high": e["cumulative_profit"] if e["amount"] >= 0 else e["cumulative_profit"] - e["amount"],
-            "low": e["cumulative_profit"] if e["amount"] < 0 else e["cumulative_profit"] - e["amount"],
-            "close": e["cumulative_profit"],
-            "volume": 1,
-            "net_change": e["amount"],
-            "event_type": e["event_type"],
-            "source": e["source"]
-        })
-
-    stats = calculate_chart_stats(candles, current_profit)
-
-    return {
-        "range": range_name,
-        "resolution": "raw",
-        "mode": "raw",
-        "candles": candles,
-        "stats": stats
-    }
-
-
-async def get_candle_chart_data(user_id: str, resolution: str, start_time: datetime, max_points: int, current_profit: float, range_name: str):
-    """Get OHLC candle data for longer-range charts"""
-    
-    collection = db[f"account_candles_{resolution}"]
-    
-    candles = await collection.find(
-        {
-            "user_id": user_id,
-            "timestamp": {"$gte": start_time.isoformat()}
-        },
-        {"_id": 0}
-    ).sort("timestamp", 1).limit(max_points).to_list(max_points)
-    
-    if not candles:
-        # Try to build from raw events if no candles exist yet
-        return await build_candles_from_raw(user_id, resolution, start_time, max_points, current_profit, range_name)
-    
-    # Format candles for frontend
-    formatted = []
-    for c in candles:
-        formatted.append({
-            "timestamp": c["timestamp"],
-            "open": c.get("open", 0),
-            "high": c.get("high", 0),
-            "low": c.get("low", 0),
-            "close": c.get("close", 0),
-            "volume": c.get("volume", 0),
-            "net_change": c.get("net_change", 0),
-            "breakdown": c.get("breakdown", {})
-        })
-    
-    stats = calculate_chart_stats(formatted, current_profit)
-    
-    return {
-        "range": range_name,
-        "resolution": resolution,
-        "mode": "candles",
-        "candles": formatted,
-        "stats": stats
-    }
-
-
-async def build_candles_from_raw(user_id: str, resolution: str, start_time: datetime, end_time: datetime, max_points: int, current_profit: float, range_name: str):
-    """Build aggregated candles from raw events. Supports 1h, 1d, 1w, 1M resolutions."""
-
-    match_filter = {
-        "user_id": user_id,
-        "timestamp": {"$gte": start_time.isoformat(), "$lt": end_time.isoformat()}
-    }
-
-    # Build group _id based on resolution
-    if resolution == "1h":
-        group_id = {"$dateToString": {"format": "%Y-%m-%dT%H:00:00", "date": "$ts_date"}}
-    elif resolution == "1d":
-        group_id = {"$dateToString": {"format": "%Y-%m-%dT00:00:00", "date": "$ts_date"}}
-    elif resolution == "1w":
-        group_id = {
-            "year": {"$isoWeekYear": "$ts_date"},
-            "week": {"$isoWeek": "$ts_date"}
-        }
-    elif resolution == "1M":
-        group_id = {"$dateToString": {"format": "%Y-%m-01T00:00:00", "date": "$ts_date"}}
-    else:
-        group_id = {"$dateToString": {"format": "%Y-%m-%dT00:00:00", "date": "$ts_date"}}
-
-    pipeline = [
-        {"$match": match_filter},
-        {"$addFields": {
-            "ts_date": {"$dateFromString": {"dateString": "$timestamp"}}
-        }},
-        {"$group": {
-            "_id": group_id,
-            "open": {"$first": "$cumulative_profit"},
-            "close": {"$last": "$cumulative_profit"},
-            "high": {"$max": "$cumulative_profit"},
-            "low": {"$min": "$cumulative_profit"},
-            "volume": {"$sum": 1},
-            "net_change": {"$sum": "$amount"},
-            "events": {"$push": "$event_type"}
-        }},
-        {"$sort": {"_id": 1}},
-        {"$limit": max_points}
-    ]
-
-    results = await db.account_activity_history.aggregate(pipeline).to_list(max_points)
-
-    if not results:
-        return {
-            "range": range_name,
-            "resolution": resolution,
-            "mode": "empty",
-            "candles": [],
-            "stats": get_empty_stats(current_profit)
-        }
-
-    candles = []
-    for r in results:
-        breakdown = {}
-        for et in r.get("events", []):
-            breakdown[et] = breakdown.get(et, 0) + 1
-
-        # For weekly grouping reconstruct Monday date from ISO year+week
-        if resolution == "1w":
-            iso_year = r["_id"]["year"]
-            iso_week = r["_id"]["week"]
-            week_monday = datetime.fromisocalendar(iso_year, iso_week, 1)
-            timestamp = week_monday.strftime("%Y-%m-%dT00:00:00")
-        else:
-            timestamp = r["_id"]
-
-        prev_close = candles[-1]["close"] if candles else r["open"] - r["net_change"]
-
-        candles.append({
-            "timestamp": timestamp,
-            "open": prev_close,
-            "high": r["high"],
-            "low": r["low"],
-            "close": r["close"],
-            "volume": r["volume"],
-            "net_change": r["net_change"],
-            "breakdown": breakdown
-        })
-
-    stats = calculate_chart_stats(candles, current_profit)
-
-    return {
-        "range": range_name,
-        "resolution": resolution,
-        "mode": "aggregated",
-        "candles": candles,
-        "stats": stats
-    }
-
-
-def calculate_chart_stats(candles: list, current_profit: float) -> dict:
-    """Calculate statistics from candle data"""
-    if not candles:
-        return get_empty_stats(current_profit)
-    
-    all_highs = [c["high"] for c in candles]
-    all_lows = [c["low"] for c in candles]
-    all_changes = [c["net_change"] for c in candles]
-    
-    highest = max(all_highs) if all_highs else 0
-    lowest = min(all_lows) if all_lows else 0
-    total_won = sum(c for c in all_changes if c > 0)
-    total_lost = abs(sum(c for c in all_changes if c < 0))
-    
-    # Calculate percent change from first to last
-    first_open = candles[0]["open"] if candles else 0
-    last_close = candles[-1]["close"] if candles else 0
-    
-    if first_open != 0:
-        percent_change = round(((last_close - first_open) / abs(first_open)) * 100, 2)
-    else:
-        percent_change = 0 if last_close == 0 else 100
-    
-    return {
-        "current_profit": round(current_profit, 2),
-        "period_high": round(highest, 2),
-        "period_low": round(lowest, 2),
-        "period_change": round(last_close - first_open, 2),
-        "percent_change": percent_change,
-        "total_won": round(total_won, 2),
-        "total_lost": round(total_lost, 2),
-        "total_volume": sum(c.get("volume", 0) for c in candles)
-    }
-
-
-def get_empty_stats(current_profit: float) -> dict:
-    """Return empty stats structure"""
-    return {
-        "current_profit": round(current_profit, 2),
-        "period_high": round(current_profit, 2),
-        "period_low": round(current_profit, 2),
-        "period_change": 0,
-        "percent_change": 0,
-        "total_won": 0,
-        "total_lost": 0,
-        "total_volume": 0
-    }
-
 
 # Legacy endpoint - keep for backwards compatibility
 @api_router.get("/user/account-activity")
@@ -5541,120 +4984,6 @@ logger = logging.getLogger(__name__)
 
 # ============== QUEST & GAME PASS SYSTEM ==============
 
-async def get_user_quests(user_id: str):
-    """Get or initialize user's quest progress"""
-    quest_data = await db.user_quests.find_one({"user_id": user_id})
-    
-    if not quest_data:
-        # Initialize quest progress for all quests
-        quest_progress = {}
-        for quest in QUEST_DEFINITIONS:
-            quest_progress[quest["quest_id"]] = {
-                "current": 0,
-                "completed": False,
-                "claimed": False
-            }
-        
-        quest_data = {
-            "user_id": user_id,
-            "progress": quest_progress,
-            "daily_a_rewards": 0,
-            "last_a_reward_date": None,
-            "quests_since_a": 0,  # Track quests completed since last A reward
-            "last_reset": datetime.now(timezone.utc).isoformat()
-        }
-        await db.user_quests.insert_one(quest_data)
-    
-    return quest_data
-
-async def update_quest_progress(user_id: str, quest_type: str, amount: int = 1, **conditions):
-    """
-    Update progress for quests matching the type and conditions.
-    
-    STRICT VALIDATION RULES:
-    - Slot spins/wins: Only count if bet_amount >= 5 G
-    - Jackpot wins: Only count if pot_size >= 20 G
-    - No "join" or "participate" jackpot tracking allowed
-    """
-    # STRICT: Reject jackpot_joins type entirely - only wins allowed
-    if quest_type == "jackpot_joins":
-        return {}  # Silently ignore - this type is not supported
-    
-    quest_data = await get_user_quests(user_id)
-    progress = quest_data.get("progress", {})
-    updated = False
-    
-    for quest in QUEST_DEFINITIONS:
-        if quest["type"] != quest_type:
-            continue
-        
-        quest_id = quest["quest_id"]
-        if quest_id not in progress:
-            progress[quest_id] = {"current": 0, "completed": False, "claimed": False}
-        
-        if progress[quest_id]["completed"]:
-            continue
-        
-        # STRICT condition validation
-        meets_conditions = True
-        
-        if quest_type in ["spins", "wins"]:
-            # STRICT: All slot quests require minimum 5 G bet
-            # Allow small floating point tolerance (4.99 rounds to 5)
-            min_bet = quest.get("min_bet", 5.0)  # Default to 5 G if not specified
-            if min_bet < 5.0:
-                min_bet = 5.0  # Enforce minimum 5 G
-            actual_bet = conditions.get("bet_amount", 0)
-            # Use small tolerance for floating point comparison
-            if actual_bet < (min_bet - 0.05):
-                meets_conditions = False
-                
-        elif quest_type == "jackpot_wins":
-            # STRICT: All jackpot wins require minimum 20 G pot
-            min_pot = quest.get("min_pot", 20)  # Default to 20 G if not specified
-            if min_pot < 20:
-                min_pot = 20  # Enforce minimum 20 G pot
-            actual_pot = conditions.get("pot_size", 0)
-            if actual_pot < min_pot:
-                meets_conditions = False
-        
-        if meets_conditions:
-            progress[quest_id]["current"] += amount
-            if progress[quest_id]["current"] >= quest["target"]:
-                progress[quest_id]["current"] = quest["target"]
-                progress[quest_id]["completed"] = True
-            updated = True
-    
-    if updated:
-        await db.user_quests.update_one(
-            {"user_id": user_id},
-            {"$set": {"progress": progress}}
-        )
-    
-    return progress
-
-async def add_game_pass_xp(user_id: str, xp_amount: int):
-    """Add XP to user's Game Pass and handle level ups"""
-    user = await db.users.find_one({"user_id": user_id})
-    if not user:
-        return None
-    
-    current_level = user.get("game_pass_level", 1)
-    current_xp = user.get("game_pass_xp", 0) + xp_amount
-    
-    # Calculate new level
-    new_level = current_level
-    while current_xp >= GAME_PASS_XP_PER_LEVEL and new_level < GAME_PASS_MAX_LEVEL:
-        current_xp -= GAME_PASS_XP_PER_LEVEL
-        new_level += 1
-    
-    await db.users.update_one(
-        {"user_id": user_id},
-        {"$set": {"game_pass_level": new_level, "game_pass_xp": current_xp}}
-    )
-    
-    return {"level": new_level, "xp": current_xp}
-
 @api_router.get("/quests")
 async def get_quests(request: Request):
     """Get 3 quest slots with user's progress.
@@ -6243,66 +5572,6 @@ async def claim_game_pass_reward(level: int, request: Request):
 # ============== INVENTORY VALUE TRACKING SYSTEM ==============
 # Event-based tracking of inventory value changes (not time-aggregated like account value)
 
-async def get_current_inventory_value(user_id: str) -> float:
-    """Calculate total inventory value based on purchase prices"""
-    items = await db.user_inventory.find(
-        {"user_id": user_id},
-        {"purchase_price": 1, "item_id": 1}
-    ).to_list(1000)
-    
-    total = 0.0
-    for item in items:
-        # Use purchase_price if available, else try to get from item definition
-        price = item.get("purchase_price", 0)
-        if price <= 0:
-            item_def = await db.items.find_one({"item_id": item.get("item_id")}, {"base_value": 1})
-            price = item_def.get("base_value", 0) if item_def else 0
-        total += price
-    return round(total, 2)
-
-
-async def record_inventory_value_event(
-    user_id: str,
-    event_type: str,  # buy, sell, trade_in, trade_out, reward, gamepass_reward, admin_adjust, drop
-    delta_value: float,  # Positive for gain, negative for loss
-    related_item_id: str = None,
-    related_item_name: str = None,
-    details: dict = None
-):
-    """
-    Record an inventory value change event.
-    Total value never goes below 0.
-    """
-    now = datetime.now(timezone.utc)
-    
-    # Get previous total value
-    last_event = await db.inventory_value_history.find_one(
-        {"user_id": user_id},
-        sort=[("event_number", -1)]
-    )
-    
-    previous_total = last_event["total_inventory_value_after"] if last_event else 0.0
-    event_number = (last_event["event_number"] + 1) if last_event else 1
-    
-    # Calculate new total (never below 0)
-    new_total = max(0, round(previous_total + delta_value, 2))
-    
-    event_doc = {
-        "event_id": f"inv_evt_{uuid.uuid4().hex[:12]}",
-        "user_id": user_id,
-        "event_number": event_number,
-        "event_type": event_type,
-        "delta_value": round(delta_value, 2),
-        "total_inventory_value_after": new_total,
-        "related_item_id": related_item_id,
-        "related_item_name": related_item_name,
-        "details": details or {},
-        "timestamp": now.isoformat()
-    }
-    
-    await db.inventory_value_history.insert_one(event_doc)
-    return event_doc
-
 
 @api_router.get("/user/inventory-history")
 async def get_inventory_history(request: Request, limit: int = 30):
@@ -6487,13 +5756,6 @@ SEED_ITEMS = [
 # Authentication via ADMIN_API_KEY header
 
 # ADMIN_API_KEY -> config.py
-
-def verify_admin_key(request: Request) -> bool:
-    """Verify admin API key from request header"""
-    api_key = request.headers.get("X-Admin-Key")
-    if not ADMIN_API_KEY or not api_key:
-        return False
-    return api_key == ADMIN_API_KEY
 
 @api_router.post("/admin/galadium-pass")
 async def admin_toggle_galadium_pass(data: AdminGaladiumPassRequest, request: Request):
@@ -7000,29 +6262,6 @@ async def admin_reset_gamepass_all(data: AdminResetGamePassAllRequest, request: 
     }
 
 
-
-async def _build_inventory_item(user_id: str, listing: dict = None, *, name: str, rarity: str,
-                                 description: str, image: str, value: float, untradeable_hours: int) -> dict:
-    """Build a user_inventory document for an admin-gifted item."""
-    now = datetime.now(timezone.utc)
-    item_id = listing["item_id"] if listing else f"item_{uuid.uuid4().hex[:12]}"
-    untradeable_until = None
-    if untradeable_hours > 0:
-        untradeable_until = (now + timedelta(hours=untradeable_hours)).isoformat()
-    return {
-        "inventory_id": f"inv_{uuid.uuid4().hex[:12]}",
-        "user_id": user_id,
-        "item_id": item_id,
-        "item_name": name,
-        "item_rarity": rarity.lower(),
-        "item_image": image,
-        "item_flavor_text": description,
-        "purchase_price": 0.0,
-        "base_value": value,
-        "acquired_at": now.isoformat(),
-        "acquired_from": "admin_gift",
-        "untradeable_until": untradeable_until,
-    }
 
 @api_router.post("/admin/give-item")
 async def admin_give_item(data: AdminGiveItemRequest, request: Request):

@@ -3,3 +3,8 @@ from services.discord_service import *
 from services.xp_service import *
 from services.chat_moderation import *
 from services.auth_utils import *
+from services.economy_service import *
+from services.chart_service import *
+from services.inventory_service import *
+from services.quest_service import *
+from services.admin_utils import *
