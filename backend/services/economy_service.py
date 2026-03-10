@@ -1,4 +1,5 @@
 """Economy service — big wins, RAP/demand, owner changes, inventory value tracking."""
+import uuid
 from datetime import datetime, timezone, timedelta
 from database import db
 from config import *

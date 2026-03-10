@@ -1,4 +1,5 @@
 """Chat moderation system — profanity, spam, advertising detection."""
+import uuid
 import re
 import logging
 import aiohttp

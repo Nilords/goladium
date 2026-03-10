@@ -1,4 +1,5 @@
 """Chart and analytics service — value snapshots, candles, account activity."""
+import uuid
 import logging
 from datetime import datetime, timezone, timedelta
 from typing import List, Optional
