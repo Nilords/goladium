@@ -1976,6 +1976,16 @@ async def delete_avatar(request: Request):
     
     return {"message": "Avatar removed successfully"}
 
+
+def get_average_symbol_probability(symbol: str, reel_distributions: dict) -> float:
+    """Calculate average appearance probability for a symbol across all reels."""
+    total_prob = 0
+    for reel_idx, dist in reel_distributions.items():
+        reel_total = sum(dist.values())
+        symbol_count = dist.get(symbol, 0)
+        total_prob += (symbol_count / reel_total) * 100 if reel_total > 0 else 0
+    return round(total_prob / len(reel_distributions), 2)
+
 # ============== SLOT GAME ENDPOINTS ==============
 
 @api_router.get("/games/slots")
