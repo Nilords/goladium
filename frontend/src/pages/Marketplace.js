@@ -399,7 +399,7 @@ export default function Marketplace() {
   };
 
   // ─── Render ──────────────────────────────────
-  const feePercent = 30;
+  const feePercent = 5;
   const priceNum = parseFloat(listPrice) || 0;
   const feeAmount = Math.round(priceNum * feePercent) / 100;
   const sellerReceives = Math.round((priceNum - feeAmount) * 100) / 100;

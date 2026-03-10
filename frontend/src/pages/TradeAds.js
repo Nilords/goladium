@@ -138,9 +138,19 @@ const TradeAdCard = ({ ad, isOwn, onDelete, lang }) => (
 
       <div className="flex items-start gap-3">
         <div className="flex-1 min-w-0">
-          <p className="text-[#00FF94] text-[10px] font-mono uppercase tracking-wider mb-1.5">
-            {tl('offering', lang)}
-          </p>
+          <div className="flex items-center justify-between mb-1.5">
+            <p className="text-[#00FF94] text-[10px] font-mono uppercase tracking-wider">
+              {tl('offering', lang)}
+            </p>
+            <div className="flex gap-2">
+              <span className="text-[10px] font-mono text-amber-400/70">
+                Value {formatCurrency(ad.offering_items.reduce((s, i) => s + (i.item_value || 0), 0) + (ad.offering_g || 0))}
+              </span>
+              <span className="text-[10px] font-mono text-sky-400/70">
+                RAP {formatCurrency(ad.offering_items.reduce((s, i) => s + (i.item_rap || 0), 0))}
+              </span>
+            </div>
+          </div>
           <div className="flex flex-wrap gap-1">
             {ad.offering_items.map((item, i) => (
               <ItemChip key={i} item={item} />
@@ -157,9 +167,19 @@ const TradeAdCard = ({ ad, isOwn, onDelete, lang }) => (
         <ArrowRight className="w-5 h-5 text-white/20 mt-5 flex-shrink-0" />
 
         <div className="flex-1 min-w-0">
-          <p className="text-[#FF6B6B] text-[10px] font-mono uppercase tracking-wider mb-1.5">
-            {tl('seeking', lang)}
-          </p>
+          <div className="flex items-center justify-between mb-1.5">
+            <p className="text-[#FF6B6B] text-[10px] font-mono uppercase tracking-wider">
+              {tl('seeking', lang)}
+            </p>
+            <div className="flex gap-2">
+              <span className="text-[10px] font-mono text-amber-400/70">
+                Value {formatCurrency(ad.seeking_items.reduce((s, i) => s + (i.item_value || 0), 0) + (ad.seeking_g || 0))}
+              </span>
+              <span className="text-[10px] font-mono text-sky-400/70">
+                RAP {formatCurrency(ad.seeking_items.reduce((s, i) => s + (i.item_rap || 0), 0))}
+              </span>
+            </div>
+          </div>
           <div className="flex flex-wrap gap-1">
             {ad.seeking_items.map((item, i) => (
               <ItemChip key={i} item={item} />
@@ -202,12 +222,10 @@ const SlotCard = ({ item, onRemove }) => {
         <Package className="w-8 h-8" style={{ color: colors.text }} />
       )}
       <p className="text-[8px] text-white/70 truncate w-full text-center mt-1 leading-tight font-medium">{name}</p>
-      {(val > 0 || rap > 0) && (
-        <div className="flex flex-col items-center gap-0 mt-0.5">
-          {val > 0 && <span className="text-[8px] font-mono text-amber-400/80">V {formatCurrency(val)}</span>}
-          {rap > 0 && <span className="text-[8px] font-mono text-sky-400/80">R {formatCurrency(rap)}</span>}
-        </div>
-      )}
+      <div className="flex flex-col items-center gap-0 mt-0.5">
+        <span className="text-[10px] font-mono text-amber-400/80">Value {formatCurrency(val)}</span>
+        <span className="text-[10px] font-mono text-sky-400/80">RAP {formatCurrency(rap)}</span>
+      </div>
       <button
         onClick={onRemove}
         className="absolute -top-1.5 -right-1.5 w-4 h-4 rounded-full bg-red-500 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity shadow-md"
@@ -249,12 +267,10 @@ const ItemPickerRow = ({ item, onAdd, disabled }) => {
         <p className="text-white text-xs font-medium truncate">{name}</p>
         <p className="text-[10px] font-mono uppercase" style={{ color: colors.text }}>{rarity}</p>
       </div>
-      {(val > 0 || rap > 0) && (
-        <div className="flex flex-col items-end gap-0 flex-shrink-0">
-          {val > 0 && <span className="text-[9px] font-mono text-amber-400/70">V {formatCurrency(val)}</span>}
-          {rap > 0 && <span className="text-[9px] font-mono text-sky-400/70">R {formatCurrency(rap)}</span>}
-        </div>
-      )}
+      <div className="flex flex-col items-end gap-0 flex-shrink-0">
+        <span className="text-[10px] font-mono text-amber-400/70">Value {formatCurrency(val)}</span>
+        <span className="text-[10px] font-mono text-sky-400/70">RAP {formatCurrency(rap)}</span>
+      </div>
       {!disabled && <Plus className="w-3.5 h-3.5 text-white/25 flex-shrink-0" />}
     </div>
   );
@@ -564,11 +580,10 @@ export default function TradeAds() {
                 <span className="text-[#00FF94] text-xs font-mono uppercase tracking-wider font-bold">
                   {tl('offering', lang)} ({offeringSlots.length}/10)
                 </span>
-                {offeringTotal > 0 && (
-                  <span className="text-amber-400 text-xs font-mono">
-                    ≈ {formatCurrency(offeringTotal)} G
-                  </span>
-                )}
+                <div className="flex flex-col items-end">
+                  <span className="text-amber-400/80 text-[10px] font-mono">Value {formatCurrency(offeringTotal)}</span>
+                  <span className="text-white/30 text-[9px] font-mono">{offeringSlots.length} item{offeringSlots.length !== 1 ? 's' : ''}{offeringG ? ` + ${offeringG}G` : ''}</span>
+                </div>
               </div>
 
               {/* Slots */}
@@ -604,11 +619,10 @@ export default function TradeAds() {
                 <span className="text-[#FF6B6B] text-xs font-mono uppercase tracking-wider font-bold">
                   {tl('seeking', lang)} ({seekingSlots.length}/10)
                 </span>
-                {seekingTotal > 0 && (
-                  <span className="text-amber-400 text-xs font-mono">
-                    ≈ {formatCurrency(seekingTotal)} G
-                  </span>
-                )}
+                <div className="flex flex-col items-end">
+                  <span className="text-amber-400/80 text-[10px] font-mono">Value {formatCurrency(seekingTotal)}</span>
+                  <span className="text-white/30 text-[9px] font-mono">{seekingSlots.length} item{seekingSlots.length !== 1 ? 's' : ''}{seekingG ? ` + ${seekingG}G` : ''}</span>
+                </div>
               </div>
 
               {/* Slots */}

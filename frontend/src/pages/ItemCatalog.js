@@ -93,7 +93,7 @@ const CatalogItemCard = ({ item, onClick, lang }) => {
         </div>
 
         <div className="flex items-center justify-between text-white/30 text-[10px] font-mono">
-          <span>{item.total_quantity}x</span>
+          <span title="In circulation / Total ever created">{item.total_quantity} / {item.total_ever_created ?? item.total_quantity}</span>
           {item.active_listings > 0 && (
             <span className="text-[#00FF94]">
               {item.active_listings} {t('listings', lang)}

@@ -1281,7 +1281,7 @@ class TradeResponse(BaseModel):
     g_fee_amount: Optional[float] = None  # Calculated fee if G involved
 
 # ============== MARKETPLACE MODELS ==============
-MARKETPLACE_FEE_PERCENT = 30  # 30% fee on marketplace sales (currency sink)
+MARKETPLACE_FEE_PERCENT = 5  # 5% fee on marketplace sales (currency sink)
 
 class MarketplaceListRequest(BaseModel):
     """Request to list an item on the marketplace"""
@@ -4285,11 +4285,16 @@ async def get_user_inventory(request: Request):
     ]
     
     stacked_items = await db.user_inventory.aggregate(pipeline).to_list(500)
-    
+
+    # Batch-fetch value/rap from db.items for all item_ids
+    item_ids = list({i["item_id"] for i in stacked_items})
+    item_defs_cursor = db.items.find({"item_id": {"$in": item_ids}}, {"_id": 0, "item_id": 1, "value": 1, "rap": 1})
+    item_defs_map = {d["item_id"]: d async for d in item_defs_cursor}
+
     # Sell fee percentage (30% fee = 70% return)
     SELL_FEE_PERCENT = 30
     SELL_RETURN_PERCENT = 100 - SELL_FEE_PERCENT
-    
+
     # Enrich with rarity info and sell values
     items = []
     for item in stacked_items:
@@ -4328,6 +4333,9 @@ async def get_user_inventory(request: Request):
         enriched_item["purchase_price"] = purchase_price
         enriched_item["sell_value"] = round(purchase_price * SELL_RETURN_PERCENT / 100, 2)
         enriched_item["sell_fee_percent"] = SELL_FEE_PERCENT
+        item_def_data = item_defs_map.get(item["item_id"], {})
+        enriched_item["value"] = item_def_data.get("value", 0) or 0
+        enriched_item["rap"] = item_def_data.get("rap", 0) or 0
         
         items.append(enriched_item)
     
@@ -4891,15 +4899,14 @@ async def sell_inventory_item(sell_request: SellItemRequest, request: Request):
     if mp_listed:
         raise HTTPException(status_code=400, detail="This item is currently listed on the marketplace. Delist it first.")
     
-    # Get sell price from saved purchase_price
-    purchase_price = item.get("purchase_price", 0)
-    
-    # If no purchase price saved, this is a legacy item - cannot sell without price
-    if purchase_price <= 0:
-        raise HTTPException(status_code=400, detail="This item has no recorded value. Please view your inventory first to sync item values.")
-    
-    sell_amount = round(purchase_price * SELL_RETURN_PERCENT / 100, 2)
-    fee_amount = round(purchase_price * SELL_FEE_PERCENT / 100, 2)
+    # Sell price is always purchase_price — prevents RAP-exploit quick-selling
+    base_price = item.get("purchase_price", 0) or 0
+
+    if base_price <= 0:
+        raise HTTPException(status_code=400, detail="This item has no recorded purchase price and cannot be sold.")
+
+    sell_amount = round(base_price * SELL_RETURN_PERCENT / 100, 2)
+    fee_amount = round(base_price * SELL_FEE_PERCENT / 100, 2)
     
     # Remove item from inventory
     await db.user_inventory.delete_one({
@@ -5023,18 +5030,20 @@ async def sell_inventory_items_batch(data: SellItemsBatchRequest, request: Reque
             raise HTTPException(status_code=400, detail="Chests cannot be sold")
         raise HTTPException(status_code=400, detail="No sellable items found")
     
-    # Calculate totals
+    # Calculate totals (always based on purchase_price — RAP-independent quicksell)
     total_value = 0
     total_sell_amount = 0
     total_fee = 0
     sold_items = []
-    
+
     for item in sellable_items:
-        purchase_price = item.get("purchase_price", 0)
-        sell_amount = round(purchase_price * SELL_RETURN_PERCENT / 100, 2)
-        fee_amount = round(purchase_price * SELL_FEE_PERCENT / 100, 2)
-        
-        total_value += purchase_price
+        base_price = item.get("purchase_price", 0) or 0
+        if base_price <= 0:
+            continue  # Skip items with no purchase price
+        sell_amount = round(base_price * SELL_RETURN_PERCENT / 100, 2)
+        fee_amount = round(base_price * SELL_FEE_PERCENT / 100, 2)
+
+        total_value += base_price
         total_sell_amount += sell_amount
         total_fee += fee_amount
         
@@ -5042,7 +5051,7 @@ async def sell_inventory_items_batch(data: SellItemsBatchRequest, request: Reque
             "inventory_id": item["inventory_id"],
             "item_id": item["item_id"],
             "item_name": item["item_name"],
-            "value": purchase_price,
+            "value": base_price,
             "sell_amount": sell_amount
         })
     

@@ -3,11 +3,11 @@ import { Link, useLocation } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { useLanguage } from '../contexts/LanguageContext';
 import { formatCurrency } from '../lib/formatCurrency';
-import { 
-  Home, 
-  Gamepad2, 
-  CircleDot, 
-  User, 
+import {
+  Home,
+  Gamepad2,
+  CircleDot,
+  User,
   Settings as SettingsIcon,
   LogOut,
   Menu,
@@ -21,7 +21,9 @@ import {
   Store,
   BookOpen,
   Megaphone,
-  Users
+  Users,
+  ChevronDown,
+  BarChart3,
 } from 'lucide-react';
 import { Button } from './ui/button';
 import {
@@ -32,7 +34,6 @@ import {
   DropdownMenuTrigger,
 } from './ui/dropdown-menu';
 import { Avatar, AvatarFallback, AvatarImage } from './ui/avatar';
-import { BarChart3 } from 'lucide-react';
 
 const Navbar = () => {
   const { user, logout } = useAuth();
@@ -40,35 +41,69 @@ const Navbar = () => {
   const location = useLocation();
   const [mobileMenuOpen, setMobileMenuOpen] = React.useState(false);
 
-  const navItems = [
-    { path: '/dashboard', label: 'Lobby', icon: Home },
-    { path: '/leaderboards', label: language === 'de' ? 'Rangliste' : 'Ranks', icon: BarChart3 },
-    { path: '/slots/classic', label: 'Slots', icon: Gamepad2 },
-    { path: '/jackpot', label: 'Jackpot', icon: Trophy },
-    { path: '/wheel', label: language === 'de' ? 'Glücksrad' : 'Wheel', icon: CircleDot },
-    { path: '/shop', label: 'Shop', icon: ShoppingBag },
-    { path: '/prestige-shop', label: 'Prestige', icon: Crown },
-    { path: '/trading', label: 'Trading', icon: ArrowLeftRight },
-    { path: '/marketplace', label: language === 'de' ? 'Marktplatz' : 'Market', icon: Store },
-    { path: '/catalog', label: language === 'de' ? 'Katalog' : 'Catalog', icon: BookOpen },
-    { path: '/trade-ads', label: language === 'de' ? 'Anzeigen' : 'Ads', icon: Megaphone },
-    { path: '/players', label: language === 'de' ? 'Spieler' : 'Players', icon: Users },
-  ];
-
   const isActive = (path) => {
-    if (path === '/slots/classic') {
-      return location.pathname.startsWith('/slots');
-    }
+    if (path === '/slots/classic') return location.pathname.startsWith('/slots');
     return location.pathname === path;
   };
 
+  const isGroupActive = (paths) => paths.some((p) => isActive(p));
+
+  // Grouped nav structure
+  const soloItems = [
+    { path: '/dashboard', label: 'Lobby', icon: Home },
+  ];
+
+  const groups = [
+    {
+      label: 'Games',
+      icon: Gamepad2,
+      items: [
+        { path: '/slots/classic', label: 'Slots', icon: Gamepad2 },
+        { path: '/jackpot', label: 'Jackpot', icon: Trophy },
+        { path: '/wheel', label: language === 'de' ? 'Glücksrad' : 'Wheel', icon: CircleDot },
+      ],
+    },
+    {
+      label: 'Shop',
+      icon: ShoppingBag,
+      items: [
+        { path: '/shop', label: 'Shop', icon: ShoppingBag },
+        { path: '/prestige-shop', label: 'Prestige', icon: Crown },
+        { path: '/marketplace', label: language === 'de' ? 'Marktplatz' : 'Market', icon: Store },
+      ],
+    },
+    {
+      label: 'Trading',
+      icon: ArrowLeftRight,
+      items: [
+        { path: '/trading', label: 'Trading', icon: ArrowLeftRight },
+        { path: '/trade-ads', label: language === 'de' ? 'Anzeigen' : 'Ads', icon: Megaphone },
+        { path: '/catalog', label: language === 'de' ? 'Katalog' : 'Catalog', icon: BookOpen },
+      ],
+    },
+    {
+      label: 'Community',
+      icon: Users,
+      items: [
+        { path: '/leaderboards', label: language === 'de' ? 'Rangliste' : 'Ranks', icon: BarChart3 },
+        { path: '/players', label: language === 'de' ? 'Spieler' : 'Players', icon: Users },
+      ],
+    },
+  ];
+
+  const linkClass = (active) =>
+    `flex items-center gap-1.5 px-2.5 py-2 rounded-lg transition-all duration-200 whitespace-nowrap h-9 text-xs font-medium ${
+      active
+        ? 'bg-primary/25 text-primary border border-primary/40'
+        : 'bg-white/10 text-white/80 hover:text-white hover:bg-white/15 border border-white/20 hover:border-white/30'
+    }`;
+
   return (
     <>
-
-      {/* Main Navbar */}
       <nav className="sticky top-0 z-50 bg-black/80 backdrop-blur-xl border-b border-white/10">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex items-center justify-between h-16">
+
             {/* Logo */}
             <Link to="/dashboard" className="flex items-center space-x-3 group">
               <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-primary to-secondary flex items-center justify-center transform group-hover:scale-105 transition-transform">
@@ -81,34 +116,57 @@ const Navbar = () => {
 
             {/* Desktop Navigation */}
             <div className="hidden md:flex items-center space-x-1">
-              {navItems.map((item) => (
+              {/* Solo items */}
+              {soloItems.map((item) => (
                 <Link
                   key={item.path}
                   to={item.path}
                   data-testid={`nav-${item.path.slice(1)}`}
-                  className={`flex items-center gap-1.5 px-2.5 py-2 rounded-lg transition-all duration-200 whitespace-nowrap h-9 ${
-                    isActive(item.path)
-                      ? 'bg-primary/25 text-primary border border-primary/40'
-                      : 'bg-white/10 text-white/80 hover:text-white hover:bg-white/15 border border-white/20 hover:border-white/30'
-                  }`}
+                  className={linkClass(isActive(item.path))}
                 >
                   <item.icon className="w-4 h-4 shrink-0" />
-                  <span className="text-xs font-medium">{item.label}</span>
+                  <span>{item.label}</span>
                 </Link>
+              ))}
+
+              {/* Grouped dropdowns */}
+              {groups.map((group) => (
+                <DropdownMenu key={group.label}>
+                  <DropdownMenuTrigger asChild>
+                    <button className={linkClass(isGroupActive(group.items.map((i) => i.path)))}>
+                      <group.icon className="w-4 h-4 shrink-0" />
+                      <span>{group.label}</span>
+                      <ChevronDown className="w-3 h-3 opacity-60" />
+                    </button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent className="bg-[#0A0A0C] border-white/10 min-w-[160px]" align="start">
+                    {group.items.map((item) => (
+                      <DropdownMenuItem key={item.path} asChild>
+                        <Link
+                          to={item.path}
+                          className={`flex items-center gap-2 cursor-pointer ${
+                            isActive(item.path) ? 'text-primary' : 'text-white/80 hover:text-white'
+                          }`}
+                        >
+                          <item.icon className="w-4 h-4" />
+                          {item.label}
+                        </Link>
+                      </DropdownMenuItem>
+                    ))}
+                  </DropdownMenuContent>
+                </DropdownMenu>
               ))}
             </div>
 
             {/* Balance & User */}
             <div className="flex items-center space-x-4">
-              {/* G Balance Display */}
               <div className="hidden sm:flex items-center space-x-2 px-3 py-2 rounded-lg bg-black/50 border border-gold/30">
                 <span className="text-gold font-mono text-lg font-bold" data-testid="user-balance">
                   {formatCurrency(user?.balance)}
                 </span>
                 <span className="text-gold/60 text-sm">G</span>
               </div>
-              
-              {/* A Balance Display */}
+
               <div className="hidden sm:flex items-center space-x-2 px-3 py-2 rounded-lg bg-black/50 border border-primary/30">
                 <span className="text-primary font-mono text-lg font-bold" data-testid="user-prestige-balance">
                   {(user?.balance_a || 0).toFixed(0)}
@@ -116,7 +174,6 @@ const Navbar = () => {
                 <span className="text-primary/60 text-sm">A</span>
               </div>
 
-              {/* Language Toggle - can be hidden via env var */}
               {showLanguageToggle && (
                 <Button
                   variant="ghost"
@@ -174,7 +231,7 @@ const Navbar = () => {
                     </Link>
                   </DropdownMenuItem>
                   <DropdownMenuSeparator className="bg-white/10" />
-                  <DropdownMenuItem 
+                  <DropdownMenuItem
                     onClick={logout}
                     className="text-red-400 hover:text-red-300 focus:text-red-300 cursor-pointer"
                     data-testid="logout-btn"
@@ -203,15 +260,15 @@ const Navbar = () => {
         {mobileMenuOpen && (
           <div className="md:hidden border-t border-white/20 animate-fade-in bg-black/50">
             <div className="px-4 py-4 space-y-2">
-              {/* Mobile Balance */}
               <div className="flex items-center justify-center space-x-2 px-4 py-3 rounded-lg bg-black/50 border border-gold/30 mb-4">
                 <span className="text-gold font-mono text-xl font-bold">
                   {formatCurrency(user?.balance)}
                 </span>
                 <span className="text-gold/60">G</span>
               </div>
-              
-              {navItems.map((item) => (
+
+              {/* Solo items */}
+              {soloItems.map((item) => (
                 <Link
                   key={item.path}
                   to={item.path}
@@ -225,6 +282,30 @@ const Navbar = () => {
                   <item.icon className="w-5 h-5" />
                   <span className="font-medium">{item.label}</span>
                 </Link>
+              ))}
+
+              {/* Groups flat in mobile */}
+              {groups.map((group) => (
+                <div key={group.label}>
+                  <p className="text-white/30 text-xs font-mono uppercase tracking-wider px-2 pt-3 pb-1">
+                    {group.label}
+                  </p>
+                  {group.items.map((item) => (
+                    <Link
+                      key={item.path}
+                      to={item.path}
+                      onClick={() => setMobileMenuOpen(false)}
+                      className={`flex items-center space-x-3 px-4 py-3 rounded-lg transition-all duration-200 ${
+                        isActive(item.path)
+                          ? 'bg-primary/25 text-primary border border-primary/40'
+                          : 'bg-white/10 text-white/80 hover:text-white hover:bg-white/15 border border-white/20 hover:border-white/30'
+                      }`}
+                    >
+                      <item.icon className="w-5 h-5" />
+                      <span className="font-medium">{item.label}</span>
+                    </Link>
+                  ))}
+                </div>
               ))}
             </div>
           </div>

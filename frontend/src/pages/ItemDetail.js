@@ -43,6 +43,7 @@ const t = (key, lang) => {
     activeListings: { de: 'Aktive Angebote', en: 'Active Listings' },
     owners: { de: 'Besitzer', en: 'Owners' },
     inCirculation: { de: 'Im Umlauf', en: 'In Circulation' },
+    totalEverCreated: { de: 'Jemals erstellt', en: 'Total Ever Created' },
     priceHistory: { de: 'Preisverlauf', en: 'Price History' },
     recentSales: { de: 'Letzte Verkäufe', en: 'Recent Sales' },
     noSales: { de: 'Noch keine Verkäufe', en: 'No sales yet' },
@@ -369,6 +370,12 @@ export default function ItemDetail() {
             label={t('inCirculation', lang)}
             value={item.total_quantity}
             icon={Package}
+          />
+          <StatBox
+            label={t('totalEverCreated', lang)}
+            value={item.total_ever_created ?? item.total_quantity}
+            icon={Package}
+            color="#A855F7"
           />
         </div>
 
