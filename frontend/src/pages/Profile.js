@@ -41,10 +41,7 @@ import {
   ImageIcon,
   X,
   ShoppingBag,
-  Coins,
-  Shield,
-  Target,
-  Package
+  Coins
 } from 'lucide-react';
 
 
@@ -60,18 +57,17 @@ const Profile = () => {
   const [historyTotalPages, setHistoryTotalPages] = useState(0);
   const [loading, setLoading] = useState(true);
   const [historyLoading, setHistoryLoading] = useState(false);
-  const [inventory, setInventory] = useState([]);
-  const [inventoryLoading, setInventoryLoading] = useState(false);
   
   // Check URL params for tab and view selection
   const urlTab = searchParams.get('tab');
-  const initialTab = urlTab === 'analytics' ? 'analytics' : urlTab === 'inventory' ? 'inventory' : 'history';
+  const initialTab = urlTab === 'analytics' ? 'analytics' : 'history';
   const [activeTab, setActiveTab] = useState(initialTab);
 
   // Update active tab when URL changes
   useEffect(() => {
-    if (urlTab === 'analytics') setActiveTab('analytics');
-    else if (urlTab === 'inventory') setActiveTab('inventory');
+    if (urlTab === 'analytics') {
+      setActiveTab('analytics');
+    }
   }, [urlTab]);
 
   useEffect(() => {
@@ -83,27 +79,8 @@ const Profile = () => {
   useEffect(() => {
     if (activeTab === 'history') {
       loadHistory(historyPage);
-    } else if (activeTab === 'inventory' && inventory.length === 0) {
-      loadInventory();
     }
   }, [historyPage, activeTab]);
-
-  const loadInventory = async () => {
-    setInventoryLoading(true);
-    try {
-      const res = await fetch('/api/inventory', {
-        headers: { 'Authorization': `Bearer ${token}` },
-      });
-      if (res.ok) {
-        const data = await res.json();
-        setInventory(data.items || []);
-      }
-    } catch (e) {
-      console.error('Failed to load inventory:', e);
-    } finally {
-      setInventoryLoading(false);
-    }
-  };
 
   const loadProfileData = async () => {
     try {
@@ -312,7 +289,7 @@ const Profile = () => {
 
         {/* Tabs - Two tabs: History and Stats & Analytics */}
         <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-          <TabsList className="grid w-full grid-cols-3 bg-[#0A0A0C] border border-white/5 mb-6 h-12">
+          <TabsList className="grid w-full grid-cols-2 bg-[#0A0A0C] border border-white/5 mb-6 h-12">
             <TabsTrigger 
               value="history"
               className="data-[state=active]:bg-primary data-[state=active]:text-black h-full"
@@ -322,23 +299,12 @@ const Profile = () => {
               {t('history')}
             </TabsTrigger>
             <TabsTrigger 
-              value="inventory"
-              className="data-[state=active]:bg-primary data-[state=active]:text-black h-full"
-              data-testid="inventory-tab"
-            >
-              <Package className="w-4 h-4 mr-2" />
-              {language === 'de' ? 'Inventar' : 'Inventory'}
-              {inventory.length > 0 && (
-                <span className="ml-1 text-xs opacity-60">({inventory.length})</span>
-              )}
-            </TabsTrigger>
-            <TabsTrigger 
               value="analytics"
               className="data-[state=active]:bg-primary data-[state=active]:text-black h-full"
               data-testid="analytics-tab"
             >
               <Activity className="w-4 h-4 mr-2" />
-              {language === 'de' ? 'Statistiken' : 'Stats'}
+              {language === 'de' ? 'Statistiken & Analyse' : 'Stats & Analytics'}
             </TabsTrigger>
           </TabsList>
 
@@ -393,21 +359,15 @@ const Profile = () => {
                                   <ShoppingBag className="w-4 h-4 text-blue-400" />
                                 ) : bet.game_type === 'item_sale' ? (
                                   <Coins className="w-4 h-4 text-green-400" />
-                                ) : bet.game_type === 'admin' ? (
-                                  <Shield className="w-4 h-4 text-orange-400" />
-                                ) : bet.game_type === 'quest' ? (
-                                  <Target className="w-4 h-4 text-pink-400" />
                                 ) : (
                                   <Gamepad2 className="w-4 h-4 text-primary" />
                                 )}
                                 <span className="text-white capitalize">
-                                  {bet.game_type === 'slot' ? (bet.slot_id || 'Slot') :
-                                   bet.game_type === 'jackpot' ? 'Jackpot' :
+                                  {bet.game_type === 'slot' ? (bet.slot_id || 'Slot') : 
+                                   bet.game_type === 'jackpot' ? 'Jackpot' : 
                                    bet.game_type === 'item_purchase' ? (bet.details?.item_name || 'Item') :
                                    bet.game_type === 'item_sale' ? (bet.details?.item_name || 'Item') :
-                                   bet.game_type === 'admin' ? 'Admin' :
-                                   bet.game_type === 'quest' ? 'Quest' :
-                                   bet.game_type || 'Unknown'}
+                                   'Slot'}
                                 </span>
                               </div>
                             </TableCell>
@@ -467,76 +427,6 @@ const Profile = () => {
           {/* Analytics Tab - Combined Account & Inventory Charts */}
           <TabsContent value="analytics" className="mt-0">
             <AnalyticsCharts defaultView={searchParams.get('view') || 'account'} />
-          </TabsContent>
-
-          {/* Inventory Tab */}
-          <TabsContent value="inventory" className="mt-0">
-            <Card className="bg-[#0A0A0C] border-white/5">
-              <CardHeader className="border-b border-white/10 py-3">
-                <p className="text-white/60 text-sm">
-                  {inventory.length} {language === 'de' ? 'Items' : 'Items'}
-                </p>
-              </CardHeader>
-              <CardContent className="p-4">
-                {inventoryLoading ? (
-                  <div className="flex items-center justify-center py-12">
-                    <div className="w-8 h-8 border-2 border-primary border-t-transparent rounded-full animate-spin" />
-                  </div>
-                ) : inventory.length === 0 ? (
-                  <div className="text-center py-12">
-                    <Package className="w-10 h-10 text-white/10 mx-auto mb-3" />
-                    <p className="text-white/30 text-sm font-mono">
-                      {language === 'de' ? 'Keine Items im Inventar' : 'No items in inventory'}
-                    </p>
-                  </div>
-                ) : (
-                  <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3">
-                    {inventory.map((item) => {
-                      const rarityColors = {
-                        common: { bg: 'rgba(156,163,175,0.15)', border: 'rgba(156,163,175,0.4)', text: '#9CA3AF' },
-                        uncommon: { bg: 'rgba(34,197,94,0.15)', border: 'rgba(34,197,94,0.4)', text: '#22C55E' },
-                        rare: { bg: 'rgba(59,130,246,0.15)', border: 'rgba(59,130,246,0.4)', text: '#3B82F6' },
-                        epic: { bg: 'rgba(168,85,247,0.15)', border: 'rgba(168,85,247,0.4)', text: '#A855F7' },
-                        legendary: { bg: 'rgba(245,158,11,0.15)', border: 'rgba(245,158,11,0.4)', text: '#F59E0B' },
-                      };
-                      const colors = rarityColors[item.item_rarity] || rarityColors.common;
-                      return (
-                        <div
-                          key={item.inventory_id}
-                          data-testid={`profile-inv-${item.inventory_id}`}
-                          className="bg-black/40 border border-white/5 rounded-lg overflow-hidden hover:border-white/15 transition-colors"
-                        >
-                          <div
-                            className="h-20 flex items-center justify-center"
-                            style={{ background: `linear-gradient(135deg, ${colors.bg}, transparent)` }}
-                          >
-                            {item.item_image ? (
-                              <img src={item.item_image} alt="" className="h-14 w-14 object-contain" />
-                            ) : (
-                              <Package className="w-8 h-8" style={{ color: colors.text, opacity: 0.5 }} />
-                            )}
-                          </div>
-                          <div className="p-2">
-                            <p className="text-white text-xs font-medium truncate">{item.item_name}</p>
-                            <div className="flex items-center justify-between mt-1">
-                              <span
-                                className="text-[10px] font-mono uppercase"
-                                style={{ color: colors.text }}
-                              >
-                                {item.item_rarity}
-                              </span>
-                              <span className="text-white/20 text-[10px] font-mono">
-                                {item.inventory_id.slice(-6)}
-                              </span>
-                            </div>
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </div>
-                )}
-              </CardContent>
-            </Card>
           </TabsContent>
         </Tabs>
       </main>

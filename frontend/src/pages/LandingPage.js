@@ -1,8 +1,7 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { useLanguage } from '../contexts/LanguageContext';
-import { HomeSEO } from '../components/SEO';
 import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
 import { Label } from '../components/ui/label';
@@ -11,6 +10,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../co
 import { toast } from 'sonner';
 import { Gamepad2, Sparkles, Trophy, Gift, Eye, EyeOff, MessageCircle } from 'lucide-react';
 import Turnstile from '../components/Turnstile';
+import { useCallback } from 'react';
 
 const LandingPage = () => {
   const navigate = useNavigate();
@@ -112,8 +112,6 @@ const LandingPage = () => {
 
   return (
     <div className="min-h-screen bg-[#050505] relative overflow-hidden">
-      <HomeSEO />
-      
       {/* Background Effects */}
       <div className="absolute inset-0 grid-bg opacity-30" />
       <div className="absolute top-0 left-1/4 w-96 h-96 bg-primary/10 rounded-full blur-[128px]" />
@@ -145,6 +143,27 @@ const LandingPage = () => {
         )}
       </div>
 
+      {/* Prominent 18+ Age Restriction Banner - Visible without scrolling w*/}
+      <div className="relative z-20 w-full bg-amber-500/10 border-b border-amber-500/30 py-3">
+        <div className="container mx-auto px-4 flex items-center justify-center gap-4">
+          <div className="flex items-center justify-center w-12 h-12 rounded-full bg-amber-500 text-black font-bold text-lg shadow-lg shadow-amber-500/30">
+            18+
+          </div>
+          <div className="text-center">
+            <p className="text-amber-400 font-semibold text-lg">
+              {language === 'de' ? 'Nur für Erwachsene ab 18 Jahren' : 'For Adults 18+ Only'}
+            </p>
+            <p className="text-amber-400/70 text-sm">
+              {language === 'de' 
+                ? 'Durch die Nutzung dieser Website bestätigst du, dass du mindestens 18 Jahre alt bist.'
+                : 'By using this website, you confirm that you are at least 18 years old.'}
+            </p>
+          </div>
+          <div className="flex items-center justify-center w-12 h-12 rounded-full bg-amber-500 text-black font-bold text-lg shadow-lg shadow-amber-500/30">
+            18+
+          </div>
+        </div>
+      </div>
 
       <div className="relative z-10 container mx-auto px-4 py-12 lg:py-20">
         <div className="grid lg:grid-cols-2 gap-12 lg:gap-20 items-center">

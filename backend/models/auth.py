@@ -4,7 +4,6 @@ from datetime import datetime
 
 
 class UserCreate(BaseModel):
-    email: Optional[str] = None
     password: str
     username: str
     turnstile_token: Optional[str] = None
@@ -19,7 +18,7 @@ class UserLogin(BaseModel):
 class UserResponse(BaseModel):
     model_config = ConfigDict(extra="ignore")
     user_id: str
-    email: str
+    email: Optional[str] = None
     username: str
     balance: float
     balance_a: float = 0.0

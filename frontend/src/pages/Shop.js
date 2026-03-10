@@ -2,7 +2,6 @@ import React, { useState, useEffect } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { useLanguage } from '../contexts/LanguageContext';
 import { useSound } from '../contexts/SoundContext';
-import { ShopSEO } from '../components/SEO';
 import { formatCurrency } from '../lib/formatCurrency';
 import Navbar from '../components/Navbar';
 import Chat from '../components/Chat';
@@ -123,7 +122,6 @@ const Shop = () => {
 
   return (
     <div className="min-h-screen bg-[#050505] flex flex-col">
-      <ShopSEO />
       <Navbar />
       
       <main className="flex-1 max-w-6xl mx-auto px-4 w-full sm:px-6 lg:px-8 py-8">

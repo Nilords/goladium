@@ -3,7 +3,7 @@ import uuid
 import re
 import logging
 import aiohttp
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 from database import db
 from config import *
 

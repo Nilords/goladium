@@ -2,7 +2,6 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { useLanguage } from '../contexts/LanguageContext';
-import { TradingSEO } from '../components/SEO';
 import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card';
@@ -575,7 +574,6 @@ const Trading = () => {
 
   return (
     <div className="min-h-screen bg-[#050505] flex flex-col" data-testid="trading-page">
-      <TradingSEO />
       <Navbar />
       <main className="flex-1 max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-8 w-full">
           {/* Header */}

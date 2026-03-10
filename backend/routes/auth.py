@@ -7,7 +7,7 @@ from config import *
 from models import *
 from services import *
 from cache import _catalog_cache, _catalog_cache_time
-from deps import limiter
+from deps import limiter, pwd_context
 import uuid
 import logging
 import asyncio
@@ -55,12 +55,6 @@ async def register(request: Request, user_data: UserCreate):
     else:
         logging.warning("[Register] Turnstile verification SKIPPED - no secret key configured")
 
-    # Auto-generate email from username if not provided
-    email = user_data.email if user_data.email else f"{user_data.username.lower()}@goladium.local"
-    
-    existing = await db.users.find_one({"email": email}, {"_id": 0})
-    if existing:
-        raise HTTPException(status_code=400, detail="Email already registered")
     
     existing_username = await db.users.find_one({"username": user_data.username}, {"_id": 0})
     if existing_username:
@@ -77,7 +71,6 @@ async def register(request: Request, user_data: UserCreate):
     now = datetime.now(timezone.utc)
     user_doc = {
         "user_id": user_id,
-        "email": email,
         "username": user_data.username,
         "password_hash": hashed_password,
         "register_ip": client_ip,
@@ -107,7 +100,6 @@ async def register(request: Request, user_data: UserCreate):
     
     user_response = UserResponse(
         user_id=user_id,
-        email=email,
         username=user_data.username,
         balance=10.0,
         balance_a=0.0,
@@ -185,7 +177,6 @@ async def login(credentials: UserLogin, request: Request):
     
     user_response = UserResponse(
         user_id=user["user_id"],
-        email=user["email"],
         username=user["username"],
         balance=user.get("balance", 50.0),
         balance_a=user.get("balance_a", 0.0),
@@ -256,7 +247,6 @@ async def get_session_from_google(request: Request, response: Response):
         
         user_doc = {
             "user_id": user_id,
-            "email": email,
             "username": username,
             "password_hash": None,
             "balance": 10.0,
@@ -324,7 +314,6 @@ async def get_session_from_google(request: Request, response: Response):
     
     return {
         "user_id": user["user_id"],
-        "email": user["email"],
         "username": user["username"],
         "balance": user.get("balance", 50.0),
         "balance_a": user.get("balance_a", 0.0),
@@ -367,7 +356,6 @@ async def get_current_user_info(request: Request):
     
     return {
         "user_id": user["user_id"],
-        "email": user["email"],
         "username": user["username"],
         "balance": user.get("balance", 50.0),
         "balance_a": user.get("balance_a", 0.0),

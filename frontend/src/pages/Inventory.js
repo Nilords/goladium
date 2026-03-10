@@ -334,10 +334,9 @@ const Inventory = () => {
                       >
                         {item.rarity_display}
                       </Badge>
-                      <div className="flex flex-col items-end">
-                        <span className="text-amber-400/80 font-mono text-xs">Value {(item.value || 0).toFixed(0)}</span>
-                        <span className="text-sky-400/70 font-mono text-xs">RAP {(item.rap || 0).toFixed(0)}</span>
-                      </div>
+                      <span className="text-gold font-mono text-xs">
+                        {(item.purchase_price || 0).toFixed(0)} G
+                      </span>
                     </div>
                     <h3 className="text-white font-medium text-sm truncate">{item.item_name}</h3>
                   </div>
@@ -350,7 +349,7 @@ const Inventory = () => {
 
       {/* Item Detail Dialog */}
       <Dialog open={!!selectedItem && !showSellConfirm} onOpenChange={() => setSelectedItem(null)}>
-        <DialogContent className="bg-[#0A0A0C] border-white/10 max-w-sm">
+        <DialogContent className="bg-[#0A0A0C] border-white/10 max-w-md">
           {selectedItem && (
             <>
               <DialogHeader>
@@ -375,7 +374,7 @@ const Inventory = () => {
               
               <div className="space-y-4">
                 {/* Item Image */}
-                <div className={`h-36 rounded-xl bg-gradient-to-br ${getRarityGradient(selectedItem.item_rarity)} border border-white/10 flex items-center justify-center overflow-hidden`}>
+                <div className={`aspect-square rounded-xl bg-gradient-to-br ${getRarityGradient(selectedItem.item_rarity)} border border-white/10 flex items-center justify-center overflow-hidden`}>
                   {selectedItem.item_image ? (
                     <img 
                       src={selectedItem.item_image} 
@@ -384,8 +383,8 @@ const Inventory = () => {
                     />
                   ) : (
                     <div className="text-center">
-                      <Sparkles className="w-10 h-10 mx-auto mb-1" style={{ color: selectedItem.rarity_color }} />
-                      <ImageIcon className="w-6 h-6 text-white/20 mx-auto" />
+                      <Sparkles className="w-16 h-16 mx-auto mb-2" style={{ color: selectedItem.rarity_color }} />
+                      <ImageIcon className="w-8 h-8 text-white/20 mx-auto" />
                     </div>
                   )}
                 </div>
@@ -394,14 +393,8 @@ const Inventory = () => {
                 <div className="space-y-3">
                   <div className="flex items-center justify-between p-3 rounded-lg bg-white/5">
                     <span className="text-white/60 text-sm">{language === 'de' ? 'Wert' : 'Value'}</span>
-                    <span className="text-amber-400 font-mono font-bold">
-                      {(selectedItem.value || 0).toFixed(0)} G
-                    </span>
-                  </div>
-                  <div className="flex items-center justify-between p-3 rounded-lg bg-white/5">
-                    <span className="text-white/60 text-sm">RAP</span>
-                    <span className="text-sky-400 font-mono font-bold">
-                      {(selectedItem.rap || 0).toFixed(0)} G
+                    <span className="text-gold font-mono font-bold">
+                      {(selectedItem.purchase_price || 0).toFixed(2)} G
                     </span>
                   </div>
                   
@@ -448,7 +441,7 @@ const Inventory = () => {
                       data-testid="sell-item-btn"
                     >
                       <Coins className="w-4 h-4 mr-2" />
-                      {language === 'de' ? 'Quicksell' : 'Quicksell'}
+                      {language === 'de' ? 'Verkaufen' : 'Sell'}
                       {(selectedItem.count || 1) > 1 && ` (${selectedItem.count})`}
                     </Button>
                   ) : (
@@ -461,6 +454,13 @@ const Inventory = () => {
                       {language === 'de' ? 'Nicht verkaufbar' : 'Cannot sell'}
                     </Button>
                   )}
+                  <Button 
+                    variant="outline" 
+                    className="flex-1 border-white/10 text-white/40"
+                    disabled
+                  >
+                    {language === 'de' ? 'Handeln (bald)' : 'Trade (coming soon)'}
+                  </Button>
                 </div>
               </div>
             </>
@@ -476,12 +476,12 @@ const Inventory = () => {
               <DialogHeader>
                 <DialogTitle className="text-white flex items-center gap-2">
                   <AlertTriangle className="w-5 h-5 text-yellow-500" />
-                  {language === 'de' ? 'Quicksell?' : 'Quicksell?'}
+                  {language === 'de' ? 'Gegenstand verkaufen?' : 'Sell Item?'}
                 </DialogTitle>
                 <DialogDescription className="text-white/60">
-                  {language === 'de'
-                    ? 'Verkauf zum Kaufpreis (RAP-unabhängig). Erhältst 70% des Kaufpreises.'
-                    : 'Sell at purchase price (RAP-independent). You receive 70% of the purchase price.'}
+                  {language === 'de' 
+                    ? 'Bist du sicher, dass du diesen Gegenstand verkaufen möchtest?'
+                    : 'Are you sure you want to sell this item?'}
                 </DialogDescription>
               </DialogHeader>
               
@@ -547,7 +547,7 @@ const Inventory = () => {
                 <div className="space-y-2 p-4 rounded-lg bg-yellow-500/10 border border-yellow-500/20">
                   <div className="flex justify-between text-sm">
                     <span className="text-white/60">
-                      {language === 'de' ? 'Kaufpreis' : 'Purchase price'} {sellAmount > 1 ? `(${sellAmount}x)` : ''}
+                      {language === 'de' ? 'Wert' : 'Value'} {sellAmount > 1 ? `(${sellAmount}x)` : ''}
                     </span>
                     <span className="text-white font-mono">
                       {((selectedItem.purchase_price || 0) * sellAmount).toFixed(2)} G
@@ -563,7 +563,7 @@ const Inventory = () => {
                     <div className="flex justify-between">
                       <span className="text-white font-medium">{language === 'de' ? 'Du erhältst' : 'You receive'}</span>
                       <span className="text-green-400 font-mono font-bold">
-                        {((selectedItem.sell_value || (selectedItem.purchase_price || 0) * 0.7) * sellAmount).toFixed(2)} G
+                        {((selectedItem.sell_value || ((selectedItem.purchase_price || 0) * 0.7)) * sellAmount).toFixed(2)} G
                       </span>
                     </div>
                   </div>
@@ -596,8 +596,8 @@ const Inventory = () => {
                     <>
                       <Coins className="w-4 h-4 mr-2" />
                       {sellAmount > 1 
-                        ? `Quicksell ${sellAmount}x`
-                        : 'Quicksell'
+                        ? (language === 'de' ? `${sellAmount}x Verkaufen` : `Sell ${sellAmount}x`)
+                        : (language === 'de' ? 'Verkaufen' : 'Sell')
                       }
                     </>
                   )}

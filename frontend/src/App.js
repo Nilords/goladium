@@ -21,12 +21,6 @@ import Customization from './pages/Customization';
 import Profile from './pages/Profile';
 import Settings from './pages/Settings';
 import Trading from './pages/Trading';
-import Marketplace from './pages/Marketplace';
-import ItemCatalog from './pages/ItemCatalog';
-import ItemDetail from './pages/ItemDetail';
-import TradeAds from './pages/TradeAds';
-import PlayerDirectory from './pages/PlayerDirectory';
-import PlayerProfile from './pages/PlayerProfile';
 import GamePass from './pages/GamePass';
 import AuthCallback from './components/AuthCallback';
 import PrivacyPolicy from "./pages/PrivacyPolicy";
@@ -184,54 +178,6 @@ const AppRouter = () => {
         }
       />
       <Route
-        path="/marketplace"
-        element={
-          <ProtectedRoute>
-            <Marketplace />
-          </ProtectedRoute>
-        }
-      />
-      <Route
-        path="/catalog"
-        element={
-          <ProtectedRoute>
-            <ItemCatalog />
-          </ProtectedRoute>
-        }
-      />
-      <Route
-        path="/item/:itemId"
-        element={
-          <ProtectedRoute>
-            <ItemDetail />
-          </ProtectedRoute>
-        }
-      />
-      <Route
-        path="/trade-ads"
-        element={
-          <ProtectedRoute>
-            <TradeAds />
-          </ProtectedRoute>
-        }
-      />
-      <Route
-        path="/players"
-        element={
-          <ProtectedRoute>
-            <PlayerDirectory />
-          </ProtectedRoute>
-        }
-      />
-      <Route
-        path="/player/:userId"
-        element={
-          <ProtectedRoute>
-            <PlayerProfile />
-          </ProtectedRoute>
-        }
-      />
-      <Route
         path="/privacy"
         element={
             <PrivacyPolicy />
@@ -253,8 +199,8 @@ function App() {
                 <AppRouter />
               </div>
               <FooterWrapper />
-              <Toaster
-                position="top-right"
+              <Toaster 
+                position="top-right" 
                 toastOptions={{
                   style: {
                     background: '#0A0A0C',

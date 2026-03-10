@@ -2,7 +2,6 @@ import React, { useState, useEffect, useRef } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { useSound } from '../contexts/SoundContext';
-import { SlotsSEO } from '../components/SEO';
 import { formatCurrency } from '../lib/formatCurrency';
 import Navbar from '../components/Navbar';
 import LiveWinFeed from '../components/LiveWinFeed';
@@ -385,7 +384,6 @@ const SlotMachine = () => {
 
   return (
     <div className="min-h-screen bg-[#050505] flex flex-col">
-      <SlotsSEO slotName={slotInfo?.name || 'Classic'} />
       <Navbar />
       
       {/* XP Popup */}
@@ -550,15 +548,7 @@ const SlotMachine = () => {
                         onChange={(e) => {
                           const val = parseFloat(e.target.value);
                           if (!isNaN(val) && val >= MIN_BET) {
-                            setBetPerLine(Math.round(val * 100) / 100);
-                          }
-                        }}
-                        onBlur={(e) => {
-                          const val = parseFloat(e.target.value);
-                          if (isNaN(val) || val < MIN_BET) {
-                            setBetPerLine(MIN_BET);
-                          } else {
-                            setBetPerLine(Math.round(val * 100) / 100);
+                            setBetPerLine(val);
                           }
                         }}
                         step={0.01}

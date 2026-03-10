@@ -37,8 +37,7 @@ import {
   ExternalLink,
   MessageCircle,
   Package,
-  Box,
-  Shield
+  Box
 } from 'lucide-react';
 
 const Dashboard = () => {
@@ -111,7 +110,7 @@ const Dashboard = () => {
           credentials: 'include'
         }),
         fetch(`/api/quests`, {
-          headers: {
+          headers: { 
             'Authorization': `Bearer ${token}`,
             'Accept-Language': language
           },
@@ -822,13 +821,9 @@ const Dashboard = () => {
                         label = bet.details?.item_name || 'Item';
                       } else if (bet.game_type === 'item_sale') {
                         label = language === 'de' ? 'Verkauf' : 'Sale';
-                      } else if (bet.game_type === 'admin') {
-                        label = 'Admin';
-                      } else if (bet.game_type === 'quest') {
-                        label = 'Quest';
                       } else {
-                        label = bet.game_type === 'slot' ? 'Slots' :
-                                bet.game_type === 'jackpot' ? 'Jackpot' :
+                        label = bet.game_type === 'slot' ? 'Slots' : 
+                                bet.game_type === 'jackpot' ? 'Jackpot' : 
                                 bet.game_type;
                       }
                       
@@ -861,14 +856,6 @@ const Dashboard = () => {
                         iconBg = 'bg-gold/20';
                         IconComponent = CircleDot;
                         iconColor = 'text-gold';
-                      } else if (bet.game_type === 'admin') {
-                        iconBg = 'bg-orange-500/20';
-                        IconComponent = Shield;
-                        iconColor = 'text-orange-400';
-                      } else if (bet.game_type === 'quest') {
-                        iconBg = 'bg-pink-500/20';
-                        IconComponent = Target;
-                        iconColor = 'text-pink-400';
                       }
                       
                       return (
