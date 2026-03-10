@@ -759,3 +759,17 @@ CHART_RANGES = {
     "M":     {"resolution": "1M",  "max_points": 24},
     "ALL":   {"resolution": "1d",  "max_points": 1000},
 }
+
+# ============== PAYLINE DEFINITIONS (5x4 Grid) ==============
+PAYLINES_4x4 = {
+    # Horizontal paylines (4 rows, each spanning 4 columns)
+    1: [(0, 0), (0, 1), (0, 2), (0, 3)],   # Row 0 - Top horizontal
+    2: [(1, 0), (1, 1), (1, 2), (1, 3)],   # Row 1 - Second horizontal
+    3: [(2, 0), (2, 1), (2, 2), (2, 3)],   # Row 2 - Third horizontal
+    4: [(3, 0), (3, 1), (3, 2), (3, 3)],   # Row 3 - Bottom horizontal
+    # Vertical paylines (4 columns, each spanning 4 rows)
+    5: [(0, 0), (1, 0), (2, 0), (3, 0)],   # Column 0 - Leftmost vertical
+    6: [(0, 1), (1, 1), (2, 1), (3, 1)],   # Column 1 - Second vertical
+    7: [(0, 2), (1, 2), (2, 2), (3, 2)],   # Column 2 - Third vertical
+    8: [(0, 3), (1, 3), (2, 3), (3, 3)],   # Column 3 - Rightmost vertical
+}
