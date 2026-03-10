@@ -773,3 +773,120 @@ PAYLINES_4x4 = {
     7: [(0, 2), (1, 2), (2, 2), (3, 2)],   # Column 2 - Third vertical
     8: [(0, 3), (1, 3), (2, 3), (3, 3)],   # Column 3 - Rightmost vertical
 }
+
+# Seed items for database initialization
+
+SEED_ITEMS = [
+    {
+        "item_id": "placeholder_relic",
+        "name": "Placeholder Relic",
+        "flavor_text": "Placeholder item. Somehow still valuable.",
+        "rarity": "uncommon",
+        "base_value": 25.0,
+        "image_url": None,
+        "category": "collectible",
+        "is_tradeable": True,
+        "is_sellable": True
+    },
+    {
+        "item_id": "gamblers_instinct",
+        "name": "Gambler's Instinct",
+        "flavor_text": "Only real gamblers know when to keep going.",
+        "rarity": "rare",
+        "base_value": 50.0,
+        "image_url": None,
+        "category": "collectible",
+        "is_tradeable": True,
+        "is_sellable": True
+    },
+    # GamePass Reward Items (Chests)
+    {
+        "item_id": "common_chest",
+        "name": "Common Chest",
+        "flavor_text": "A simple chest with basic treasures inside.",
+        "rarity": "common",
+        "base_value": 15.0,
+        "image_url": None,
+        "category": "chest",
+        "is_tradeable": True,
+        "is_sellable": True
+    },
+    {
+        "item_id": "uncommon_chest",
+        "name": "Uncommon Chest",
+        "flavor_text": "A sturdy chest containing decent loot.",
+        "rarity": "uncommon",
+        "base_value": 30.0,
+        "image_url": None,
+        "category": "chest",
+        "is_tradeable": True,
+        "is_sellable": True
+    },
+    {
+        "item_id": "rare_chest",
+        "name": "Rare Chest",
+        "flavor_text": "A glowing chest filled with valuable items.",
+        "rarity": "rare",
+        "base_value": 60.0,
+        "image_url": None,
+        "category": "chest",
+        "is_tradeable": True,
+        "is_sellable": True
+    },
+    {
+        "item_id": "epic_chest",
+        "name": "Epic Chest",
+        "flavor_text": "A magnificent chest radiating power.",
+        "rarity": "epic",
+        "base_value": 120.0,
+        "image_url": None,
+        "category": "chest",
+        "is_tradeable": True,
+        "is_sellable": True
+    },
+    {
+        "item_id": "legendary_chest",
+        "name": "Legendary Chest",
+        "flavor_text": "An ancient chest containing legendary treasures.",
+        "rarity": "legendary",
+        "base_value": 250.0,
+        "image_url": None,
+        "category": "chest",
+        "is_tradeable": True,
+        "is_sellable": True
+    },
+    {
+        "item_id": "mythic_chest",
+        "name": "Mythic Chest",
+        "flavor_text": "A chest of myth, said to contain items of immense power.",
+        "rarity": "legendary",  # Using legendary as top tier
+        "base_value": 500.0,
+        "image_url": None,
+        "category": "chest",
+        "is_tradeable": True,
+        "is_sellable": True
+    },
+    # GamePass Level Reward Chests
+    {
+        "item_id": "gamepass_chest",
+        "name": "GamePass Chest",
+        "flavor_text": "A reward for your dedication. What treasures await inside?",
+        "rarity": "uncommon",
+        "base_value": 10.0,
+        "image_url": None,
+        "category": "chest",
+        "is_tradeable": True,
+        "is_sellable": True
+    },
+    {
+        "item_id": "galadium_chest",
+        "name": "Galadium Chest",
+        "flavor_text": "A premium reward for Galadium Pass holders. Golden treasures await!",
+        "rarity": "rare",
+        "base_value": 15.0,
+        "image_url": None,
+        "category": "chest",
+        "is_tradeable": True,
+        "is_sellable": True
+    }
+]
