@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { useSound } from '../contexts/SoundContext';
+import { SlotsSEO } from '../components/SEO';
 import { formatCurrency } from '../lib/formatCurrency';
 import Navbar from '../components/Navbar';
 import LiveWinFeed from '../components/LiveWinFeed';
@@ -384,6 +385,7 @@ const SlotMachine = () => {
 
   return (
     <div className="min-h-screen bg-[#050505] flex flex-col">
+      <SlotsSEO slotName={slotInfo?.name || 'Classic'} />
       <Navbar />
       
       {/* XP Popup */}
@@ -548,7 +550,15 @@ const SlotMachine = () => {
                         onChange={(e) => {
                           const val = parseFloat(e.target.value);
                           if (!isNaN(val) && val >= MIN_BET) {
-                            setBetPerLine(val);
+                            setBetPerLine(Math.round(val * 100) / 100);
+                          }
+                        }}
+                        onBlur={(e) => {
+                          const val = parseFloat(e.target.value);
+                          if (isNaN(val) || val < MIN_BET) {
+                            setBetPerLine(MIN_BET);
+                          } else {
+                            setBetPerLine(Math.round(val * 100) / 100);
                           }
                         }}
                         step={0.01}
@@ -696,22 +706,24 @@ const SlotMachine = () => {
                           <div className="text-sm text-yellow-500/70 border-b border-yellow-900/30 pb-4 space-y-2">
                             <p><strong className="text-yellow-400">8 Straight Paylines:</strong> 4 horizontal rows + 4 vertical columns</p>
                             <p><strong className="text-yellow-400">How to Win:</strong> ALL symbols on a payline must match (full line only)</p>
-                            <p><strong className="text-yellow-400">Wild:</strong> Substitutes for any symbol. Only all-wild lines pay 200x</p>
                             <p><strong className="text-yellow-400">Payout:</strong> Bet per Line × Symbol Multiplier</p>
                           </div>
                           <div className="space-y-2">
-                            {(slotInfo?.symbols || displaySlotInfo.symbols)?.sort((a,b) => b.multiplier - a.multiplier).map((sym, idx) => (
+                            {(slotInfo?.symbols || displaySlotInfo.symbols)?.filter(sym => !sym.is_wild).sort((a,b) => b.multiplier - a.multiplier).map((sym, idx) => (
                               <div key={idx} className="flex items-center justify-between p-3 bg-black/40 rounded-xl border border-yellow-900/20">
                                 <div className="flex items-center gap-4">
                                   <span className="text-4xl">{getSymbol(sym.symbol)}</span>
                                   <span className="text-yellow-500 capitalize font-medium">{sym.symbol.replace('_', ' ')}</span>
-                                  {sym.is_wild && <Badge className="bg-yellow-500/20 text-yellow-400">WILD</Badge>}
                                 </div>
                                 <div className="text-right">
                                   <span className="font-mono text-yellow-400 font-bold text-lg">{sym.multiplier}x</span>
                                 </div>
                               </div>
                             ))}
+                          </div>
+                          <div className="mt-4 p-3 bg-yellow-500/10 border border-yellow-500/30 rounded-xl flex items-center gap-3">
+                            <span className="text-2xl">⭐</span>
+                            <p className="text-yellow-400 text-sm"><strong>Wild-Symbol:</strong> Ersetzt jedes Symbol auf einer Payline — pass auf die Wilds auf, sie können dein Glück komplett boosten!</p>
                           </div>
                         </div>
                       </ScrollArea>

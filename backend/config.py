@@ -551,14 +551,14 @@ LINE_PRESETS = {
 }
 
 CLASSIC_SYMBOL_CONFIG = {
-    # Calibrated 2026-03-01: avg RTP=95.30%
-    "orange":   {"mult": 30.55,  "r0": 25.0, "r1": 27.0, "r2": 29.0, "r3": 31.0, "tier": "common"},
-    "lemon":    {"mult": 63.42,  "r0": 22.0, "r1": 21.0, "r2": 20.0, "r3": 19.0, "tier": "common"},
-    "cherry":   {"mult": 140.98, "r0": 16.0, "r1": 15.0, "r2": 14.0, "r3": 13.0, "tier": "uncommon"},
-    "bar":      {"mult": 281.94, "r0":  9.0, "r1":  8.0, "r2":  7.0, "r3":  6.0, "tier": "rare"},
-    "wild":     {"mult": 180.0,  "r0":  4.0, "r1":  4.0, "r2":  4.0, "r3":  4.0, "tier": "special", "is_wild": True},
-    "seven":    {"mult": 187.96, "r0": 12.0, "r1": 13.0, "r2": 13.0, "r3": 14.0, "tier": "jackpot"},
-    "diamond":  {"mult": 281.94, "r0": 12.0, "r1": 12.0, "r2": 13.0, "r3": 13.0, "tier": "jackpot"},
+    # Calibrated 2026-03-12: avg RTP=95.13%, Diamond > Seven > Bar
+    "orange":   {"mult":  15,  "r0": 28.0, "r1": 30.0, "r2": 32.0, "r3": 34.0, "tier": "common"},
+    "lemon":    {"mult":  50,  "r0": 22.0, "r1": 21.0, "r2": 20.0, "r3": 19.0, "tier": "common"},
+    "cherry":   {"mult": 100,  "r0": 16.0, "r1": 15.0, "r2": 14.0, "r3": 13.0, "tier": "uncommon"},
+    "bar":      {"mult": 250,  "r0": 12.0, "r1": 12.0, "r2": 12.0, "r3": 12.0, "tier": "rare"},
+    "wild":     {"mult":   0,  "r0":  4.0, "r1":  4.0, "r2":  4.0, "r3":  4.0, "tier": "special", "is_wild": True},
+    "seven":    {"mult": 650,  "r0": 10.0, "r1": 10.0, "r2": 10.0, "r3": 10.0, "tier": "jackpot"},
+    "diamond":  {"mult":1050,  "r0":  7.0, "r1":  7.0, "r2":  8.0, "r3":  8.0, "tier": "jackpot"},
 }
 
 WILD_NERF_PROBABILITY = 0.1  # 0.1% when a reel is nerfed
@@ -598,119 +598,13 @@ def build_config_from_table(config_table):
 
 CLASSIC_SYMBOLS, CLASSIC_REEL_DISTRIBUTIONS = build_config_from_table(CLASSIC_SYMBOL_CONFIG)
 
-CLASSIC_REEL_STRIPS = {
-    reel_idx: build_reel_strip(dist, 1000)
-    for reel_idx, dist in CLASSIC_REEL_DISTRIBUTIONS.items()
-}
-
 SLOT_CONFIGS = {
     "classic": {
         "name": "Classic Fruits Deluxe",
         "reels": 4, "rows": 4, "max_paylines": 8,
         "volatility": "medium", "rtp": 95.5,
         "symbols": CLASSIC_SYMBOLS,
-        "reel_strips": CLASSIC_REEL_STRIPS,
         "reel_distributions": CLASSIC_REEL_DISTRIBUTIONS,
-        "features": {"wilds": True}
-    },
-    "book": {
-        "name": "Book of Pharaohs",
-        "reels": 5, "rows": 4, "max_paylines": 20,
-        "volatility": "high", "rtp": 96.2,
-        "symbols": {
-            "ankh": {"multiplier": 2.0}, "scarab": {"multiplier": 3.0},
-            "eye": {"multiplier": 5.0}, "anubis": {"multiplier": 10.0},
-            "pharaoh": {"multiplier": 25.0}, "book": {"multiplier": 100.0, "is_wild": True}
-        },
-        "features": {"wilds": True, "expanding_symbols": True}
-    },
-    "diamond": {
-        "name": "Diamond Empire",
-        "reels": 5, "rows": 4, "max_paylines": 20,
-        "volatility": "medium-high", "rtp": 95.8,
-        "symbols": {
-            "ruby": {"multiplier": 2.0}, "emerald": {"multiplier": 3.0, "weight": 20},
-            "sapphire": {"multiplier": 5.0, "weight": 15}, "amethyst": {"multiplier": 8.0, "weight": 12},
-            "diamond": {"multiplier": 20.0, "weight": 8}, "crown": {"multiplier": 50.0, "weight": 5},
-            "wild_diamond": {"multiplier": 100.0, "weight": 3, "is_wild": True}
-        },
-        "features": {"wilds": True}
-    },
-    "cyber": {
-        "name": "Cyber Reels",
-        "reels": 5, "rows": 4, "max_paylines": 20,
-        "volatility": "medium", "rtp": 95.5,
-        "symbols": {
-            "chip": {"multiplier": 2.0, "weight": 24}, "circuit": {"multiplier": 3.0, "weight": 20},
-            "robot": {"multiplier": 5.0, "weight": 16}, "ai": {"multiplier": 10.0, "weight": 12},
-            "cyber": {"multiplier": 25.0, "weight": 8}, "matrix": {"multiplier": 50.0, "weight": 5, "is_wild": True}
-        },
-        "features": {"wilds": True, "sticky_wilds": True}
-    },
-    "viking": {
-        "name": "Viking Storm",
-        "reels": 5, "rows": 4, "max_paylines": 20,
-        "volatility": "high", "rtp": 96.0,
-        "symbols": {
-            "axe": {"multiplier": 2.0, "weight": 22}, "shield": {"multiplier": 3.0, "weight": 20},
-            "helmet": {"multiplier": 5.0, "weight": 15}, "ship": {"multiplier": 10.0, "weight": 12},
-            "thor": {"multiplier": 25.0, "weight": 8}, "odin": {"multiplier": 50.0, "weight": 5, "is_wild": True}
-        },
-        "features": {"wilds": True, "expanding_wilds": True}
-    },
-    "fortune": {
-        "name": "Asian Fortune",
-        "reels": 5, "rows": 4, "max_paylines": 20,
-        "volatility": "medium", "rtp": 95.6,
-        "symbols": {
-            "fan": {"multiplier": 2.0, "weight": 24}, "lantern": {"multiplier": 3.0, "weight": 20},
-            "koi": {"multiplier": 5.0, "weight": 16}, "dragon": {"multiplier": 10.0, "weight": 12},
-            "lucky": {"multiplier": 25.0, "weight": 8}, "wild": {"multiplier": 50.0, "weight": 5, "is_wild": True}
-        },
-        "features": {"wilds": True}
-    },
-    "pirate": {
-        "name": "Pirate's Chest",
-        "reels": 5, "rows": 4, "max_paylines": 20,
-        "volatility": "medium-high", "rtp": 95.4,
-        "symbols": {
-            "compass": {"multiplier": 2.0, "weight": 22}, "map": {"multiplier": 3.0, "weight": 20},
-            "parrot": {"multiplier": 5.0, "weight": 15}, "ship": {"multiplier": 10.0, "weight": 12},
-            "captain": {"multiplier": 25.0, "weight": 8}, "skull": {"multiplier": 100.0, "weight": 5, "is_wild": True}
-        },
-        "features": {"wilds": True}
-    },
-    "mythic": {
-        "name": "Mythic Gods",
-        "reels": 5, "rows": 4, "max_paylines": 20,
-        "volatility": "high", "rtp": 96.1,
-        "symbols": {
-            "scroll": {"multiplier": 2.0, "weight": 22}, "lyre": {"multiplier": 3.0, "weight": 18},
-            "athena": {"multiplier": 5.0, "weight": 14}, "poseidon": {"multiplier": 10.0, "weight": 12},
-            "hades": {"multiplier": 20.0, "weight": 10}, "zeus": {"multiplier": 50.0, "weight": 6, "is_wild": True}
-        },
-        "features": {"wilds": True, "stacked_symbols": True}
-    },
-    "inferno": {
-        "name": "Inferno Reels",
-        "reels": 5, "rows": 4, "max_paylines": 20,
-        "volatility": "very-high", "rtp": 94.5,
-        "symbols": {
-            "ember": {"multiplier": 2.0, "weight": 25}, "flame": {"multiplier": 3.0, "weight": 20},
-            "phoenix": {"multiplier": 8.0, "weight": 15}, "demon": {"multiplier": 15.0, "weight": 12},
-            "devil": {"multiplier": 30.0, "weight": 8}, "inferno": {"multiplier": 100.0, "weight": 5, "is_wild": True}
-        },
-        "features": {"wilds": True, "high_volatility": True}
-    },
-    "battle": {
-        "name": "Slot Battle Arena",
-        "reels": 5, "rows": 4, "max_paylines": 20,
-        "volatility": "medium", "rtp": 95.0,
-        "symbols": {
-            "sword": {"multiplier": 2.0, "weight": 24}, "shield": {"multiplier": 3.0, "weight": 20},
-            "armor": {"multiplier": 5.0, "weight": 16}, "knight": {"multiplier": 10.0, "weight": 12},
-            "king": {"multiplier": 25.0, "weight": 8}, "trophy": {"multiplier": 50.0, "weight": 5, "is_wild": True}
-        },
         "features": {"wilds": True}
     },
 }
@@ -722,24 +616,6 @@ JACKPOT_MIN_PARTICIPANTS = 2
 JACKPOT_WAIT_SECONDS = 600      # 10 minutes
 JACKPOT_COUNTDOWN_SECONDS = 30  # 30 seconds countdown
 
-# ============== OUTCOME TABLE ==============
-
-OUTCOME_TABLE = [
-    {"type": "loss",             "weight": 50,  "wins": 0},
-    {"type": "win_cherry",       "weight": 10,  "wins": 1, "symbol": "cherry"},
-    {"type": "win_lemon",        "weight": 8,   "wins": 1, "symbol": "lemon"},
-    {"type": "win_orange",       "weight": 7,   "wins": 1, "symbol": "orange"},
-    {"type": "win_bar",          "weight": 8,   "wins": 1, "symbol": "bar"},
-    {"type": "win_bar_multi",    "weight": 4,   "wins": 2, "symbol": "bar"},
-    {"type": "win_lemon_multi",  "weight": 3,   "wins": 2, "symbol": "lemon"},
-    {"type": "win_seven",        "weight": 4,   "wins": 1, "symbol": "seven"},
-    {"type": "win_seven_multi",  "weight": 2,   "wins": 2, "symbol": "seven"},
-    {"type": "win_diamond",      "weight": 1,   "wins": 1, "symbol": "diamond"},
-    {"type": "win_wild",         "weight": 1.5, "wins": 1, "symbol": "wild"},
-    {"type": "win_diamond_multi","weight": 0.8, "wins": 2, "symbol": "diamond"},
-    {"type": "win_wild_multi",   "weight": 0.5, "wins": 2, "symbol": "wild"},
-    {"type": "win_mega",         "weight": 0.2, "wins": 3, "symbol": "seven"},
-]
 
 # ============== CHEST DROPS ==============
 

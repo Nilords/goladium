@@ -22,35 +22,11 @@ def build_reel_strip(distribution: dict, strip_length: int = 1000) -> list:
     random.shuffle(strip)
     return strip
 
-# CLASSIC_SYMBOL_CONFIG, build_reel_strip, build_config_from_table, CLASSIC_SYMBOLS,
-# CLASSIC_REEL_DISTRIBUTIONS, CLASSIC_REEL_STRIPS, SLOT_CONFIGS -> config.py
+# CLASSIC_SYMBOL_CONFIG, CLASSIC_SYMBOLS, CLASSIC_REEL_DISTRIBUTIONS, SLOT_CONFIGS -> config.py
 
 # ============== JACKPOT CONFIGURATION ==============
 # JACKPOT constants -> config.py
 
-def get_weighted_symbol(symbols: dict) -> str:
-    """Get a random symbol based on weights"""
-    total_weight = sum(s["weight"] for s in symbols.values())
-    rand = random.randint(1, total_weight)
-    cumulative = 0
-    for symbol, data in symbols.items():
-        cumulative += data["weight"]
-        if rand <= cumulative:
-            return symbol
-    return list(symbols.keys())[0]
-
-# OUTCOME_TABLE -> config.py
-
-def get_random_outcome():
-    """Select outcome from weighted outcome table"""
-    total_weight = sum(o["weight"] for o in OUTCOME_TABLE)
-    rand = random.uniform(0, total_weight)
-    cumulative = 0
-    for outcome in OUTCOME_TABLE:
-        cumulative += outcome["weight"]
-        if rand <= cumulative:
-            return outcome
-    return OUTCOME_TABLE[0]  # Default to loss
 
 def check_payline_win(grid: list, line_path: list, symbols: dict) -> dict:
     """
@@ -79,9 +55,14 @@ def check_payline_win(grid: list, line_path: list, symbols: dict) -> dict:
             base_symbol = sym
             break
     
-    # If all symbols are wild, it's a wild-line win
+    # If all symbols are wild, pay as highest non-wild symbol (diamond)
     if base_symbol is None:
-        base_symbol = "wild"
+        highest = max(
+            ((s, d["multiplier"]) for s, d in symbols.items() if not d.get("is_wild")),
+            key=lambda x: x[1],
+            default=("diamond", 0)
+        )
+        base_symbol = highest[0]
     
     # STRICT CHECK: EVERY position must match base symbol OR be wild
     # If ANY position fails this check, return None (no win)
@@ -203,142 +184,6 @@ def generate_random_grid_with_wild_nerf(symbols: dict, rows: int = 4, cols: int 
     
     return grid
 
-
-def generate_random_grid(symbols: dict, rows: int = 4, cols: int = 4, reel_strips: dict = None) -> list:
-    """
-    Legacy wrapper - now delegates to Wild nerf version for "classic" slot.
-    Kept for backward compatibility with other slot machines.
-    """
-    import random
-    
-    # If no reel strips provided, fall back to uniform distribution
-    if not reel_strips:
-        symbol_list = list(symbols.keys())
-        return [[random.choice(symbol_list) for _ in range(cols)] for _ in range(rows)]
-    
-    grid = []
-    
-    # For each reel (column), determine stop position and extract visible symbols
-    reel_stops = []
-    for col_idx in range(cols):
-        # Get the physical reel strip for this column
-        reel_strip = reel_strips.get(col_idx, reel_strips.get(0, []))
-        
-        if not reel_strip:
-            # Fallback if no strip available
-            symbol_list = list(symbols.keys())
-            reel_stops.append([random.choice(symbol_list) for _ in range(rows)])
-        else:
-            # Roll RNG to determine stop position on this reel
-            stop_position = random.randint(0, len(reel_strip) - 1)
-            
-            # Extract consecutive symbols starting from stop position
-            visible_symbols = []
-            for row_idx in range(rows):
-                symbol_idx = (stop_position + row_idx) % len(reel_strip)
-                visible_symbols.append(reel_strip[symbol_idx])
-            
-            reel_stops.append(visible_symbols)
-    
-    # Convert from column-major (reels) to row-major (grid) format
-    for row_idx in range(rows):
-        row = []
-        for col_idx in range(cols):
-            row.append(reel_stops[col_idx][row_idx])
-        grid.append(row)
-    
-    return grid
-
-
-def place_full_line_win(grid: list, line_num: int, symbol: str, symbols: dict) -> list:
-    """Place a FULL LINE of matching symbols along a payline path."""
-    if line_num not in PAYLINES_4x4:
-        return grid
-    
-    line_path = PAYLINES_4x4[line_num]
-    
-    # Fill ALL positions with the winning symbol
-    for (r, c) in line_path:
-        grid[r][c] = symbol
-    
-    return grid
-
-
-def break_accidental_wins(grid: list, active_lines: List[int], symbols: dict, exclude_lines: List[int] = None) -> list:
-    """Break any accidental full-line wins on paylines that shouldn't win."""
-    if exclude_lines is None:
-        exclude_lines = []
-    
-    symbol_list = list(symbols.keys())
-    
-    for line_num in active_lines:
-        if line_num in exclude_lines:
-            continue
-        if line_num not in PAYLINES_4x4:
-            continue
-        
-        line_path = PAYLINES_4x4[line_num]
-        win_info = check_payline_win(grid, line_path, symbols)
-        
-        if win_info:
-            # Break this win by changing a random position on the line
-            break_pos = random.randint(0, len(line_path) - 1)
-            r, c = line_path[break_pos]
-            base_sym = win_info["symbol"]
-            # Pick a different non-wild symbol
-            other_symbols = [s for s in symbol_list if s != base_sym and not symbols.get(s, {}).get("is_wild", False)]
-            if other_symbols:
-                grid[r][c] = random.choice(other_symbols)
-    
-    return grid
-
-
-def map_outcome_to_reels(outcome: dict, symbols: dict, active_lines: List[int], rows: int = 4, cols: int = 4, reel_strips: dict = None) -> tuple:
-    """
-    Generate reels for FULL-LINE-ONLY wins using per-reel probability strips.
-    
-    Payout formula: bet_per_line × symbol_multiplier
-    - Only pays when ALL 4 positions on a payline match
-    - Wild symbols substitute but don't define base symbol
-    - No partial payouts
-    """
-    # Start with random grid using per-reel weights
-    grid = generate_random_grid(symbols, rows, cols, reel_strips)
-    
-    if outcome["type"] == "loss":
-        # Break ALL accidental full-line wins
-        grid = break_accidental_wins(grid, active_lines, symbols)
-        # Double-check - should have no wins
-        winning_paylines = validate_all_paylines(grid, active_lines, symbols)
-        attempts = 0
-        while winning_paylines and attempts < 10:
-            grid = break_accidental_wins(grid, active_lines, symbols)
-            winning_paylines = validate_all_paylines(grid, active_lines, symbols)
-            attempts += 1
-        return grid, []
-    
-    # Create winning outcome - FULL LINE wins
-    win_symbol = outcome.get("symbol", "cherry")
-    num_wins = outcome.get("wins", 1)
-    
-    # Select random paylines to be winners
-    available_lines = [line for line in active_lines if line in PAYLINES_4x4]
-    if not available_lines:
-        return grid, []
-    
-    winning_line_nums = random.sample(available_lines, min(num_wins, len(available_lines)))
-    
-    # Place FULL LINE wins on selected paylines
-    for line_num in winning_line_nums:
-        grid = place_full_line_win(grid, line_num, win_symbol, symbols)
-    
-    # Break accidental wins on OTHER paylines
-    grid = break_accidental_wins(grid, active_lines, symbols, exclude_lines=winning_line_nums)
-    
-    # VALIDATE: Check actual wins on grid
-    winning_paylines = validate_all_paylines(grid, active_lines, symbols)
-    
-    return grid, winning_paylines
 
 def calculate_slot_result(bet_per_line: float, active_lines: List[int], slot_id: str = "classic") -> dict:
     """
